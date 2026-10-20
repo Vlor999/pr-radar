@@ -2,10 +2,20 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 jobs:
+  # main n'accepte que des PR venant de dev (check requis par le ruleset de main)
+  source-branch:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD: ${{ github.head_ref }}
+          REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: '[[ $HEAD == dev && $REPO == "$GITHUB_REPOSITORY" ]] || { echo "PR vers main uniquement depuis dev"; exit 1; }'
+
   check:
     runs-on: ubuntu-22.04
     steps:

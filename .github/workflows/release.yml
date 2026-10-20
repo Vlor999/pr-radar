@@ -1,16 +1,32 @@
 name: Release
 
+# merge dev → main : release si la version de package.json n'est pas encore publiée
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      new: ${{ steps.check.outputs.new }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(node -p "require('./package.json').version")
+          if gh release view "v$v" >/dev/null 2>&1; then echo new=false; else echo new=true; fi >> "$GITHUB_OUTPUT"
+
   release:
+    needs: version
+    # workflow_dispatch : relance manuelle d'une release ratée, même si elle existe déjà
+    if: needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     strategy:
