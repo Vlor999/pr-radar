@@ -64,8 +64,8 @@ struct UninstallPlan {
     app_path: Option<String>,
     /// Dossiers et fichiers de données existants qui seront supprimés.
     data_paths: Vec<String>,
-    /// Message à afficher quand il reste une étape manuelle (.deb/.rpm, MSI).
-    note: Option<String>,
+    /// Étape manuelle restante, traduite par l'interface : "linux-package" (.deb/.rpm) ou "windows-settings" (MSI).
+    note: Option<&'static str>,
 }
 
 /// Garde-fou : chemin absolu, sans `..`, strictement sous le home (ou égal au bundle calculé), jamais `/`.
@@ -79,7 +79,7 @@ fn is_safe(p: &Path, home: &Path, bundle: Option<&Path>) -> bool {
 }
 
 /// Ce qui retire l'app elle-même, selon la façon dont elle a été installée.
-fn app_removal() -> (Option<PathBuf>, Option<String>) {
+fn app_removal() -> (Option<PathBuf>, Option<&'static str>) {
     #[cfg(target_os = "macos")]
     return (
         std::env::current_exe().ok().and_then(|e| {
@@ -92,7 +92,7 @@ fn app_removal() -> (Option<PathBuf>, Option<String>) {
     #[cfg(target_os = "linux")]
     return match std::env::var_os("APPIMAGE") {
         Some(p) => (Some(p.into()), None),
-        None => (None, Some("Installée via un paquet système : termine avec `sudo apt remove pr-radar` (ou `sudo dnf remove pr-radar`).".into())),
+        None => (None, Some("linux-package")),
     };
     #[cfg(windows)]
     return match std::env::current_exe()
@@ -101,10 +101,7 @@ fn app_removal() -> (Option<PathBuf>, Option<String>) {
         .filter(|u| u.exists())
     {
         Some(u) => (Some(u), None),
-        None => (
-            None,
-            Some("Termine depuis Paramètres > Applications > PR Radar.".into()),
-        ),
+        None => (None, Some("windows-settings")),
     };
 }
 

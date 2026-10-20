@@ -2,9 +2,28 @@ import { Download, Loader2, RotateCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { installUpdate, useUpdate } from "@/lib/updater"
+import { strings, useStrings } from "@/lib/i18n"
+
+const S = strings(
+  {
+    available: "est disponible.",
+    downloading: (version: string, pct: number | null) =>
+      `Téléchargement de la version ${version}${pct !== null ? ` · ${pct} %` : "…"}`,
+    ready: "Installée : redémarrage…",
+    install: "Installer et redémarrer",
+  },
+  {
+    available: "is available.",
+    downloading: (version: string, pct: number | null) =>
+      `Downloading version ${version}${pct !== null ? ` · ${pct}%` : "…"}`,
+    ready: "Installed: restarting…",
+    install: "Install and restart",
+  },
+)
 
 /** Bandeau discret en haut de l'app quand une nouvelle version est prête à être installée. */
 export function UpdateBanner() {
+  const t = useStrings(S)
   const update = useUpdate()
   if (
     update.status !== "available" &&
@@ -27,13 +46,12 @@ export function UpdateBanner() {
       <span className="min-w-0 flex-1">
         {update.status === "available" && (
           <>
-            <span className="font-medium">PR Radar {update.version}</span> est
-            disponible.
+            <span className="font-medium">PR Radar {update.version}</span>{" "}
+            {t.available}
           </>
         )}
-        {update.status === "downloading" &&
-          `Téléchargement de la version ${update.version}${pct !== null ? ` · ${pct} %` : "…"}`}
-        {update.status === "ready" && "Installée : redémarrage…"}
+        {update.status === "downloading" && t.downloading(update.version, pct)}
+        {update.status === "ready" && t.ready}
       </span>
       {update.status === "downloading" && (
         <span
@@ -49,7 +67,7 @@ export function UpdateBanner() {
       {update.status === "available" && (
         <Button size="sm" onClick={() => void installUpdate()}>
           <RotateCw />
-          Installer et redémarrer
+          {t.install}
         </Button>
       )}
       {update.status !== "available" && (

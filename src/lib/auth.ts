@@ -2,6 +2,21 @@ import { invoke } from "@tauri-apps/api/core"
 import { fetch } from "@tauri-apps/plugin-http"
 import { useSyncExternalStore } from "react"
 
+import { pick, strings } from "./i18n"
+
+const S = strings(
+  {
+    cancelled: "Annulé",
+    denied: "Connexion refusée sur GitHub",
+    expired: "Code expiré, recommence la connexion",
+  },
+  {
+    cancelled: "Cancelled",
+    denied: "Sign-in denied on GitHub",
+    expired: "Code expired, start the sign-in again",
+  },
+)
+
 /**
  * Connexion GitHub sans serveur : le jeton vit dans le trousseau du système (commandes Rust
  * get_token / set_token / delete_token), et en mémoire pour la session.
@@ -148,7 +163,7 @@ export async function pollDeviceFlow(
   const deadline = Date.now() + code.expires_in * 1000
   while (Date.now() < deadline) {
     await sleep(interval * 1000)
-    if (signal.aborted) throw new Error("Annulé")
+    if (signal.aborted) throw new Error(pick(S).cancelled)
     const res = await post<{
       access_token?: string
       error?: string
@@ -160,11 +175,10 @@ export async function pollDeviceFlow(
     })
     if (res.access_token) return res.access_token
     if (res.error === "slow_down") interval = res.interval ?? interval + 5
-    else if (res.error === "access_denied")
-      throw new Error("Connexion refusée sur GitHub")
+    else if (res.error === "access_denied") throw new Error(pick(S).denied)
     else if (res.error === "expired_token") break
     else if (res.error !== "authorization_pending")
       throw new Error(`GitHub : ${res.error}`)
   }
-  throw new Error("Code expiré, recommence la connexion")
+  throw new Error(pick(S).expired)
 }

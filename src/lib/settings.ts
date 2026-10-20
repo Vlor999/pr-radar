@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react"
 
+import type { Lang } from "./i18n"
+
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
 export type Settings = {
   /** minutes entre deux actualisations automatiques ; 0 = manuelle */
@@ -20,6 +22,8 @@ export type Settings = {
   mergedDays: number
   /** repos retirés du panneau latéral */
   hiddenRepos: string[]
+  /** langue de l'interface ; null = pas encore choisie (question au premier lancement) */
+  lang: Lang | null
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -35,6 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleDays: 5,
   mergedDays: 7,
   hiddenRepos: [],
+  lang: null,
 }
 
 const KEY = "pr-radar:settings"
@@ -49,6 +54,8 @@ function read(): Settings {
       ...DEFAULT_SETTINGS,
       ...saved,
       notify: { ...DEFAULT_SETTINGS.notify, ...saved.notify },
+      // valeur inconnue (édition à la main, version plus récente) : on repose la question
+      lang: saved.lang === "fr" || saved.lang === "en" ? saved.lang : null,
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -75,12 +82,9 @@ export function updateSettings(patch: SettingsPatch) {
   listeners.forEach((l) => l())
 }
 
+/** Remet les réglages par défaut, sauf la langue. */
 export function resetSettings() {
-  try {
-    localStorage.removeItem(KEY)
-  } catch {}
-  current = DEFAULT_SETTINGS
-  listeners.forEach((l) => l())
+  updateSettings({ ...DEFAULT_SETTINGS, lang: current.lang })
 }
 
 export function useSettings(): Settings {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { cn } from "cn"
 import { mergedBetween } from "@/lib/actions"
+import { locale, strings, useStrings } from "@/lib/i18n"
 import type { MergedPr } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -15,29 +16,59 @@ const PALETTE = [
   "bg-cyan-500",
 ]
 const MAX_VISIBLE = 3
+
+const S = strings(
+  {
+    month: "Mois",
+    week: "Semaine",
+    day: "Jour",
+    emptyMonth: "Aucune PR mergée ce mois-ci",
+    emptyWeek: "Aucune PR mergée cette semaine",
+    emptyDay: "Aucune PR mergée ce jour-là",
+    weekOf: (from: string, to: string) => `Semaine du ${from} au ${to}`,
+    prev: (unit: string, week: boolean) =>
+      `${unit} précédent${week ? "e" : ""}`,
+    next: (unit: string, week: boolean) => `${unit} suivant${week ? "e" : ""}`,
+    viewLabel: "Vue du calendrier",
+    today: "Aujourd'hui",
+    merged: (n: number) => `${n} PR mergée${n > 1 ? "s" : ""}`,
+    viewDay: "Voir ce jour",
+    collapse: "Réduire",
+  },
+  {
+    month: "Month",
+    week: "Week",
+    day: "Day",
+    emptyMonth: "No PRs merged this month",
+    emptyWeek: "No PRs merged this week",
+    emptyDay: "No PRs merged that day",
+    weekOf: (from: string, to: string) => `Week of ${from} to ${to}`,
+    prev: (unit: string) => `Previous ${unit.toLowerCase()}`,
+    next: (unit: string) => `Next ${unit.toLowerCase()}`,
+    viewLabel: "Calendar view",
+    today: "Today",
+    merged: (n: number) => `${n} merged PR${n === 1 ? "" : "s"}`,
+    viewDay: "View this day",
+    collapse: "Collapse",
+  },
+)
 const pad = (n: number) => String(n).padStart(2, "0")
 const dayKey = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const shortName = (repo: string) => repo.split("/").pop() ?? repo
-const WEEKDAYS = Array.from({ length: 7 }, (_, i) =>
-  new Date(2024, 0, 1 + i).toLocaleDateString("fr-FR", { weekday: "short" }),
-)
+const weekdays = () =>
+  Array.from({ length: 7 }, (_, i) =>
+    new Date(2024, 0, 1 + i).toLocaleDateString(locale(), {
+      weekday: "short",
+    }),
+  )
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const addDays = (d: Date, n: number) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
 const monday = (d: Date) => addDays(d, -((d.getDay() + 6) % 7))
 
 type View = "month" | "week" | "day"
-const VIEWS: { id: View; label: string }[] = [
-  { id: "month", label: "Mois" },
-  { id: "week", label: "Semaine" },
-  { id: "day", label: "Jour" },
-]
-const EMPTY: Record<View, string> = {
-  month: "Aucune PR mergée ce mois-ci",
-  week: "Aucune PR mergée cette semaine",
-  day: "Aucune PR mergée ce jour-là",
-}
+const VIEWS: View[] = ["month", "week", "day"]
 
 /** Premier et dernier jour affichés pour une vue autour d'un jour d'ancrage. */
 function range(view: View, anchor: Date): [Date, Date] {
@@ -49,10 +80,10 @@ function range(view: View, anchor: Date): [Date, Date] {
   ]
 }
 
-function heading(view: View, from: Date, to: Date) {
+function heading(t: typeof S.fr, view: View, from: Date, to: Date) {
   if (view === "day")
     return capitalize(
-      from.toLocaleDateString("fr-FR", {
+      from.toLocaleDateString(locale(), {
         weekday: "long",
         day: "numeric",
         month: "long",
@@ -60,15 +91,23 @@ function heading(view: View, from: Date, to: Date) {
       }),
     )
   if (view === "week")
-    return `Semaine du ${from.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} au ${to.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`
+    return t.weekOf(
+      from.toLocaleDateString(locale(), { day: "numeric", month: "short" }),
+      to.toLocaleDateString(locale(), {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
+    )
   return capitalize(
-    from.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }),
+    from.toLocaleDateString(locale(), { month: "long", year: "numeric" }),
   )
 }
 
 type Loaded = { key: string; prs: MergedPr[]; error?: string }
 
 export function MergeCalendar() {
+  const t = useStrings(S)
   const now = new Date()
   const todayKey = dayKey(now)
   const [view, setView] = useState<View>("month")
@@ -142,7 +181,7 @@ export function MergeCalendar() {
     setAnchor(d)
     setView("day")
   }
-  const unit = view === "month" ? "Mois" : view === "week" ? "Semaine" : "Jour"
+  const unit = t[view]
 
   const pill = (pr: MergedPr) => (
     <a
@@ -164,25 +203,25 @@ export function MergeCalendar() {
       <div className="flex flex-wrap items-center gap-2">
         <div
           role="group"
-          aria-label="Vue du calendrier"
+          aria-label={t.viewLabel}
           className="flex rounded-lg border p-0.5"
         >
           {VIEWS.map((v) => (
             <Button
-              key={v.id}
+              key={v}
               size="sm"
-              variant={view === v.id ? "secondary" : "ghost"}
-              aria-pressed={view === v.id}
-              onClick={() => setView(v.id)}
+              variant={view === v ? "secondary" : "ghost"}
+              aria-pressed={view === v}
+              onClick={() => setView(v)}
             >
-              {v.label}
+              {t[v]}
             </Button>
           ))}
         </div>
         <Button
           variant="outline"
           size="icon-sm"
-          aria-label={`${unit} précédent${view === "week" ? "e" : ""}`}
+          aria-label={t.prev(unit, view === "week")}
           onClick={() => move(-1)}
         >
           <ChevronLeft />
@@ -197,19 +236,19 @@ export function MergeCalendar() {
             )
           }
         >
-          Aujourd&apos;hui
+          {t.today}
         </Button>
         <Button
           variant="outline"
           size="icon-sm"
-          aria-label={`${unit} suivant${view === "week" ? "e" : ""}`}
+          aria-label={t.next(unit, view === "week")}
           disabled={isCurrent}
           onClick={() => move(1)}
         >
           <ChevronRight />
         </Button>
         <h2 className="ml-1 text-lg font-semibold">
-          {heading(view, first, last)}
+          {heading(t, view, first, last)}
         </h2>
         {loading && (
           <Loader2 className="size-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
@@ -217,7 +256,7 @@ export function MergeCalendar() {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">
-          {data.prs.length} PR mergée{data.prs.length > 1 ? "s" : ""}
+          {t.merged(data.prs.length)}
         </span>
         {repos.map(([repo, n]) => (
           <Badge key={repo} variant="outline" title={repo}>
@@ -246,7 +285,7 @@ export function MergeCalendar() {
                   className="flex items-baseline gap-3 px-4 py-2.5 text-sm hover:bg-muted"
                 >
                   <span className="shrink-0 text-muted-foreground tabular-nums">
-                    {new Date(pr.mergedAt).toLocaleTimeString("fr-FR", {
+                    {new Date(pr.mergedAt).toLocaleTimeString(locale(), {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
@@ -265,7 +304,7 @@ export function MergeCalendar() {
         ) : (
           <>
             <div className="hidden grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border sm:grid">
-              {WEEKDAYS.map((w) => (
+              {weekdays().map((w) => (
                 <div
                   key={w}
                   className="bg-muted px-2 py-1 text-center text-xs font-medium text-muted-foreground"
@@ -293,12 +332,12 @@ export function MergeCalendar() {
                   >
                     <button
                       type="button"
-                      title="Voir ce jour"
+                      title={t.viewDay}
                       onClick={() => openDay(d)}
                       className="self-start rounded px-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
                       {view === "week"
-                        ? d.toLocaleDateString("fr-FR", {
+                        ? d.toLocaleDateString(locale(), {
                             day: "numeric",
                             month: "short",
                           })
@@ -326,7 +365,7 @@ export function MergeCalendar() {
                           })
                         }
                       >
-                        Réduire
+                        {t.collapse}
                       </button>
                     )}
                   </div>
@@ -340,7 +379,7 @@ export function MergeCalendar() {
                 .map(([k, prs]) => (
                   <li key={k} className="rounded-lg border bg-card p-2">
                     <div className="mb-1 text-xs font-medium text-muted-foreground">
-                      {new Date(`${k}T00:00:00`).toLocaleDateString("fr-FR", {
+                      {new Date(`${k}T00:00:00`).toLocaleDateString(locale(), {
                         weekday: "long",
                         day: "numeric",
                         month: "long",
@@ -358,7 +397,15 @@ export function MergeCalendar() {
         !data.error &&
         (view === "day" ? !byDay.get(from)?.length : data.prs.length === 0) && (
           <p className="text-center text-sm text-muted-foreground">
-            {EMPTY[view]}
+            {
+              t[
+                view === "month"
+                  ? "emptyMonth"
+                  : view === "week"
+                    ? "emptyWeek"
+                    : "emptyDay"
+              ]
+            }
           </p>
         )}
     </div>
