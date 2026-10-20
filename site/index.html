@@ -22,6 +22,7 @@
   <span class="brand">PR Radar</span>
   <nav aria-label="Principal">
     <a href="#download">Télécharger</a>
+    <a href="#how">Aperçu</a>
     <a href="#first-run">Premier lancement</a>
     <a href="#features">Fonctions</a>
     <a href="https://github.com/Vlor999/pr-radar">GitHub</a>
@@ -35,18 +36,103 @@
     <p class="lead">Stacks, reviews, discussions avec le code, calendrier des merges. Gratuit, open source, sans serveur : l'app parle directement à GitHub depuis votre machine.</p>
     <p><a class="btn primary" href="#download">Télécharger</a> <a class="btn" href="https://github.com/Vlor999/pr-radar">Code source</a></p>
   </div>
-  <svg class="tree" viewBox="0 0 360 260" role="img" aria-labelledby="tree-t">
-    <title id="tree-t">Illustration : la branche main avec des cartes de PR reliées en arbre</title>
-    <g fill="none" stroke="var(--line)" stroke-width="2">
-      <path d="M30 30V230"/><path d="M30 70H70"/><path d="M30 140H70"/><path d="M30 215H70"/><path d="M110 100V120Q110 140 130 140H150" /><path d="M200 168V180Q200 195 215 195H235"/>
-    </g>
-    <circle cx="30" cy="30" r="8" fill="var(--accent)"/>
-    <text x="46" y="35" class="svgt" font-size="13">main</text>
-    <g class="card"><rect x="70" y="50" width="270" height="48" rx="8"/><circle cx="90" cy="74" r="6" fill="var(--accent)"/><rect x="106" y="62" width="150" height="8" rx="4" class="bar"/><rect x="106" y="78" width="90" height="7" rx="3.5" class="bar2"/><rect x="290" y="66" width="36" height="16" rx="8" class="pill"/></g>
-    <g class="card"><rect x="70" y="120" width="270" height="48" rx="8"/><circle cx="90" cy="144" r="6" fill="var(--accent)"/><rect x="106" y="132" width="130" height="8" rx="4" class="bar"/><rect x="106" y="148" width="100" height="7" rx="3.5" class="bar2"/><rect x="290" y="136" width="36" height="16" rx="8" class="pill"/></g>
-    <g class="card"><rect x="150" y="190" width="190" height="44" rx="8"/><circle cx="168" cy="212" r="6" fill="var(--warn)"/><rect x="184" y="203" width="100" height="8" rx="4" class="bar"/><rect x="184" y="218" width="70" height="7" rx="3.5" class="bar2"/></g>
-    <path d="M110 168V196Q110 212 126 212H150" fill="none" stroke="var(--line)" stroke-width="2"/>
-  </svg>
+  <p class="sr">Aperçu animé de l'app : la liste des PR ouvertes du repo acme/web s'affiche en arbre sous la branche main, avec une PR empilée sous sa parente. Une carte est sélectionnée au clavier, sa discussion de review s'ouvre avec un extrait de diff, et une réponse est envoyée.</p>
+  <div class="mock" id="mock" aria-hidden="true">
+    <div class="chrome"><i></i><i></i><i></i><span>PR Radar</span></div>
+    <div class="app">
+      <div class="side">
+        <p class="org">acme</p>
+        <p class="on"><b class="cb"></b>web<i class="gdot"></i></p>
+        <p><b class="cb"></b>api<i class="gdot"></i></p>
+        <p><b class="cb"></b>design-system</p>
+        <p class="org" style="margin-top:12px">perso</p>
+        <p><b class="cb off"></b>dotfiles</p>
+      </div>
+      <div class="mainp">
+        <div class="rhead">▾ acme/web <span class="cnt">3</span><small><i class="sync"></i><span class="ago">à l'instant</span></small></div>
+        <span class="branch"><i></i>main</span>
+        <ul class="tree">
+          <li><div class="pc c1">
+              <div class="r1"><span class="chev">›</span><span class="num">#42</span><span class="ti">feat(checkout): paiement en un clic</span></div>
+              <div class="r2"><span>feat/checkout-v2</span><span><span class="add">+312</span> <span class="del">−48</span></span></div>
+              <div class="r3"><span class="b go">Prête à merger</span><span class="b ok">Approuvée</span><span class="b">CI ✓</span><span class="b">bloque 1 PR</span></div>
+            </div>
+            <ul><li><div class="pc c2">
+              <div class="r1"><span class="chev">›</span><span class="num">#45</span><span class="ti">feat(checkout): Apple Pay et Google Pay</span><span class="b go new">Nouveau</span></div>
+              <div class="r2"><span>feat/checkout-wallets</span><span><span class="add">+128</span> <span class="del">−9</span></span></div>
+              <div class="r3"><span class="b warn">bloquée par #42</span><span class="b ci"><i class="spin"></i>CI <b>✓</b></span><span class="b">💬 3</span></div>
+            </div></li></ul>
+          </li>
+          <li><div class="pc c3 open sel">
+              <div class="r1"><span class="chev">›</span><span class="num">#38</span><span class="ti">fix(api): retry sur les 502 du paiement</span></div>
+              <div class="r2"><span>fix/payment-retry</span><span><span class="add">+24</span> <span class="del">−6</span></span></div>
+              <div class="r3"><span class="b bad">Changements demandés</span><span class="b warn unres">1 non résolu</span><span class="b">inactive depuis 6 j</span></div>
+              <div class="thr"><div><div class="thr-in">
+                <div class="file">src/payments/retry.ts:18</div>
+                <div class="hunk"><span>  const res = await fetch(url)</span><span class="hd">- if (res.status === 502) return retry()</span><span class="ha">+ if (res.status === 502 &amp;&amp; n &lt; 3)</span><span class="ha">+   return retry(n + 1)</span></div>
+                <div class="msg"><i class="av" style="background:#6d5bd0">b</i><span><b>bob</b> Il faut borner les essais, sinon boucle infinie.</span></div>
+                <div class="grow"><div><div class="msg"><i class="av" style="background:#d9822b">a</i><span><b>alice</b> Corrigé : 3 essais max, avec backoff.</span></div></div></div>
+                <div class="reply"><div class="ta"><span class="typed"></span><i class="caret"></i></div><span class="rbtn">Répondre</span></div>
+              </div></div></div>
+          </div></li>
+        </ul>
+        <span class="key">j</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" class="wrap">
+  <h2>Comment ça marche</h2>
+  <div class="vigs">
+    <figure class="vig">
+      <div class="vm v-stack" aria-hidden="true">
+        <span class="branch"><i></i>main</span>
+        <ul class="tree"><li><div class="pc">
+            <div class="r1"><span class="num">#12</span><span class="ti">feat(cart): panier persistant</span></div>
+            <div class="r3" style="padding:0"><span class="b go v-pop">Prête à merger</span><span class="b ok">Approuvée</span><span class="b">bloque 1 PR</span></div>
+          </div>
+          <ul><li><div class="pc">
+            <div class="r1"><span class="num">#13</span><span class="ti">feat(cart): codes promo</span></div>
+            <div class="r3" style="padding:0"><span class="b warn">bloquée par #12</span><span class="b">CI ✓</span></div>
+          </div></li></ul>
+        </li></ul>
+      </div>
+      <figcaption><strong>Stacks</strong>Chaque PR empilée s'affiche sous sa parente : vous savez quoi merger en premier.<span class="sr"> Animation : l'arbre main, PR #12, PR #13 se dessine, puis le badge Prête à merger apparaît sur la PR #12.</span></figcaption>
+    </figure>
+    <figure class="vig">
+      <div class="vm v-thr" aria-hidden="true">
+        <div class="file">src/cart/store.ts:27</div>
+        <div class="hunk"><span>  const items = load()</span><span class="hd">- save(items)</span><span class="ha">+ save(items, { ttl: DAY })</span><span class="ha">+ track('cart_saved')</span></div>
+        <div class="msg"><i class="av" style="background:#2b8fd9">c</i><span><b>chloe</b> Pourquoi un TTL d'un jour ?</span></div>
+        <div class="msg v-sent"><i class="av" style="background:#d9822b">a</i><span><b>alice</b> Aligné sur la session.</span></div>
+        <div class="reply"><div class="ta"><span class="vtype">Aligné sur la session.</span></div><span class="rbtn">Répondre</span></div>
+      </div>
+      <figcaption><strong>Discussions</strong>Les fils non résolus s'ouvrent avec le code concerné, et vous répondez sans quitter l'app.<span class="sr"> Animation : un extrait de diff, une question de chloe, puis une réponse tapée et envoyée.</span></figcaption>
+    </figure>
+    <figure class="vig">
+      <div class="vm v-cal" aria-hidden="true">
+        <div class="cal-h"><span>Octobre 2026</span><span class="seg"><i class="on">Mois</i><i>Semaine</i><i>Jour</i></span></div>
+        <div class="cal">
+          <span class="wd">L</span><span class="wd">M</span><span class="wd">M</span><span class="wd">J</span><span class="wd">V</span><span class="wd">S</span><span class="wd">D</span>
+          <span></span><span></span><span></span><b></b><b></b><b></b><b></b>
+          <b><i class="mp" style="--c:#6d5bd0;--d:.2s">#17</i></b><b></b><b></b><b><i class="mp" style="--d:.5s">#31</i></b><b></b><b></b><b></b>
+          <b></b><b><i class="mp" style="--c:#d9822b;--d:.8s">#8</i></b><b></b><b></b><b><i class="mp" style="--d:1.1s">#36</i></b><b></b><b></b>
+          <b></b><b></b><b><i class="mp" style="--c:#6d5bd0;--d:1.4s">#21</i></b><b></b><b><i class="mp" style="--d:1.7s">#42</i></b><b></b><b></b>
+          <b></b><b><i class="mp" style="--c:#d9822b;--d:2s">#11</i></b><b></b><b></b><b></b><b></b>
+        </div>
+      </div>
+      <figcaption><strong>Calendrier des merges</strong>Mois, semaine ou jour : le rythme de livraison de chaque repo d'un coup d'œil.<span class="sr"> Animation : des pastilles de PR mergées tombent dans les jours d'octobre.</span></figcaption>
+    </figure>
+    <figure class="vig">
+      <div class="vm v-notif" aria-hidden="true">
+        <div class="menubar"><span>PR Radar</span><span>mar. 20 oct. 09:41</span></div>
+        <div class="toast" style="--d:0s"><i class="appic">PR</i><div><b>acme/web#42 : approuvée</b><small>alice a approuvé « feat(checkout): paiement en un clic »</small></div><time>maint.</time></div>
+        <div class="toast" style="--d:1.4s"><i class="appic">PR</i><div><b>acme/api#17 : prête à merger</b><small>Tous les checks sont passés.</small></div><time>maint.</time></div>
+      </div>
+      <figcaption><strong>Notifications</strong>Une approbation, un changement demandé, une CI cassée : le système vous prévient.<span class="sr"> Animation : deux notifications système glissent depuis le bord de l'écran.</span></figcaption>
+    </figure>
+  </div>
 </section>
 
 <section id="download" class="wrap">

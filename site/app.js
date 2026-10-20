@@ -75,4 +75,60 @@
       if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done);
     });
   });
+  // Hero mock timeline + vignettes: run only while visible; reduced motion keeps the static final state.
+  var mock = document.getElementById('mock');
+  var vigs = document.querySelectorAll('.vig');
+  var still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var typed = mock.querySelector('.typed'), key = mock.querySelector('.key'), ago = mock.querySelector('.ago');
+  var cards = mock.querySelectorAll('.pc'), REPLY = 'Corrigé : 3 essais max, avec backoff.';
+  var timers = [], seen = false;
+  function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function add(c) { return function () { mock.classList.add(c); }; }
+  function sel(i) {
+    return function () {
+      cards.forEach(function (c, n) { c.classList.toggle('sel', n === i); });
+      key.classList.remove('hit'); void key.offsetWidth; key.classList.add('hit');
+    };
+  }
+  function type(n) { return function () { typed.textContent = REPLY.slice(0, n); }; }
+  function tick(s) { return function () { ago.textContent = 'mis à jour il y a ' + s + ' s'; }; }
+  function stop() { timers.forEach(clearTimeout); timers = []; }
+  function run() {
+    stop();
+    mock.className = 'mock play';
+    typed.textContent = '';
+    ago.textContent = 'synchronisation…';
+    cards.forEach(function (c) { c.classList.remove('sel'); });
+    at(150, add('s-draw')); at(500, add('s-c1')); at(800, add('s-c2')); at(1100, add('s-c3'));
+    at(1400, add('s-sync')); at(1400, function () { ago.textContent = "à l'instant"; });
+    for (var s = 1; s <= 9; s++) at(1400 + s * 1000, tick(s));
+    at(1900, add('s-new'));
+    at(2600, sel(0)); at(3100, sel(1)); at(3600, sel(2));
+    at(4200, add('s-open'));
+    for (var n = 1; n <= REPLY.length; n++) at(4900 + n * 50, type(n));
+    at(7100, add('s-press'));
+    at(7400, function () { typed.textContent = ''; mock.classList.add('s-sent'); });
+    at(8200, add('s-ci'));
+    at(10600, add('s-out'));
+    at(11200, run);
+  }
+  function sync() {
+    if (seen && !document.hidden) { if (!timers.length) run(); } else stop();
+  }
+  if (!still) {
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+          if (e.target === mock) { seen = e.isIntersecting; sync(); }
+          else e.target.classList.toggle('run', e.isIntersecting);
+        });
+      }, { threshold: 0.2 });
+      io.observe(mock);
+      vigs.forEach(function (v) { io.observe(v); });
+    } else {
+      seen = true; sync();
+      vigs.forEach(function (v) { v.classList.add('run'); });
+    }
+    document.addEventListener('visibilitychange', sync);
+  }
 })();
