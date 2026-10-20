@@ -68,6 +68,10 @@ git tag vX.Y.Z && git push --tags
 
 L'app se met à jour toute seule : elle lit `latest.json` sur la dernière release, vérifie la signature avec la clé publique de `src-tauri/tauri.conf.json`, installe puis redémarre. La CI signe chaque version avec la clé privée stockée dans les secrets du repo (`TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Sans cette clé, plus aucune mise à jour ne peut être publiée pour les apps déjà installées : en garder une copie hors du repo.
 
+### Signature macOS
+
+Sans secrets Apple, les builds macOS sont signés ad hoc (premier lancement : « Ouvrir quand même » dans Confidentialité et sécurité). Avec les secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` et `APPLE_TEAM_ID` (certificat Developer ID Application), la release signe et notarise automatiquement : macOS n'affiche plus que « app téléchargée d'internet ».
+
 ## Licence
 
 MIT
