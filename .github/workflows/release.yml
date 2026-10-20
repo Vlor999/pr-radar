@@ -83,3 +83,27 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  # cask Homebrew (Vlor999/homebrew-tap) : mis à jour seulement si le secret HOMEBREW_TAP_TOKEN existe
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      HAS_TAP: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Update cask
+        if: env.HAS_TAP == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p '*_aarch64.dmg' -p '*_x64.dmg'
+          arm=$(sha256sum *_aarch64.dmg | cut -d' ' -f1)
+          intel=$(sha256sum *_x64.dmg | cut -d' ' -f1)
+          gh auth setup-git
+          gh repo clone Vlor999/homebrew-tap tap
+          cd tap
+          sed -i -E "s/version \"[^\"]+\"/version \"${TAG#v}\"/; s/arm:   \"[0-9a-f]+\"/arm:   \"$arm\"/; s/intel: \"[0-9a-f]+\"/intel: \"$intel\"/" Casks/pr-radar.rb
+          git diff --quiet && exit 0
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -am "pr-radar ${TAG#v}"
+          git push

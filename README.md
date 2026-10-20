@@ -22,6 +22,7 @@ Vos PR GitHub ouvertes, en arbre : stacks, reviews, discussions et merges, dans 
 
 - Page de téléchargement : https://vlor999.github.io/pr-radar/
 - Releases : https://github.com/Vlor999/pr-radar/releases
+- Homebrew : `brew install --cask vlor999/tap/pr-radar` (cask mis à jour par la CI de release, secret `HOMEBREW_TAP_TOKEN`)
 
 ## Premier lancement
 
