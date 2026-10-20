@@ -20,7 +20,6 @@ section{padding-top:32px;padding-bottom:16px}
 .btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .dl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .dl{display:flex;flex-direction:column;gap:6px;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
-.dl.match{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .dl .btn{margin:0;text-align:center}
 .dl small{color:var(--muted)}
 .dl svg{width:24px;height:24px;fill:currentColor}
@@ -144,3 +143,8 @@ code{font:13px/1.5 'JetBrains Mono',monospace;word-break:break-all;flex:1}
 .appic{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-fg);font:700 10px Inter,sans-serif;font-style:normal}
 @keyframes v-slide{0%,6%{opacity:0;transform:translateX(110%)}14%,84%{opacity:1;transform:none}92%,100%{opacity:0;transform:translateX(110%)}}
 @media(prefers-reduced-motion:reduce){.mock *,.mock *::before,.mock *::after,.vm *,.vm *::before,.vm *::after{animation:none!important;transition:none!important}}
+.dl-top{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-bottom:12px}
+.dl-hero{display:inline-flex;align-items:center;gap:10px;font-size:18px;padding:14px 24px;margin:0}
+.dl-hero svg{width:22px;height:22px;fill:currentColor}
+.dl-top small{color:var(--muted)}
+.dl-other{margin:12px 0 0}
