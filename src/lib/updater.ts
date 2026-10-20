@@ -2,11 +2,18 @@ import { relaunch } from "@tauri-apps/plugin-process"
 import { check, type Update } from "@tauri-apps/plugin-updater"
 import { useSyncExternalStore } from "react"
 
+import { pick, strings } from "./i18n"
+
 /**
  * Mise à jour intégrée : l'app lit latest.json sur la dernière release GitHub, vérifie la signature
  * (clé publique dans tauri.conf.json), télécharge, installe, puis redémarre.
  */
-export type UpdateState =
+export const S = strings(
+  { unknownError: "erreur inconnue" },
+  { unknownError: "unknown error" },
+)
+
+type UpdateState =
   | { status: "idle" | "checking" | "up-to-date" }
   | { status: "available"; version: string; notes?: string }
   | { status: "downloading"; version: string; progress: number | null }
@@ -33,7 +40,7 @@ export function useUpdate(): UpdateState {
 }
 
 const message = (e: unknown) =>
-  e instanceof Error ? e.message : String(e ?? "erreur inconnue")
+  e instanceof Error ? e.message : String(e ?? pick(S).unknownError)
 
 /** Cherche une version plus récente. `quiet` : pas d'erreur affichée (vérification automatique). */
 export async function checkForUpdate({ quiet = false } = {}) {

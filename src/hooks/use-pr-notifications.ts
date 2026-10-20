@@ -1,8 +1,27 @@
 import { invoke } from "@tauri-apps/api/core"
 import { useEffect, useRef, useSyncExternalStore } from "react"
 
+import { pick, strings } from "@/lib/i18n"
 import { getSettings, type Settings } from "@/lib/settings"
 import type { Pr } from "@/lib/types"
+
+const S = strings(
+  {
+    approved: "approuvée",
+    changesRequested: "changements demandés",
+    comments: (n: number) =>
+      `${n} nouveau${n > 1 ? "x" : ""} commentaire${n > 1 ? "s" : ""}`,
+    ciFailed: "CI en échec",
+    testBody: "Les notifications fonctionnent.",
+  },
+  {
+    approved: "approved",
+    changesRequested: "changes requested",
+    comments: (n: number) => `${n} new comment${n > 1 ? "s" : ""}`,
+    ciFailed: "CI failed",
+    testBody: "Notifications are working.",
+  },
+)
 
 /* ---------- Envoi : on appelle la commande du plugin pour récupérer les erreurs ---------- */
 
@@ -42,19 +61,20 @@ type Kind = keyof Settings["notify"]
 
 /** Ce qui a changé sur une PR depuis le dernier chargement : type (réglable) et phrase, ou null. */
 function change(before: Pr, now: Pr): { kind: Kind; text: string } | null {
+  const t = pick(S)
   if (now.decision !== before.decision && now.decision === "APPROVED")
-    return { kind: "approved", text: "approuvée" }
+    return { kind: "approved", text: t.approved }
   if (now.decision !== before.decision && now.decision === "CHANGES_REQUESTED")
-    return { kind: "changesRequested", text: "changements demandés" }
+    return { kind: "changesRequested", text: t.changesRequested }
   if (now.comments > before.comments) {
     const n = now.comments - before.comments
     return {
       kind: "comments",
-      text: `${n} nouveau${n > 1 ? "x" : ""} commentaire${n > 1 ? "s" : ""}`,
+      text: t.comments(n),
     }
   }
   if (now.ci !== before.ci && (now.ci === "FAILURE" || now.ci === "ERROR"))
-    return { kind: "ciFailed", text: "CI en échec" }
+    return { kind: "ciFailed", text: t.ciFailed }
   return null
 }
 
@@ -79,5 +99,5 @@ export function usePrNotifications(prs: Pr[]) {
 
 /** Bouton « Envoyer une notification de test » des réglages. */
 export function testNotification() {
-  return notify("PR Radar", "Les notifications fonctionnent.")
+  return notify("PR Radar", pick(S).testBody)
 }

@@ -12,6 +12,7 @@ import { cn } from "cn"
 
 import { refreshPrs } from "@/lib/actions"
 import { reload } from "@/lib/store"
+import { locale, strings, useStrings } from "@/lib/i18n"
 import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
@@ -43,49 +44,138 @@ import {
 } from "@/lib/tree"
 import type { Pr, PrNode, RepoTree } from "@/lib/types"
 
+const S = strings(
+  {
+    tabs: { open: "PR ouvertes", calendar: "Calendrier des merges" },
+    filters: {
+      all: "Toutes",
+      attention: "À traiter",
+      ready: "Prêtes à merger",
+      approved: "Approuvées",
+      stacked: "Stackées",
+      draft: "Draft",
+      ci: "CI rouge",
+      stale: "Inactives",
+    },
+    sorts: {
+      priority: "Priorité",
+      oldest: "Plus anciennes",
+      recent: "Plus récentes",
+    },
+    trackedRepos: "Repos suivis",
+    myOpenPrs: "Mes PR ouvertes",
+    updatedAt: (time: string) => `mis à jour ${time}`,
+    auto: (min: number) => `auto toutes les ${min} min`,
+    manual: "actualisation manuelle",
+    refreshing: "Rafraîchissement…",
+    refresh: "Rafraîchir",
+    settings: "Réglages",
+    settingsUpdate: (v: string) => `Réglages (version ${v} disponible)`,
+    settingsTitleUpdate: (v: string) => `Réglages · version ${v} disponible`,
+    settingsTitle: "Réglages (⌘,)",
+    view: "Vue",
+    fetchFailed: (e: string) => `Récupération GitHub en échec : ${e}`,
+    searchPlaceholder: "Repo, titre, branche, #numéro",
+    search: "Rechercher",
+    filterByStatus: "Filtrer par statut",
+    sort: "Tri",
+    markAllSeen: (n: number) => `Tout marquer comme vu (${n})`,
+    expandAll: "Tout déplier",
+    collapseAll: "Tout replier",
+    noRepos:
+      "Aucun repo suivi. Coche des repos dans le panneau « Repos suivis ».",
+    noMatch: "Aucune PR ne correspond à la recherche.",
+    repo: "repo",
+  },
+  {
+    tabs: { open: "Open PRs", calendar: "Merge calendar" },
+    filters: {
+      all: "All",
+      attention: "Needs action",
+      ready: "Ready to merge",
+      approved: "Approved",
+      stacked: "Stacked",
+      draft: "Draft",
+      ci: "CI failing",
+      stale: "Stale",
+    },
+    sorts: {
+      priority: "Priority",
+      oldest: "Oldest",
+      recent: "Most recent",
+    },
+    trackedRepos: "Tracked repos",
+    myOpenPrs: "My open PRs",
+    updatedAt: (time: string) => `updated ${time}`,
+    auto: (min: number) => `auto every ${min} min`,
+    manual: "manual refresh",
+    refreshing: "Refreshing…",
+    refresh: "Refresh",
+    settings: "Settings",
+    settingsUpdate: (v: string) => `Settings (version ${v} available)`,
+    settingsTitleUpdate: (v: string) => `Settings · version ${v} available`,
+    settingsTitle: "Settings (⌘,)",
+    view: "View",
+    fetchFailed: (e: string) => `GitHub fetch failed: ${e}`,
+    searchPlaceholder: "Repo, title, branch, #number",
+    search: "Search",
+    filterByStatus: "Filter by status",
+    sort: "Sort",
+    markAllSeen: (n: number) => `Mark all as seen (${n})`,
+    expandAll: "Expand all",
+    collapseAll: "Collapse all",
+    noRepos: "No tracked repos. Tick repos in the “Tracked repos” panel.",
+    noMatch: "No PRs match the search.",
+    repo: "repo",
+  },
+)
+
 const TABS = [
-  { id: "open", label: "PR ouvertes", icon: GitPullRequest },
-  { id: "calendar", label: "Calendrier des merges", icon: CalendarDays },
+  { id: "open", icon: GitPullRequest },
+  { id: "calendar", icon: CalendarDays },
 ] as const
 
-const FILTERS: { id: string; label: string; match: (p: PrNode) => boolean }[] =
-  [
-    { id: "all", label: "Toutes", match: () => true },
-    { id: "attention", label: "À traiter", match: needsAttention },
-    {
-      id: "ready",
-      label: "Prêtes à merger",
-      match: (p) => mergeState(p)?.kind === "ready",
-    },
-    {
-      id: "approved",
-      label: "Approuvées",
-      match: (p) => p.decision === "APPROVED",
-    },
-    { id: "stacked", label: "Stackées", match: isStacked },
-    { id: "draft", label: "Draft", match: (p) => p.draft },
-    {
-      id: "ci",
-      label: "CI rouge",
-      match: (p) => p.ci === "FAILURE" || p.ci === "ERROR",
-    },
-    {
-      id: "stale",
-      label: "Inactives",
-      match: (p) => isStale(p, Date.now(), getSettings().staleDays),
-    },
-  ]
+const FILTERS: {
+  id: keyof typeof S.fr.filters
+  match: (p: PrNode) => boolean
+}[] = [
+  { id: "all", match: () => true },
+  { id: "attention", match: needsAttention },
+  {
+    id: "ready",
 
-const SORTS: { id: string; label: string; cmp?: (a: Pr, b: Pr) => number }[] = [
-  { id: "priority", label: "Priorité" }, // ordre déjà calculé par buildTree
+    match: (p) => mergeState(p)?.kind === "ready",
+  },
+  {
+    id: "approved",
+
+    match: (p) => p.decision === "APPROVED",
+  },
+  { id: "stacked", match: isStacked },
+  { id: "draft", match: (p) => p.draft },
+  {
+    id: "ci",
+
+    match: (p) => p.ci === "FAILURE" || p.ci === "ERROR",
+  },
+  {
+    id: "stale",
+
+    match: (p) => isStale(p, Date.now(), getSettings().staleDays),
+  },
+]
+
+const SORTS: {
+  id: keyof typeof S.fr.sorts
+  cmp?: (a: Pr, b: Pr) => number
+}[] = [
+  { id: "priority" }, // ordre déjà calculé par buildTree
   {
     id: "oldest",
-    label: "Plus anciennes",
     cmp: (a, b) => Date.parse(a.updated) - Date.parse(b.updated),
   },
   {
     id: "recent",
-    label: "Plus récentes",
     cmp: (a, b) => Date.parse(b.updated) - Date.parse(a.updated),
   },
 ]
@@ -103,11 +193,12 @@ export function PrDashboard({
   fetchedAt: string
   error?: string
 }) {
+  const t = useStrings(S)
   const wide = useWide()
   const [reposOpen, setReposOpen] = useState(false)
   const [refreshing, startRefresh] = useTransition()
   const [query, setQuery] = useState("")
-  const [filter, setFilter] = useState("all")
+  const [filter, setFilter] = useState<keyof typeof S.fr.filters>("all")
   const settings = useSettings()
   const [sort, setSort] = useState<string>(() => getSettings().defaultSort)
   const [showSettings, setShowSettings] = useState(false)
@@ -117,6 +208,7 @@ export function PrDashboard({
   usePrNotifications(prs)
   const seen = useSeen(prs)
   useKeyboardNav()
+  const shortcuts = useStrings(SHORTCUTS)
 
   // l'état déplié/replié survit aux rafraîchissements (le composant n'est pas remonté)
   const [open, setOpen] = useState<Record<string, boolean>>({})
@@ -231,15 +323,15 @@ export function PrDashboard({
                   <Button
                     variant="outline"
                     size="icon"
-                    aria-label="Repos suivis"
-                    title="Repos suivis"
+                    aria-label={t.trackedRepos}
+                    title={t.trackedRepos}
                   />
                 }
               >
                 <PanelLeft />
               </SheetTrigger>
               <SheetContent side="left" className="p-4 pt-12">
-                <SheetTitle className="sr-only">Repos suivis</SheetTitle>
+                <SheetTitle className="sr-only">{t.trackedRepos}</SheetTitle>
                 <RepoSidebar
                   current={trees.map((t) => t.repo)}
                   withPrs={withPrs}
@@ -250,19 +342,20 @@ export function PrDashboard({
           )}
           <div className="flex flex-col gap-1">
             <h1 className="font-heading text-2xl font-semibold tracking-tight">
-              Mes PR ouvertes
+              {t.myOpenPrs}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {plural(trees.length, "repo")} · {plural(prs.length, "PR")} · mis
-              à jour{" "}
-              {new Date(fetchedAt).toLocaleTimeString("fr-FR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {plural(trees.length, t.repo)} · {plural(prs.length, "PR")} ·{" "}
+              {t.updatedAt(
+                new Date(fetchedAt).toLocaleTimeString(locale(), {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              )}
               ,{" "}
               {settings.refreshMinutes
-                ? `auto toutes les ${settings.refreshMinutes} min`
-                : "actualisation manuelle"}
+                ? t.auto(settings.refreshMinutes)
+                : t.manual}
             </p>
           </div>
         </div>
@@ -273,19 +366,13 @@ export function PrDashboard({
             onClick={() => startRefresh(() => refreshPrs())}
           >
             <RefreshCw className={cn(refreshing && "animate-spin")} />
-            {refreshing ? "Rafraîchissement…" : "Rafraîchir"}
+            {refreshing ? t.refreshing : t.refresh}
           </Button>
           <Button
             variant={showSettings ? "secondary" : "ghost"}
             size="icon"
-            aria-label={
-              update ? `Réglages (version ${update} disponible)` : "Réglages"
-            }
-            title={
-              update
-                ? `Réglages · version ${update} disponible`
-                : "Réglages (⌘,)"
-            }
+            aria-label={update ? t.settingsUpdate(update) : t.settings}
+            title={update ? t.settingsTitleUpdate(update) : t.settingsTitle}
             aria-pressed={showSettings}
             onClick={() => setShowSettings((v) => !v)}
             className="relative"
@@ -307,25 +394,25 @@ export function PrDashboard({
           <div className="flex min-w-0 flex-col gap-6 lg:order-last">
             <nav
               role="tablist"
-              aria-label="Vue"
+              aria-label={t.view}
               className="flex gap-1 border-b"
             >
-              {TABS.map((t) => (
+              {TABS.map((tb) => (
                 <button
-                  key={t.id}
+                  key={tb.id}
                   type="button"
                   role="tab"
-                  aria-selected={tab === t.id}
-                  onClick={() => setTab(t.id)}
+                  aria-selected={tab === tb.id}
+                  onClick={() => setTab(tb.id)}
                   className={cn(
                     "-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
-                    tab === t.id
+                    tab === tb.id
                       ? "border-primary text-foreground"
                       : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <t.icon className="size-4" />
-                  {t.label}
+                  <tb.icon className="size-4" />
+                  {t.tabs[tb.id]}
                 </button>
               ))}
             </nav>
@@ -336,7 +423,7 @@ export function PrDashboard({
               <>
                 {error && (
                   <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    Récupération GitHub en échec : {error}
+                    {t.fetchFailed(error)}
                   </p>
                 )}
 
@@ -349,8 +436,8 @@ export function PrDashboard({
                         type="search"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Repo, titre, branche, #numéro"
-                        aria-label="Rechercher"
+                        placeholder={t.searchPlaceholder}
+                        aria-label={t.search}
                         className="pl-9"
                       />
                     </div>
@@ -359,7 +446,7 @@ export function PrDashboard({
                     <div
                       className="flex flex-wrap gap-1"
                       role="group"
-                      aria-label="Filtrer par statut"
+                      aria-label={t.filterByStatus}
                     >
                       {FILTERS.map((f) => (
                         <Button
@@ -369,7 +456,7 @@ export function PrDashboard({
                           aria-pressed={filter === f.id}
                           onClick={() => setFilter(f.id)}
                         >
-                          {f.label}
+                          {t.filters[f.id]}
                           <Badge
                             variant={filter === f.id ? "secondary" : "outline"}
                           >
@@ -383,7 +470,7 @@ export function PrDashboard({
                         htmlFor="sort"
                         className="text-sm text-muted-foreground"
                       >
-                        Tri
+                        {t.sort}
                       </label>
                       <select
                         id="sort"
@@ -393,7 +480,7 @@ export function PrDashboard({
                       >
                         {SORTS.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.label}
+                            {t.sorts[s.id]}
                           </option>
                         ))}
                       </select>
@@ -404,7 +491,7 @@ export function PrDashboard({
                           onClick={() => seen.markSeen(prs)}
                         >
                           <CheckCheck />
-                          Tout marquer comme vu ({seen.count})
+                          {t.markAllSeen(seen.count)}
                         </Button>
                       )}
                       <Button
@@ -412,29 +499,24 @@ export function PrDashboard({
                         variant="ghost"
                         onClick={() => setAll(true)}
                       >
-                        Tout déplier
+                        {t.expandAll}
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => setAll(false)}
                       >
-                        Tout replier
+                        {t.collapseAll}
                       </Button>
                     </div>
                   </div>
                 </section>
 
                 {trees.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Aucun repo suivi. Coche des repos dans le panneau « Repos
-                    suivis ».
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t.noRepos}</p>
                 )}
                 {trees.length > 0 && visible.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Aucune PR ne correspond à la recherche.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t.noMatch}</p>
                 )}
                 {visible.map((v) => (
                   <RepoSection
@@ -447,7 +529,7 @@ export function PrDashboard({
               </>
             )}
             <footer className="flex flex-wrap gap-x-4 gap-y-1 pt-4 text-xs text-muted-foreground">
-              {SHORTCUTS.map((s) => (
+              {shortcuts.map((s) => (
                 <span key={s.keys}>
                   <kbd className="rounded border bg-muted px-1 font-mono">
                     {s.keys}

@@ -1,14 +1,25 @@
 import { useEffect } from "react"
 
+import { strings } from "@/lib/i18n"
 import { openExternal } from "@/lib/open"
 
-export const SHORTCUTS: { keys: string; label: string }[] = [
-  { keys: "/", label: "rechercher" },
-  { keys: "j / k", label: "carte suivante / précédente" },
-  { keys: "o", label: "ouvrir sur GitHub" },
-  { keys: "e", label: "déplier / replier" },
-  { keys: "d", label: "clair / sombre" },
-]
+/** À lire avec `useStrings(SHORTCUTS)`. */
+export const SHORTCUTS = strings(
+  [
+    { keys: "/", label: "rechercher" },
+    { keys: "j / k", label: "carte suivante / précédente" },
+    { keys: "o", label: "ouvrir sur GitHub" },
+    { keys: "e", label: "déplier / replier" },
+    { keys: "d", label: "clair / sombre" },
+  ],
+  [
+    { keys: "/", label: "search" },
+    { keys: "j / k", label: "next / previous card" },
+    { keys: "o", label: "open on GitHub" },
+    { keys: "e", label: "expand / collapse" },
+    { keys: "d", label: "light / dark" },
+  ],
+)
 
 const CARD = "[data-pr-card]"
 

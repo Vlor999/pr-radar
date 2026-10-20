@@ -3,17 +3,35 @@ import { ExternalLink, Loader2, Send } from "lucide-react"
 import { cn } from "cn"
 
 import { reply } from "@/lib/actions"
+import { strings, useStrings } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import type { Thread } from "@/lib/types"
 
-function ago(iso: string) {
+const S = strings(
+  {
+    agoNow: "à l'instant",
+    agoH: (h: number) => `il y a ${h} h`,
+    agoD: (d: number) => `il y a ${d} j`,
+    outdated: "code modifié depuis",
+    reply: "Répondre",
+    replyPlaceholder: "Répondre…",
+    viewOnGithub: "Voir sur GitHub",
+  },
+  {
+    agoNow: "just now",
+    agoH: (h: number) => `${h}h ago`,
+    agoD: (d: number) => `${d}d ago`,
+    outdated: "code changed since",
+    reply: "Reply",
+    replyPlaceholder: "Reply…",
+    viewOnGithub: "View on GitHub",
+  },
+)
+
+function ago(iso: string, t: typeof S.fr) {
   const h = Math.floor((Date.now() - Date.parse(iso)) / 3_600_000)
-  return h >= 48
-    ? `il y a ${Math.floor(h / 24)} j`
-    : h
-      ? `il y a ${h} h`
-      : "à l'instant"
+  return h >= 48 ? t.agoD(Math.floor(h / 24)) : h ? t.agoH(h) : t.agoNow
 }
 
 /** Colonne des discussions ouvertes d'une PR, reliée à sa carte par des traits (affichée sous la carte). */
@@ -38,6 +56,7 @@ export function ThreadColumn({ threads }: { threads: Thread[] }) {
 }
 
 function ThreadCard({ thread }: { thread: Thread }) {
+  const t = useStrings(S)
   const [draft, setDraft] = useState("")
   const [error, setError] = useState("")
   const [sending, start] = useTransition()
@@ -64,7 +83,7 @@ function ThreadCard({ thread }: { thread: Thread }) {
         </a>
         {thread.outdated && (
           <span className="shrink-0 text-xs text-amber-700 dark:text-amber-400">
-            code modifié depuis
+            {t.outdated}
           </span>
         )}
       </header>
@@ -82,7 +101,7 @@ function ThreadCard({ thread }: { thread: Thread }) {
                 rel="noopener"
                 className="text-xs text-muted-foreground hover:underline"
               >
-                {ago(c.at)}
+                {ago(c.at, t)}
               </a>
             </div>
             <p className="break-words whitespace-pre-line">{c.body}</p>
@@ -98,7 +117,7 @@ function ThreadCard({ thread }: { thread: Thread }) {
         }}
       >
         <label htmlFor={`reply-${thread.id}`} className="sr-only">
-          Répondre
+          {t.reply}
         </label>
         <textarea
           id={`reply-${thread.id}`}
@@ -111,7 +130,7 @@ function ThreadCard({ thread }: { thread: Thread }) {
             }
           }}
           rows={2}
-          placeholder="Répondre…"
+          placeholder={t.replyPlaceholder}
           disabled={sending}
           className="min-h-16 w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
         />
@@ -123,11 +142,11 @@ function ThreadCard({ thread }: { thread: Thread }) {
             rel="noopener"
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
           >
-            Voir sur GitHub <ExternalLink className="size-3" />
+            {t.viewOnGithub} <ExternalLink className="size-3" />
           </a>
           <Button type="submit" size="sm" disabled={sending || !draft.trim()}>
             {sending ? <Loader2 className="animate-spin" /> : <Send />}
-            Répondre
+            {t.reply}
             <kbd className="font-sans text-xs opacity-70">⌘↵</kbd>
           </Button>
         </div>

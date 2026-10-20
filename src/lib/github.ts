@@ -1,6 +1,7 @@
 import { fetch } from "@tauri-apps/plugin-http"
 
 import { currentToken } from "./auth"
+import { pick, strings } from "./i18n"
 import { trackQuota } from "./quota"
 import type { Decision, MergedPr, Pr, Thread } from "./types"
 
@@ -12,6 +13,29 @@ const REPOS_PER_QUERY = 5 // une requête de recherche GitHub est limitée en lo
 const MAX_BODY = 4000 // caractères gardés par message de discussion
 const HUNK_LINES = 8 // GitHub montre aussi la fin du hunk, qui se termine sur la ligne commentée
 
+const S = strings(
+  {
+    notSignedIn: "Non connecté",
+    tokenRejected: "Jeton GitHub refusé",
+    http: (status: number) => `GitHub : HTTP ${status}`,
+    httpOn: (status: number, path: string) =>
+      `GitHub : HTTP ${status} sur ${path}`,
+    invalidName: (repo: string) =>
+      `Nom invalide : « ${repo} » (attendu : owner/repo)`,
+    notFound: (repo: string) => `Repo introuvable ou inaccessible : ${repo}`,
+  },
+  {
+    notSignedIn: "Not signed in",
+    tokenRejected: "GitHub token rejected",
+    http: (status: number) => `GitHub: HTTP ${status}`,
+    httpOn: (status: number, path: string) =>
+      `GitHub: HTTP ${status} on ${path}`,
+    invalidName: (repo: string) =>
+      `Invalid name: "${repo}" (expected: owner/repo)`,
+    notFound: (repo: string) => `Repo not found or inaccessible: ${repo}`,
+  },
+)
+
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
 /** Jeton refusé par GitHub (révoqué, expiré) : l'app repasse à l'écran de connexion. */
@@ -20,7 +44,7 @@ export class AuthError extends Error {
 }
 
 function headers(token = currentToken()) {
-  if (!token) throw new AuthError("Non connecté")
+  if (!token) throw new AuthError(pick(S).notSignedIn)
   return {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
@@ -39,7 +63,7 @@ async function gql<T>(
     body: JSON.stringify({ query, variables }),
   })
   trackQuota(res.headers)
-  if (res.status === 401) throw new AuthError("Jeton GitHub refusé")
+  if (res.status === 401) throw new AuthError(pick(S).tokenRejected)
   const json = (await res.json()) as {
     data?: T
     errors?: { message: string }[]
@@ -48,7 +72,7 @@ async function gql<T>(
   if (!json.data)
     throw new Error(
       json.errors?.map((e) => e.message).join(" ; ") ??
-        `GitHub : HTTP ${res.status}`,
+        pick(S).http(res.status),
     )
   return json.data
 }
@@ -59,8 +83,8 @@ async function restAll<T>(path: string): Promise<T[]> {
   let url: string | null = `${API}${path}`
   while (url) {
     const res = await fetch(url, { headers: headers() })
-    if (res.status === 401) throw new AuthError("Jeton GitHub refusé")
-    if (!res.ok) throw new Error(`GitHub : HTTP ${res.status} sur ${path}`)
+    if (res.status === 401) throw new AuthError(pick(S).tokenRejected)
+    if (!res.ok) throw new Error(pick(S).httpOn(res.status, path))
     out.push(...((await res.json()) as T[]))
     url =
       /<([^>]+)>;\s*rel="next"/.exec(res.headers.get("link") ?? "")?.[1] ?? null
@@ -315,10 +339,9 @@ export function listRepos(): Promise<string[]> {
 
 /** Vérifie que le repo existe et est accessible ; renvoie son nom canonique. */
 export async function resolveRepo(repo: string): Promise<string> {
-  if (!REPO_NAME.test(repo))
-    throw new Error(`Nom invalide : « ${repo} » (attendu : owner/repo)`)
+  if (!REPO_NAME.test(repo)) throw new Error(pick(S).invalidName(repo))
   const res = await fetch(`${API}/repos/${repo}`, { headers: headers() })
-  if (!res.ok) throw new Error(`Repo introuvable ou inaccessible : ${repo}`)
+  if (!res.ok) throw new Error(pick(S).notFound(repo))
   return ((await res.json()) as { full_name: string }).full_name
 }
 

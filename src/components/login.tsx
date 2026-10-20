@@ -22,13 +22,56 @@ import {
   type DeviceCode,
 } from "@/lib/auth"
 import { viewerLogin } from "@/lib/github"
+import { useStrings, strings } from "@/lib/i18n"
 import { openExternal } from "@/lib/open"
+
+const S = strings(
+  {
+    patRejected:
+      "Jeton refusé par GitHub : vérifie-le et ses droits (repo, read:org).",
+    intro:
+      "Connecte ton compte GitHub. Le jeton reste dans le trousseau de ton ordinateur : l'app parle directement à GitHub, sans serveur intermédiaire.",
+    codeCopied: "Code copié : colle-le sur github.com (⌘V)",
+    enterCode: "Saisis ce code sur github.com :",
+    copy: "Copier",
+    open: (host: string) => `Ouvrir ${host}`,
+    waiting: "En attente de ta validation…",
+    cancel: "Annuler",
+    signIn: "Se connecter avec GitHub",
+    useGh: "Utiliser mon compte du CLI gh",
+    moreOptions: "Autres options : jeton d'accès personnel",
+    patLabel: "Jeton d'accès personnel GitHub",
+    patPlaceholder: "ghp_… ou github_pat_…",
+    submit: "Valider",
+    createPat: "Créer un jeton (droits repo et read:org) sur GitHub",
+  },
+  {
+    patRejected:
+      "GitHub rejected the token: check it and its scopes (repo, read:org).",
+    intro:
+      "Sign in with your GitHub account. The token stays in your computer's keychain: the app talks directly to GitHub, with no intermediary server.",
+    codeCopied: "Code copied: paste it on github.com (⌘V)",
+    enterCode: "Enter this code on github.com:",
+    copy: "Copy",
+    open: (host: string) => `Open ${host}`,
+    waiting: "Waiting for you to authorize…",
+    cancel: "Cancel",
+    signIn: "Sign in with GitHub",
+    useGh: "Use my gh CLI account",
+    moreOptions: "More options: personal access token",
+    patLabel: "GitHub personal access token",
+    patPlaceholder: "ghp_… or github_pat_…",
+    submit: "Submit",
+    createPat: "Create a token (repo and read:org scopes) on GitHub",
+  },
+)
 
 const PAT_URL =
   "https://github.com/settings/tokens/new?scopes=repo,read:org&description=PR%20Radar"
 
 /** Écran de connexion : code à valider sur github.com (device flow) ou jeton personnel. */
 export function Login() {
+  const t = useStrings(S)
   const [code, setCode] = useState<DeviceCode | null>(null)
   const [pat, setPat] = useState("")
   const [error, setError] = useState("")
@@ -72,9 +115,7 @@ export function Login() {
       await viewerLogin(pat.trim()) // vérifie le jeton avant de l'enregistrer
       await saveToken(pat.trim(), "pat")
     } catch {
-      setError(
-        "Jeton refusé par GitHub : vérifie-le et ses droits (repo, read:org).",
-      )
+      setError(t.patRejected)
     } finally {
       setBusy(false)
     }
@@ -96,11 +137,7 @@ export function Login() {
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
             PR Radar
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Connecte ton compte GitHub. Le jeton reste dans le trousseau de ton
-            ordinateur : l'app parle directement à GitHub, sans serveur
-            intermédiaire.
-          </p>
+          <p className="text-sm text-muted-foreground">{t.intro}</p>
         </div>
 
         {CLIENT_ID && (
@@ -108,15 +145,13 @@ export function Login() {
             {code ? (
               <div className="flex flex-col items-center gap-3 rounded-2xl bg-muted/60 px-4 py-5 text-center">
                 <p className="text-sm text-muted-foreground">
-                  {copied
-                    ? "Code copié : colle-le sur github.com (⌘V)"
-                    : "Saisis ce code sur github.com :"}
+                  {copied ? t.codeCopied : t.enterCode}
                 </p>
                 <button
                   type="button"
                   onClick={copy}
                   className="flex items-center gap-2 rounded-lg px-3 py-1 font-mono text-3xl font-semibold tracking-widest hover:bg-muted"
-                  title="Copier"
+                  title={t.copy}
                 >
                   {code.user_code}
                   {copied ? (
@@ -130,25 +165,24 @@ export function Login() {
                   size="sm"
                   onClick={() => openExternal(code.verification_uri)}
                 >
-                  Ouvrir {code.verification_uri.replace("https://", "")}{" "}
+                  {t.open(code.verification_uri.replace("https://", ""))}{" "}
                   <ExternalLink />
                 </Button>
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="size-3.5 animate-spin" /> En attente de ta
-                  validation…
+                  <Loader2 className="size-3.5 animate-spin" /> {t.waiting}
                 </p>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => abort.current?.abort()}
                 >
-                  Annuler
+                  {t.cancel}
                 </Button>
               </div>
             ) : (
               <Button size="lg" disabled={busy} onClick={deviceLogin}>
                 {busy ? <Loader2 className="animate-spin" /> : null}
-                Se connecter avec GitHub
+                {t.signIn}
               </Button>
             )}
           </section>
@@ -161,7 +195,7 @@ export function Login() {
             onClick={() => signInWithGh()}
           >
             <Terminal />
-            Utiliser mon compte du CLI gh
+            {t.useGh}
           </Button>
         )}
 
@@ -173,7 +207,7 @@ export function Login() {
             className="group flex items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
           >
             <ChevronRight className="size-3.5 transition-transform group-aria-expanded:rotate-90" />
-            Autres options : jeton d'accès personnel
+            {t.moreOptions}
           </button>
           {more && (
             <form
@@ -184,7 +218,7 @@ export function Login() {
               }}
             >
               <label htmlFor="pat" className="text-sm font-medium">
-                Jeton d'accès personnel GitHub
+                {t.patLabel}
               </label>
               <div className="flex gap-2">
                 <Input
@@ -192,7 +226,7 @@ export function Login() {
                   type="password"
                   value={pat}
                   onChange={(e) => setPat(e.target.value)}
-                  placeholder="ghp_… ou github_pat_…"
+                  placeholder={t.patPlaceholder}
                   autoComplete="off"
                 />
                 <Button
@@ -201,14 +235,14 @@ export function Login() {
                   disabled={busy || !pat.trim()}
                 >
                   <KeyRound />
-                  Valider
+                  {t.submit}
                 </Button>
               </div>
               <a
                 href={PAT_URL}
                 className="text-xs text-primary hover:underline"
               >
-                Créer un jeton (droits repo et read:org) sur GitHub
+                {t.createPat}
               </a>
             </form>
           )}

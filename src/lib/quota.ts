@@ -2,6 +2,21 @@ import { useSyncExternalStore } from "react"
 
 import { notify } from "@/hooks/use-pr-notifications"
 
+import { locale, pick, strings } from "./i18n"
+
+const S = strings(
+  {
+    lowTitle: "Quota GitHub presque épuisé",
+    lowBody: (remaining: number, limit: number, reset: string) =>
+      `${remaining} / ${limit} points restants, réinitialisé à ${reset}`,
+  },
+  {
+    lowTitle: "GitHub quota almost used up",
+    lowBody: (remaining: number, limit: number, reset: string) =>
+      `${remaining} / ${limit} points left, resets at ${reset}`,
+  },
+)
+
 /** Quota GraphQL de GitHub (points par heure), lu dans les en-têtes de chaque réponse. */
 export type Quota = { remaining: number; limit: number; resetAt: number }
 
@@ -11,7 +26,7 @@ let warned = 0
 const listeners = new Set<() => void>()
 
 export const resetTime = (at: number) =>
-  new Date(at).toLocaleTimeString("fr-FR", {
+  new Date(at).toLocaleTimeString(locale(), {
     hour: "2-digit",
     minute: "2-digit",
   })
@@ -27,9 +42,10 @@ export function trackQuota(h: Headers) {
   listeners.forEach((l) => l())
   if (quota.remaining > limit * LOW || warned === quota.resetAt) return
   warned = quota.resetAt
+  const t = pick(S)
   notify(
-    "Quota GitHub presque épuisé",
-    `${quota.remaining} / ${limit} points restants, réinitialisé à ${resetTime(quota.resetAt)}`,
+    t.lowTitle,
+    t.lowBody(quota.remaining, limit, resetTime(quota.resetAt)),
   ).catch(() => {})
 }
 
