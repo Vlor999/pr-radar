@@ -13,6 +13,12 @@
       "allow": [
         {
           "url": "https://**"
+        },
+        {
+          "url": "x-apple.systempreferences:*"
+        },
+        {
+          "url": "ms-settings:*"
         }
       ]
     },

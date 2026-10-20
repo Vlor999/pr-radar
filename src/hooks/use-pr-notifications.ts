@@ -1,14 +1,42 @@
-import { useEffect, useRef } from "react"
-import {
-  isPermissionGranted,
-  requestPermission,
-  sendNotification,
-} from "@tauri-apps/plugin-notification"
+import { invoke } from "@tauri-apps/api/core"
+import { useEffect, useRef, useSyncExternalStore } from "react"
 
 import { getSettings, type Settings } from "@/lib/settings"
 import type { Pr } from "@/lib/types"
 
-type Permission = "default" | "granted" | "denied"
+/* ---------- Envoi : on appelle la commande du plugin pour récupérer les erreurs ---------- */
+
+type Sent = { title: string; at: string }
+const LAST = "pr-radar:last-notification"
+const listeners = new Set<() => void>()
+const readLast = () => {
+  try {
+    return localStorage.getItem(LAST)
+  } catch {
+    return null
+  }
+}
+
+/** Envoie une notification système ; rejette avec l'erreur du système si elle échoue. */
+export async function notify(title: string, body: string) {
+  await invoke("plugin:notification|notify", { options: { title, body } })
+  try {
+    localStorage.setItem(
+      LAST,
+      JSON.stringify({ title, at: new Date().toISOString() }),
+    )
+  } catch {}
+  listeners.forEach((l) => l())
+}
+
+/** Dernière notification envoyée par l'app (réglages : preuve que le mécanisme tourne). */
+export function useLastNotification(): Sent | null {
+  const raw = useSyncExternalStore((l) => {
+    listeners.add(l)
+    return () => listeners.delete(l)
+  }, readLast)
+  return raw ? (JSON.parse(raw) as Sent) : null
+}
 
 type Kind = keyof Settings["notify"]
 
@@ -44,31 +72,12 @@ export function usePrNotifications(prs: Pr[]) {
       const what = was && change(was, now)
       return what && getSettings().notify[what.kind] ? [{ key, now, what }] : []
     })
-    if (!changes.length) return
-    isPermissionGranted().then((ok) => {
-      if (!ok) return
-      for (const { key, now, what } of changes)
-        sendNotification({ title: `${key} : ${what.text}`, body: now.title })
-    })
+    for (const { key, now, what } of changes)
+      notify(`${key} : ${what.text}`, now.title).catch(() => {})
   }, [prs])
 }
 
-/** Réglages > Notifications : état de l'autorisation système, sans rien demander. */
-export async function notificationPermission(): Promise<Permission> {
-  return (await isPermissionGranted().catch(() => false))
-    ? "granted"
-    : "default"
-}
-
-/** Demande l'autorisation au système (affiche la boîte de dialogue la première fois). */
-export async function requestNotifications(): Promise<Permission> {
-  return (await requestPermission()) as Permission
-}
-
-/** Bouton « Tester » des réglages. */
+/** Bouton « Envoyer une notification de test » des réglages. */
 export function testNotification() {
-  sendNotification({
-    title: "PR Radar",
-    body: "Les notifications fonctionnent.",
-  })
+  return notify("PR Radar", "Les notifications fonctionnent.")
 }

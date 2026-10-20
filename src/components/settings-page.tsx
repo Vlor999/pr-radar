@@ -15,9 +15,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { SHORTCUTS } from "@/hooks/use-keyboard-nav"
 import {
-  notificationPermission,
-  requestNotifications,
   testNotification,
+  useLastNotification,
 } from "@/hooks/use-pr-notifications"
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
@@ -404,46 +403,77 @@ const NOTIFY = [
   ["ciFailed", "CI en échec"],
 ] as const
 
+// sur ordinateur, c'est le système qui autorise ou bloque : on renvoie vers ses réglages
+const SYSTEM_NOTIFICATION_SETTINGS = navigator.userAgent.includes("Mac")
+  ? "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+  : navigator.userAgent.includes("Windows")
+    ? "ms-settings:notifications"
+    : null
+
 function NotificationsSection() {
   const s = useSettings()
-  const [perm, setPerm] = useState<string | null>(null)
-  useEffect(() => {
-    notificationPermission().then(setPerm, () => setPerm("default"))
-  }, [])
-  const granted = perm === "granted"
+  const last = useLastNotification()
+  const [test, setTest] = useState<
+    { state: "sending" | "sent" } | { state: "error"; message: string } | null
+  >(null)
+  const send = () => {
+    setTest({ state: "sending" })
+    testNotification().then(
+      () => setTest({ state: "sent" }),
+      (e: unknown) => setTest({ state: "error", message: String(e) }),
+    )
+  }
   return (
     <Section
       id="notifications"
       title="Notifications"
-      description="Envoyées quand l'app est ouverte."
+      description="Notifications système envoyées quand une PR change, tant que l'app est ouverte."
     >
       <Row
-        label="Autorisation du système"
+        label="Tester"
         description={
-          perm === null ? "…" : granted ? "Autorisées" : "Non autorisées"
+          test?.state === "sent"
+            ? "Envoyée. Rien n'est apparu ? Le système bloque PR Radar : voir ci-dessous."
+            : test?.state === "error"
+              ? `Échec : ${test.message}`
+              : "Envoie une notification maintenant pour vérifier."
         }
       >
-        {perm !== null &&
-          (granted ? (
-            <Button variant="outline" size="sm" onClick={testNotification}>
-              Tester
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              onClick={() =>
-                void requestNotifications().then(setPerm, () => {})
-              }
-            >
-              Autoriser
-            </Button>
-          ))}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={test?.state === "sending"}
+          onClick={send}
+        >
+          Envoyer une notification de test
+        </Button>
       </Row>
+      <Row
+        label="Dernière notification"
+        description={
+          last
+            ? `${last.title} · ${new Date(last.at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}`
+            : "Aucune pour l'instant."
+        }
+      />
+      {SYSTEM_NOTIFICATION_SETTINGS && (
+        <Row
+          label="Autorisation du système"
+          description="C'est le système qui affiche ou bloque les notifications. Vérifie que PR Radar y est autorisée (bannières ou alertes)."
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openExternal(SYSTEM_NOTIFICATION_SETTINGS)}
+          >
+            Ouvrir les réglages du système
+          </Button>
+        </Row>
+      )}
       {NOTIFY.map(([key, label]) => (
         <Row key={key} label={label} labelId={`notify-${key}`}>
           <Toggle
             labelledBy={`notify-${key}`}
-            muted={!granted}
             checked={s.notify[key]}
             onChange={(v) => updateSettings({ notify: { [key]: v } })}
           />
