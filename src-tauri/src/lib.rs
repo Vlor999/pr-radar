@@ -32,16 +32,16 @@ fn delete_token() -> Result<(), String> {
 }
 
 /// Jeton du CLI GitHub (`gh auth token`) s'il est installé et connecté : connexion sans aucune étape.
-/// Une app lancée depuis le Finder n'a pas le PATH du terminal : on essaie aussi les emplacements usuels.
+/// Une app lancée depuis le Finder n'a pas le PATH du terminal : on essaie d'abord les emplacements usuels.
 #[tauri::command]
 fn gh_token() -> Option<String> {
     let candidates = [
-        "gh",
         "/opt/homebrew/bin/gh",
         "/usr/local/bin/gh",
         "/usr/bin/gh",
         "/home/linuxbrew/.linuxbrew/bin/gh",
         "C:\\Program Files\\GitHub CLI\\gh.exe",
+        "gh", // PATH en dernier recours : pas de binaire `gh` détourné via le PATH
     ];
     candidates.iter().find_map(|bin| {
         let mut cmd = std::process::Command::new(bin);
