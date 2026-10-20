@@ -10,13 +10,13 @@ import {
 import { cn } from "cn"
 
 import { refreshPrs } from "@/lib/actions"
-import { getVersion } from "@tauri-apps/api/app"
 import { reload } from "@/lib/store"
 import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
 import { SettingsPage } from "@/components/settings-page"
-import { isNewer, latestRelease } from "@/lib/github"
+import { UpdateBanner } from "@/components/update-banner"
+import { checkForUpdate, useUpdate } from "@/lib/updater"
 import { getSettings, useSettings } from "@/lib/settings"
 import { RepoSection, type OpenState } from "@/components/repo-section"
 import { Badge } from "@/components/ui/badge"
@@ -102,7 +102,8 @@ export function PrDashboard({
   const settings = useSettings()
   const [sort, setSort] = useState<string>(() => getSettings().defaultSort)
   const [showSettings, setShowSettings] = useState(false)
-  const [update, setUpdate] = useState<string | null>(null)
+  const updateState = useUpdate()
+  const update = updateState.status === "available" ? updateState.version : null
   const [tab, setTab] = useState<"open" | "calendar">("open")
   usePrNotifications(prs)
   const seen = useSeen(prs)
@@ -137,14 +138,11 @@ export function PrDashboard({
     return () => window.removeEventListener("focus", onFocus)
   }, [settings.refreshOnFocus, fetchedAt])
 
-  // mise à jour disponible : badge sur l'engrenage (vérifiée une fois au lancement)
+  // mise à jour : vérifiée au lancement puis toutes les 6 h (bandeau + badge sur l'engrenage)
   useEffect(() => {
-    Promise.all([getVersion(), latestRelease()])
-      .then(
-        ([mine, latest]) =>
-          isNewer(latest.version, mine) && setUpdate(latest.version),
-      )
-      .catch(() => {})
+    checkForUpdate({ quiet: true })
+    const id = setInterval(() => checkForUpdate({ quiet: true }), 6 * 3_600_000)
+    return () => clearInterval(id)
   }, [])
 
   // ⌘, (Ctrl+, ailleurs) : réglages, comme dans les apps macOS
@@ -263,6 +261,8 @@ export function PrDashboard({
           </Button>
         </div>
       </header>
+
+      <UpdateBanner />
 
       {showSettings ? (
         <SettingsPage onClose={() => setShowSettings(false)} />

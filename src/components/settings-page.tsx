@@ -24,14 +24,13 @@ import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { authSource, CLIENT_ID, logout } from "@/lib/auth"
 import {
   clearCache,
-  isNewer,
-  latestRelease,
   reposWithMyOpenPrs,
   viewerProfile,
   type Profile,
 } from "@/lib/github"
 import { openExternal } from "@/lib/open"
 import { resetSettings, updateSettings, useSettings } from "@/lib/settings"
+import { checkForUpdate, installUpdate, useUpdate } from "@/lib/updater"
 import { getRepos, reload, setRepos } from "@/lib/store"
 
 const SECTIONS = [
@@ -646,29 +645,16 @@ function ShortcutsSection() {
   )
 }
 
-type UpdateState =
-  | { status: "idle" | "checking" | "up-to-date" | "error" }
-  | { status: "available"; version: string }
-
 function AboutSection() {
   const [version, setVersion] = useState<string | null>(null)
-  const [update, setUpdate] = useState<UpdateState>({ status: "idle" })
+  const update = useUpdate()
   useEffect(() => {
     getVersion().then(setVersion, () => {})
   }, [])
-  const check = async () => {
-    setUpdate({ status: "checking" })
-    try {
-      const latest = await latestRelease()
-      setUpdate(
-        version && isNewer(latest.version, version)
-          ? { status: "available", version: latest.version }
-          : { status: "up-to-date" },
-      )
-    } catch {
-      setUpdate({ status: "error" })
-    }
-  }
+  const busy =
+    update.status === "checking" ||
+    update.status === "downloading" ||
+    update.status === "ready"
   return (
     <Section
       id="a-propos"
@@ -684,26 +670,39 @@ function AboutSection() {
             <span className="text-muted-foreground">À jour</span>
           )}
           {update.status === "error" && (
-            <span className="text-destructive">Vérification impossible</span>
+            <span className="text-destructive" title={update.message}>
+              Mise à jour impossible
+            </span>
           )}
           {update.status === "available" && (
             <span className="font-medium text-primary">
               Version {update.version} disponible
             </span>
           )}
+          {update.status === "downloading" && (
+            <span className="text-muted-foreground">
+              Téléchargement
+              {update.progress !== null
+                ? ` · ${Math.round(update.progress * 100)} %`
+                : "…"}
+            </span>
+          )}
+          {update.status === "ready" && (
+            <span className="text-muted-foreground">Redémarrage…</span>
+          )}
         </span>
         {update.status === "available" ? (
-          <Button size="sm" onClick={() => openExternal(DOWNLOAD_URL)}>
-            Télécharger
+          <Button size="sm" onClick={() => void installUpdate()}>
+            Installer et redémarrer
           </Button>
         ) : (
           <Button
             variant="outline"
             size="sm"
-            disabled={update.status === "checking" || !version}
-            onClick={() => void check()}
+            disabled={busy}
+            onClick={() => void checkForUpdate()}
           >
-            {update.status === "checking" && (
+            {busy && (
               <Loader2
                 data-icon="inline-start"
                 className="animate-spin motion-reduce:animate-none"

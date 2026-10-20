@@ -341,33 +341,3 @@ export async function viewerProfile(): Promise<Profile> {
     await gql<{ viewer: Profile }>("{ viewer { login name avatarUrl url } }")
   ).viewer
 }
-
-export type Release = { version: string; url: string; publishedAt: string }
-
-/** Dernière version publiée de PR Radar (repo public : pas besoin de jeton). */
-export async function latestRelease(): Promise<Release> {
-  const res = await fetch(`${API}/repos/Vlor999/pr-radar/releases/latest`, {
-    headers: { Accept: "application/vnd.github+json" },
-  })
-  if (!res.ok) throw new Error(`GitHub : HTTP ${res.status}`)
-  const r = (await res.json()) as {
-    tag_name: string
-    html_url: string
-    published_at: string
-  }
-  return {
-    version: r.tag_name.replace(/^v/, ""),
-    url: r.html_url,
-    publishedAt: r.published_at,
-  }
-}
-
-/** "0.2.0" > "0.1.9" : comparaison numérique, segment par segment. */
-export function isNewer(a: string, b: string) {
-  const pa = a.split(".").map(Number)
-  const pb = b.split(".").map(Number)
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0)
-  }
-  return false
-}

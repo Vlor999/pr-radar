@@ -2,23 +2,39 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "opener:default",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://**" }]
+      "allow": [
+        {
+          "url": "https://**"
+        }
+      ]
     },
     "notification:default",
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://api.github.com/*" },
-        { "url": "https://api.github.com/**" },
-        { "url": "https://github.com/login/*" },
-        { "url": "https://github.com/login/**" }
+        {
+          "url": "https://api.github.com/*"
+        },
+        {
+          "url": "https://api.github.com/**"
+        },
+        {
+          "url": "https://github.com/login/*"
+        },
+        {
+          "url": "https://github.com/login/**"
+        }
       ]
-    }
+    },
+    "updater:default",
+    "process:allow-restart"
   ]
 }
