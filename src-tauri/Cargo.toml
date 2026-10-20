@@ -1,6 +1,6 @@
 [package]
 name = "pr-radar"
-version = "0.3.2"
+version = "0.3.3"
 description = "PR Radar — vos PR GitHub ouvertes"
 authors = ["Vlor999"]
 edition = "2024"
