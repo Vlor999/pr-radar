@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 import { fetchMerged, fetchPrs, listRepos, reposWithMyOpenPrs } from "./github"
+import { getSettings } from "./settings"
 import { buildTree } from "./tree"
 import type { MergedPr, Pr, RepoTree } from "./types"
 
@@ -25,7 +26,6 @@ export function setRepos(repos: string[]) {
 
 /* ---------- Données affichées : chargées depuis GitHub, partagées par toute l'interface ---------- */
 
-const MERGED_DAYS = 7
 const day = (d: Date) => d.toISOString().slice(0, 10)
 
 export type Data = {
@@ -39,7 +39,13 @@ export type Data = {
   authError?: boolean
 }
 
-let data: Data = { prs: [], trees: [], withPrs: [], fetchedAt: "", loading: true }
+let data: Data = {
+  prs: [],
+  trees: [],
+  withPrs: [],
+  fetchedAt: "",
+  loading: true,
+}
 const listeners = new Set<() => void>()
 let seq = 0
 
@@ -54,7 +60,7 @@ export function useData(): Data {
       listeners.add(l)
       return () => listeners.delete(l)
     },
-    () => data
+    () => data,
   )
 }
 
@@ -74,9 +80,11 @@ export async function reload() {
     const now = new Date()
     const [prs, recent] = await Promise.all([
       fetchPrs(repos),
-      fetchMerged(repos, day(new Date(now.getTime() - MERGED_DAYS * 86_400_000)), day(now)).catch(
-        () => [] as MergedPr[]
-      ),
+      fetchMerged(
+        repos,
+        day(new Date(now.getTime() - getSettings().mergedDays * 86_400_000)),
+        day(now),
+      ).catch(() => [] as MergedPr[]),
     ])
     if (id !== seq) return
     set({

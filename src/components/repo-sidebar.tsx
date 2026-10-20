@@ -1,8 +1,8 @@
-
 import { useEffect, useOptimistic, useState, useTransition } from "react"
 import { ChevronRight, Loader2, Plus, Search } from "lucide-react"
 
 import { accessibleRepos, addRepo, setFollowed } from "@/lib/actions"
+import { CLIENT_ID } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -12,6 +12,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
+
+const ORG_ACCESS_URL = `https://github.com/settings/connections/applications/${CLIENT_ID}`
 
 const lower = (s: string) => s.toLowerCase()
 
@@ -46,7 +48,7 @@ export function RepoSidebar({
       if (on) next.add(lower(repo))
       else next.delete(lower(repo))
       return next
-    }
+    },
   )
 
   useEffect(() => {
@@ -82,7 +84,7 @@ export function RepoSidebar({
   // orgs avec des repos suivis d'abord, puis par nombre de repos
   const orgs = [...byOrg].sort(
     ([a, ra], [b, rb]) =>
-      count(rb) - count(ra) || rb.length - ra.length || a.localeCompare(b)
+      count(rb) - count(ra) || rb.length - ra.length || a.localeCompare(b),
   )
   const canAddTyped =
     /^[\w.-]+\/[\w.-]+$/.test(query.trim()) &&
@@ -187,6 +189,13 @@ export function RepoSidebar({
           </Collapsible>
         ))}
       </div>
+      <p className="border-t pt-3 text-xs text-muted-foreground">
+        Une organisation manque ? Elle bloque peut-être les apps tierces :{" "}
+        <a href={ORG_ACCESS_URL} className="text-primary hover:underline">
+          demander l'accès pour PR Radar
+        </a>{" "}
+        (un admin de l'org valide), ou connecte-toi avec le CLI gh.
+      </p>
     </aside>
   )
 }

@@ -1,4 +1,3 @@
-
 import { useState, useTransition } from "react"
 import { ExternalLink, Loader2, Send } from "lucide-react"
 import { cn } from "cn"
@@ -28,7 +27,7 @@ export function ThreadColumn({ threads }: { threads: Thread[] }) {
             "relative",
             // coude qui part de la carte de la PR vers chaque discussion
             "before:absolute before:top-0 before:-left-5 before:h-7 before:w-5 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-border",
-            "not-last:after:absolute not-last:after:top-0 not-last:after:-bottom-3 not-last:after:-left-5 not-last:after:border-l-2 not-last:after:border-border"
+            "not-last:after:absolute not-last:after:top-0 not-last:after:-bottom-3 not-last:after:-left-5 not-last:after:border-l-2 not-last:after:border-border",
           )}
         >
           <ThreadCard thread={t} />
@@ -153,7 +152,7 @@ function Hunk({ hunk }: { hunk: string }) {
               "bg-green-500/10 text-green-800 dark:text-green-300",
             line.startsWith("-") &&
               "bg-red-500/10 text-red-800 dark:text-red-300",
-            line.startsWith("@@") && "text-muted-foreground"
+            line.startsWith("@@") && "text-muted-foreground",
           )}
         >
           {line || " "}

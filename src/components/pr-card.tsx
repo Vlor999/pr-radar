@@ -1,4 +1,3 @@
-
 import {
   ChevronRight,
   Clock,
@@ -16,6 +15,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { useSettings } from "@/lib/settings"
 import { idleDays, isStale, mergeState, needsAttention } from "@/lib/tree"
 import type { PrNode } from "@/lib/types"
 
@@ -68,6 +68,7 @@ export function PrCard({
   const status = STATUS[pr.decision ?? "NONE"] ?? STATUS.NONE
   const ci = pr.ci ? CI[pr.ci] : undefined
   const merge = mergeState(pr)
+  const { staleDays } = useSettings()
 
   return (
     <Card
@@ -77,7 +78,7 @@ export function PrCard({
         // carte sélectionnée au clavier (j/k) : contour épais + fond teinté, bien visible
         "has-[[data-pr-card]:focus-visible]:bg-primary/5 has-[[data-pr-card]:focus-visible]:shadow-lg has-[[data-pr-card]:focus-visible]:ring-2 has-[[data-pr-card]:focus-visible]:ring-primary",
         needsAttention(pr) && "border-l-4 border-l-destructive",
-        merge?.kind === "ready" && "border-l-4 border-l-primary"
+        merge?.kind === "ready" && "border-l-4 border-l-primary",
       )}
     >
       <Collapsible open={open} onOpenChange={onOpenChange}>
@@ -160,7 +161,7 @@ export function PrCard({
                 bloque {plural(pr.children.length, "PR")}
               </Badge>
             )}
-            {isStale(pr) && (
+            {isStale(pr, Date.now(), staleDays) && (
               <Badge
                 variant="outline"
                 className="text-amber-700 dark:text-amber-400"
@@ -181,7 +182,7 @@ export function PrCard({
                     className={cn(
                       "font-medium",
                       r.state === "APPROVED" && "text-primary",
-                      r.state === "CHANGES_REQUESTED" && "text-destructive"
+                      r.state === "CHANGES_REQUESTED" && "text-destructive",
                     )}
                   >
                     {r.who}

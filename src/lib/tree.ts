@@ -1,15 +1,15 @@
 import type { Pr, PrNode, Root } from "./types.ts"
 
 export const TRUNKS = ["main", "master"]
-export const STALE_DAYS = 5
+export const STALE_DAYS = 5 // par défaut ; réglable dans l'app
 
 export const needsAttention = (p: Pr) =>
   p.decision === "CHANGES_REQUESTED" || p.unresolved > 0
 export const isStacked = (p: Pr) => !TRUNKS.includes(p.base)
 export const idleDays = (p: Pr, now = Date.now()) =>
   Math.floor((now - Date.parse(p.updated)) / 86_400_000)
-export const isStale = (p: Pr, now = Date.now()) =>
-  idleDays(p, now) >= STALE_DAYS
+export const isStale = (p: Pr, now = Date.now(), days = STALE_DAYS) =>
+  idleDays(p, now) >= days
 
 /** Prête à merger, bloquée par sa PR parente du stack, ou rien de particulier. */
 export type MergeState =
@@ -62,7 +62,7 @@ export function buildTree(prs: Pr[]): Root[] {
     .sort(
       (a, b) =>
         Number(!TRUNKS.includes(a)) - Number(!TRUNKS.includes(b)) ||
-        a.localeCompare(b)
+        a.localeCompare(b),
     )
     .map((branch) => ({
       branch,
@@ -77,7 +77,7 @@ export function buildTree(prs: Pr[]): Root[] {
 /** Garde les PR qui matchent, plus leurs ancêtres pour garder le contexte du stack. */
 export function filterTree(
   roots: Root[],
-  match: (p: PrNode) => boolean
+  match: (p: PrNode) => boolean,
 ): Root[] {
   const prune = (n: PrNode): PrNode | null => {
     const children = n.children
@@ -96,7 +96,7 @@ export function filterTree(
 /** Trie chaque niveau de l'arbre (les stacks restent sous leur parent). */
 export function sortTree(
   roots: Root[],
-  cmp: (a: PrNode, b: PrNode) => number
+  cmp: (a: PrNode, b: PrNode) => number,
 ): Root[] {
   const sort = (ns: PrNode[]): PrNode[] =>
     [...ns].sort(cmp).map((n) => ({ ...n, children: sort(n.children) }))

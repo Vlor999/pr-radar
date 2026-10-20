@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { cn } from "cn"
@@ -21,7 +20,7 @@ const dayKey = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const shortName = (repo: string) => repo.split("/").pop() ?? repo
 const WEEKDAYS = Array.from({ length: 7 }, (_, i) =>
-  new Date(2024, 0, 1 + i).toLocaleDateString("fr-FR", { weekday: "short" })
+  new Date(2024, 0, 1 + i).toLocaleDateString("fr-FR", { weekday: "short" }),
 )
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const addDays = (d: Date, n: number) =>
@@ -58,12 +57,12 @@ function heading(view: View, from: Date, to: Date) {
         day: "numeric",
         month: "long",
         year: "numeric",
-      })
+      }),
     )
   if (view === "week")
     return `Semaine du ${from.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} au ${to.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`
   return capitalize(
-    from.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+    from.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }),
   )
 }
 
@@ -74,7 +73,7 @@ export function MergeCalendar() {
   const todayKey = dayKey(now)
   const [view, setView] = useState<View>("month")
   const [anchor, setAnchor] = useState(
-    () => new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    () => new Date(now.getFullYear(), now.getMonth(), now.getDate()),
   )
   const [data, setData] = useState<Loaded>({ key: "", prs: [] })
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -92,7 +91,7 @@ export function MergeCalendar() {
     mergedBetween(from, to)
       .then((r) => !stale && setData({ key, prs: r.prs, error: r.error }))
       .catch(
-        (e: unknown) => !stale && setData({ key, prs: [], error: String(e) })
+        (e: unknown) => !stale && setData({ key, prs: [], error: String(e) }),
       )
     return () => {
       stale = true
@@ -130,14 +129,14 @@ export function MergeCalendar() {
                 : Math.ceil((((first.getDay() + 6) % 7) + last.getDate()) / 7) *
                   7,
           },
-          (_, i) => addDays(gridStart, i)
+          (_, i) => addDays(gridStart, i),
         )
 
   const move = (delta: number) =>
     setAnchor((a) =>
       view === "month"
         ? new Date(a.getFullYear(), a.getMonth() + delta, 1)
-        : addDays(a, delta * (view === "week" ? 7 : 1))
+        : addDays(a, delta * (view === "week" ? 7 : 1)),
     )
   const openDay = (d: Date) => {
     setAnchor(d)
@@ -194,7 +193,7 @@ export function MergeCalendar() {
           disabled={isCurrent}
           onClick={() =>
             setAnchor(
-              new Date(now.getFullYear(), now.getMonth(), now.getDate())
+              new Date(now.getFullYear(), now.getMonth(), now.getDate()),
             )
           }
         >
@@ -233,7 +232,7 @@ export function MergeCalendar() {
       <div
         className={cn(
           "transition-opacity motion-reduce:transition-none",
-          loading && "opacity-50"
+          loading && "opacity-50",
         )}
       >
         {view === "day" ? (
@@ -289,7 +288,7 @@ export function MergeCalendar() {
                       view === "month" &&
                         d.getMonth() !== first.getMonth() &&
                         "opacity-40",
-                      k === todayKey && "ring-2 ring-primary ring-inset"
+                      k === todayKey && "ring-2 ring-primary ring-inset",
                     )}
                   >
                     <button

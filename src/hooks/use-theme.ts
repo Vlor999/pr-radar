@@ -45,9 +45,12 @@ export function useThemeEffects() {
     media.addEventListener("change", apply)
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
-      if (e.key !== "d" || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
+      if (e.key !== "d" || e.metaKey || e.ctrlKey || e.altKey || e.repeat)
+        return
       if (t?.matches("input, textarea, select") || t?.isContentEditable) return
-      setTheme(document.documentElement.classList.contains("dark") ? "light" : "dark")
+      setTheme(
+        document.documentElement.classList.contains("dark") ? "light" : "dark",
+      )
     }
     window.addEventListener("keydown", onKey)
     return () => {

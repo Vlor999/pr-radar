@@ -8,7 +8,9 @@ export function openExternal(url: string) {
 /** Tous les liens http(s) de l'app s'ouvrent dans le navigateur du système. */
 export function routeLinksToBrowser() {
   document.addEventListener("click", (e) => {
-    const a = (e.target as HTMLElement | null)?.closest?.("a[href]") as HTMLAnchorElement | null
+    const a = (e.target as HTMLElement | null)?.closest?.(
+      "a[href]",
+    ) as HTMLAnchorElement | null
     if (!a || !/^https?:/.test(a.href) || e.defaultPrevented) return
     e.preventDefault()
     openExternal(a.href)

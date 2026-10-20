@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react"
 
 import type { Pr } from "@/lib/types"
@@ -37,7 +36,7 @@ export function useSeen(prs: Pr[]) {
   const raw = useSyncExternalStore(subscribe, read, () => null)
   const seen = useMemo<Record<string, string> | null>(
     () => (raw ? JSON.parse(raw) : null),
-    [raw]
+    [raw],
   )
 
   // première visite : tout ce qui est là est considéré comme vu, pas de badge partout
@@ -48,7 +47,7 @@ export function useSeen(prs: Pr[]) {
 
   const isNew = useCallback(
     (p: Pr) => !!seen && seen[prKey(p)] !== p.updated,
-    [seen]
+    [seen],
   )
 
   const markSeen = useCallback(
@@ -59,8 +58,16 @@ export function useSeen(prs: Pr[]) {
         ...Object.fromEntries(ps.map((p) => [prKey(p), p.updated])),
       })
     },
-    [isNew]
+    [isNew],
   )
 
   return { isNew, markSeen, count: prs.filter(isNew).length }
+}
+
+/** Réglages > Données : oublie les marques « vu » (comme une première visite). */
+export function resetSeen() {
+  try {
+    localStorage.removeItem(KEY)
+  } catch {}
+  listeners.forEach((l) => l())
 }

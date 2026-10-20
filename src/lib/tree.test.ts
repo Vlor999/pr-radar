@@ -8,7 +8,7 @@ const pr = (
   number: number,
   head: string,
   base: string,
-  extra: Partial<Pr> = {}
+  extra: Partial<Pr> = {},
 ): Pr => ({
   repo: "o/r",
   number,
@@ -41,16 +41,16 @@ test("une PR stackée est rangée sous la PR dont elle part", () => {
   assert.equal(root.branch, "main")
   assert.deepEqual(
     root.children.map((n) => n.number),
-    [1]
+    [1],
   )
   assert.deepEqual(
     root.children[0].children.map((n) => n.number),
-    [2]
+    [2],
   )
   assert.equal(root.children[0].children[0].parent, 1)
   assert.deepEqual(
     root.children[0].children[0].children.map((n) => n.number),
-    [3]
+    [3],
   )
 })
 
@@ -61,7 +61,7 @@ test("une base sans PR à moi devient sa propre racine, après main", () => {
     [
       ["main", true],
       ["feat/x", false],
-    ]
+    ],
   )
 })
 
@@ -77,7 +77,7 @@ test("les changements demandés passent en premier", () => {
   ])
   assert.deepEqual(
     root.children.map((n) => n.number),
-    [2, 1]
+    [2, 1],
   )
 })
 
@@ -90,15 +90,15 @@ test("le filtre garde les ancêtres d'une PR qui matche", () => {
   const [root] = filterTree(roots, (p) => p.number === 2)
   assert.deepEqual(
     root.children.map((n) => n.number),
-    [1]
+    [1],
   )
   assert.deepEqual(
     root.children[0].children.map((n) => n.number),
-    [2]
+    [2],
   )
   assert.deepEqual(
     filterTree(roots, () => false),
-    []
+    [],
   )
 })
 
@@ -121,11 +121,11 @@ test("une PR est inactive après 5 jours sans activité", () => {
   const now = Date.parse("2026-01-10T00:00:00Z")
   assert.equal(
     isStale(pr(1, "a", "main", { updated: "2026-01-06T00:00:00Z" }), now),
-    false
+    false,
   )
   assert.equal(
     isStale(pr(1, "a", "main", { updated: "2026-01-05T00:00:00Z" }), now),
-    true
+    true,
   )
 })
 
@@ -139,10 +139,10 @@ test("le tri s'applique à chaque niveau sans casser les stacks", () => {
   const [root] = sortTree(roots, (x, y) => x.number - y.number)
   assert.deepEqual(
     root.children.map((n) => n.number),
-    [1, 2]
+    [1, 2],
   )
   assert.deepEqual(
     root.children[0].children.map((n) => n.number),
-    [3, 4]
+    [3, 4],
   )
 })

@@ -1,4 +1,3 @@
-
 import { useEffect } from "react"
 
 import { openExternal } from "@/lib/open"
@@ -39,7 +38,7 @@ export function useKeyboardNav(): void {
       switch (event.key) {
         case "/": {
           const search = document.getElementById(
-            "search"
+            "search",
           ) as HTMLInputElement | null
           if (!search) return
           event.preventDefault()

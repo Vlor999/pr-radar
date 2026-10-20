@@ -39,7 +39,8 @@ function Dashboard() {
         <Button onClick={() => logout()}>Se reconnecter</Button>
       </main>
     )
-  if (!data.fetchedAt && data.loading) return <Splash label="Chargement de tes PR…" />
+  if (!data.fetchedAt && data.loading)
+    return <Splash label="Chargement de tes PR…" />
   return (
     <PrDashboard
       prs={data.prs}

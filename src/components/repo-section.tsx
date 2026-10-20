@@ -1,4 +1,3 @@
-
 import { useTransition } from "react"
 import { ChevronRight, GitBranch, GitMerge, Trash2 } from "lucide-react"
 import { cn } from "cn"
@@ -13,6 +12,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { useSettings } from "@/lib/settings"
 import { descendants, needsAttention } from "@/lib/tree"
 import type { MergedPr, PrNode, RepoTree } from "@/lib/types"
 
@@ -75,7 +75,7 @@ export function RepoSection({
                 <span
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 font-mono text-xs font-semibold",
-                    !root.trunk && "border-dashed"
+                    !root.trunk && "border-dashed",
                   )}
                 >
                   <GitBranch className="size-3.5" />
@@ -118,6 +118,7 @@ function MergedList({
   repo: string
   state: OpenState
 }) {
+  const { mergedDays } = useSettings()
   const key = `${repo}:merged`
   return (
     <Collapsible
@@ -128,7 +129,7 @@ function MergedList({
       <CollapsibleTrigger className="group flex items-center gap-1.5 rounded-md py-1 text-sm font-medium text-muted-foreground hover:text-foreground">
         <ChevronRight className="size-3.5 transition-transform group-data-[panel-open]:rotate-90" />
         <GitMerge className="size-3.5 text-violet-600 dark:text-violet-400" />
-        Mergées ces 7 derniers jours
+        Mergées ces {mergedDays} derniers jours
         <Badge variant="outline">{prs.length}</Badge>
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -170,7 +171,7 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
             className={cn(
               "relative pt-2",
               "before:absolute before:top-0 before:-left-4.5 before:h-9 before:w-4 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-border",
-              "not-last:after:absolute not-last:after:top-0 not-last:after:bottom-0 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-border"
+              "not-last:after:absolute not-last:after:top-0 not-last:after:bottom-0 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-border",
             )}
           >
             {/* carte dépliée : ses discussions ouvertes s'affichent dessous, même largeur que la carte */}

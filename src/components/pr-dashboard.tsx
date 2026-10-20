@@ -1,22 +1,23 @@
 import { useEffect, useState, useTransition } from "react"
 import {
-  Bell,
   CalendarDays,
   CheckCheck,
   GitPullRequest,
-  LogOut,
   RefreshCw,
   Search,
+  Settings as SettingsIcon,
 } from "lucide-react"
 import { cn } from "cn"
 
 import { refreshPrs } from "@/lib/actions"
-import { logout } from "@/lib/auth"
+import { getVersion } from "@tauri-apps/api/app"
 import { reload } from "@/lib/store"
 import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
-import { ThemeSwitcher } from "@/components/theme-switcher"
+import { SettingsPage } from "@/components/settings-page"
+import { isNewer, latestRelease } from "@/lib/github"
+import { getSettings, useSettings } from "@/lib/settings"
 import { RepoSection, type OpenState } from "@/components/repo-section"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -34,8 +35,6 @@ import {
   sortTree,
 } from "@/lib/tree"
 import type { Pr, PrNode, RepoTree } from "@/lib/types"
-
-const AUTO_REFRESH_MS = 5 * 60 * 1000
 
 const TABS = [
   { id: "open", label: "PR ouvertes", icon: GitPullRequest },
@@ -63,7 +62,11 @@ const FILTERS: { id: string; label: string; match: (p: PrNode) => boolean }[] =
       label: "CI rouge",
       match: (p) => p.ci === "FAILURE" || p.ci === "ERROR",
     },
-    { id: "stale", label: "Inactives", match: (p) => isStale(p) },
+    {
+      id: "stale",
+      label: "Inactives",
+      match: (p) => isStale(p, Date.now(), getSettings().staleDays),
+    },
   ]
 
 const SORTS: { id: string; label: string; cmp?: (a: Pr, b: Pr) => number }[] = [
@@ -96,9 +99,12 @@ export function PrDashboard({
   const [refreshing, startRefresh] = useTransition()
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("all")
-  const [sort, setSort] = useState("priority")
+  const settings = useSettings()
+  const [sort, setSort] = useState<string>(() => getSettings().defaultSort)
+  const [showSettings, setShowSettings] = useState(false)
+  const [update, setUpdate] = useState<string | null>(null)
   const [tab, setTab] = useState<"open" | "calendar">("open")
-  const notifications = usePrNotifications(prs)
+  usePrNotifications(prs)
   const seen = useSeen(prs)
   useKeyboardNav()
 
@@ -111,12 +117,46 @@ export function PrDashboard({
     markSeen: seen.markSeen,
   }
 
+  // actualisation automatique (0 = manuelle) et au retour sur la fenêtre
   useEffect(() => {
+    if (!settings.refreshMinutes) return
     const id = setInterval(
       () => startRefresh(() => reload()),
-      AUTO_REFRESH_MS
+      settings.refreshMinutes * 60_000,
     )
     return () => clearInterval(id)
+  }, [settings.refreshMinutes])
+
+  useEffect(() => {
+    if (!settings.refreshOnFocus) return
+    const onFocus = () => {
+      if (Date.now() - Date.parse(fetchedAt) > 60_000)
+        startRefresh(() => reload())
+    }
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [settings.refreshOnFocus, fetchedAt])
+
+  // mise à jour disponible : badge sur l'engrenage (vérifiée une fois au lancement)
+  useEffect(() => {
+    Promise.all([getVersion(), latestRelease()])
+      .then(
+        ([mine, latest]) =>
+          isNewer(latest.version, mine) && setUpdate(latest.version),
+      )
+      .catch(() => {})
+  }, [])
+
+  // ⌘, (Ctrl+, ailleurs) : réglages, comme dans les apps macOS
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "," && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setShowSettings((v) => !v)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
   }, [])
 
   const cmp = SORTS.find((s) => s.id === sort)?.cmp
@@ -134,7 +174,7 @@ export function PrDashboard({
         (!q ||
           repoMatches ||
           [p.title, p.head, `#${p.number}`].some((s) =>
-            s.toLowerCase().includes(q)
+            s.toLowerCase().includes(q),
           ))
       const merged =
         filter !== "all"
@@ -144,8 +184,8 @@ export function PrDashboard({
                 !q ||
                 repoMatches ||
                 [p.title, `#${p.number}`].some((s) =>
-                  s.toLowerCase().includes(q)
-                )
+                  s.toLowerCase().includes(q),
+                ),
             )
       return {
         tree: { ...t, roots: sorted(filterTree(t.roots, match)), merged },
@@ -157,7 +197,7 @@ export function PrDashboard({
       (v) =>
         v.tree.roots.length ||
         v.tree.merged.length ||
-        (filter === "all" && (!q || v.repoMatches))
+        (filter === "all" && (!q || v.repoMatches)),
     )
 
   const setAll = (v: boolean) =>
@@ -166,10 +206,9 @@ export function PrDashboard({
         [
           ...trees.map((t) => t.repo),
           ...prs.map((p) => `${p.repo}#${p.number}`),
-        ].map((k) => [k, v])
-      )
+        ].map((k) => [k, v]),
+      ),
     )
-
 
   const count = (match: (p: PrNode) => boolean) => nodes.filter(match).length
 
@@ -187,16 +226,13 @@ export function PrDashboard({
               hour: "2-digit",
               minute: "2-digit",
             })}
-            , auto toutes les 5 min
+            ,{" "}
+            {settings.refreshMinutes
+              ? `auto toutes les ${settings.refreshMinutes} min`
+              : "actualisation manuelle"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {notifications.permission === "default" && (
-            <Button variant="ghost" onClick={notifications.enable}>
-              <Bell />
-              Activer les notifications
-            </Button>
-          )}
           <Button
             variant="outline"
             disabled={refreshing}
@@ -205,166 +241,189 @@ export function PrDashboard({
             <RefreshCw className={cn(refreshing && "animate-spin")} />
             {refreshing ? "Rafraîchissement…" : "Rafraîchir"}
           </Button>
-          <ThemeSwitcher />
-          <Button variant="ghost" onClick={() => logout()} title="Se déconnecter de GitHub">
-            <LogOut />
-            Déconnexion
+          <Button
+            variant={showSettings ? "secondary" : "ghost"}
+            size="icon"
+            aria-label={
+              update ? `Réglages (version ${update} disponible)` : "Réglages"
+            }
+            title={
+              update
+                ? `Réglages · version ${update} disponible`
+                : "Réglages (⌘,)"
+            }
+            aria-pressed={showSettings}
+            onClick={() => setShowSettings((v) => !v)}
+            className="relative"
+          >
+            <SettingsIcon />
+            {update && (
+              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary ring-2 ring-background" />
+            )}
           </Button>
         </div>
       </header>
 
-      <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-6 lg:order-last">
-          <nav role="tablist" aria-label="Vue" className="flex gap-1 border-b">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.id}
-                onClick={() => setTab(t.id)}
-                className={cn(
-                  "-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
-                  tab === t.id
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+      {showSettings ? (
+        <SettingsPage onClose={() => setShowSettings(false)} />
+      ) : (
+        <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col gap-6 lg:order-last">
+            <nav
+              role="tablist"
+              aria-label="Vue"
+              className="flex gap-1 border-b"
+            >
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  onClick={() => setTab(t.id)}
+                  className={cn(
+                    "-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                    tab === t.id
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <t.icon className="size-4" />
+                  {t.label}
+                </button>
+              ))}
+            </nav>
+
+            {tab === "calendar" ? (
+              <MergeCalendar />
+            ) : (
+              <>
+                {error && (
+                  <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    Récupération GitHub en échec : {error}
+                  </p>
                 )}
-              >
-                <t.icon className="size-4" />
-                {t.label}
-              </button>
-            ))}
-          </nav>
 
-          {tab === "calendar" ? (
-            <MergeCalendar />
-          ) : (
-            <>
-              {error && (
-                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  Récupération GitHub en échec : {error}
-                </p>
-              )}
-
-              <section className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-start gap-2">
-                  <div className="relative w-full max-w-sm">
-                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="search"
-                      type="search"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Repo, titre, branche, #numéro"
-                      aria-label="Rechercher"
-                      className="pl-9"
-                    />
+                <section className="flex flex-col gap-3">
+                  <div className="flex flex-wrap items-start gap-2">
+                    <div className="relative w-full max-w-sm">
+                      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="search"
+                        type="search"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Repo, titre, branche, #numéro"
+                        aria-label="Rechercher"
+                        className="pl-9"
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div
-                    className="flex flex-wrap gap-1.5"
-                    role="group"
-                    aria-label="Filtrer par statut"
-                  >
-                    {FILTERS.map((f) => (
-                      <Button
-                        key={f.id}
-                        size="sm"
-                        variant={filter === f.id ? "default" : "outline"}
-                        aria-pressed={filter === f.id}
-                        onClick={() => setFilter(f.id)}
-                      >
-                        {f.label}
-                        <Badge
-                          variant={filter === f.id ? "secondary" : "outline"}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div
+                      className="flex flex-wrap gap-1.5"
+                      role="group"
+                      aria-label="Filtrer par statut"
+                    >
+                      {FILTERS.map((f) => (
+                        <Button
+                          key={f.id}
+                          size="sm"
+                          variant={filter === f.id ? "default" : "outline"}
+                          aria-pressed={filter === f.id}
+                          onClick={() => setFilter(f.id)}
                         >
-                          {count(f.match)}
-                        </Badge>
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1">
-                    <label
-                      htmlFor="sort"
-                      className="text-sm text-muted-foreground"
-                    >
-                      Tri
-                    </label>
-                    <select
-                      id="sort"
-                      value={sort}
-                      onChange={(e) => setSort(e.target.value)}
-                      className="h-8 rounded-lg border bg-background px-2 text-sm"
-                    >
-                      {SORTS.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.label}
-                        </option>
+                          {f.label}
+                          <Badge
+                            variant={filter === f.id ? "secondary" : "outline"}
+                          >
+                            {count(f.match)}
+                          </Badge>
+                        </Button>
                       ))}
-                    </select>
-                    {seen.count > 0 && (
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <label
+                        htmlFor="sort"
+                        className="text-sm text-muted-foreground"
+                      >
+                        Tri
+                      </label>
+                      <select
+                        id="sort"
+                        value={sort}
+                        onChange={(e) => setSort(e.target.value)}
+                        className="h-8 rounded-lg border bg-background px-2 text-sm"
+                      >
+                        {SORTS.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                      {seen.count > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => seen.markSeen(prs)}
+                        >
+                          <CheckCheck />
+                          Tout marquer comme vu ({seen.count})
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => seen.markSeen(prs)}
+                        onClick={() => setAll(true)}
                       >
-                        <CheckCheck />
-                        Tout marquer comme vu ({seen.count})
+                        Tout déplier
                       </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setAll(true)}
-                    >
-                      Tout déplier
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setAll(false)}
-                    >
-                      Tout replier
-                    </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setAll(false)}
+                      >
+                        Tout replier
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </section>
+                </section>
 
-              {trees.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Aucun repo suivi. Coche des repos dans le panneau « Repos
-                  suivis ».
-                </p>
-              )}
-              {trees.length > 0 && visible.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Aucune PR ne correspond à la recherche.
-                </p>
-              )}
-              {visible.map((v) => (
-                <RepoSection
-                  key={v.tree.repo}
-                  tree={v.tree}
-                  total={v.total}
-                  state={state}
-                />
+                {trees.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Aucun repo suivi. Coche des repos dans le panneau « Repos
+                    suivis ».
+                  </p>
+                )}
+                {trees.length > 0 && visible.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Aucune PR ne correspond à la recherche.
+                  </p>
+                )}
+                {visible.map((v) => (
+                  <RepoSection
+                    key={v.tree.repo}
+                    tree={v.tree}
+                    total={v.total}
+                    state={state}
+                  />
+                ))}
+              </>
+            )}
+            <footer className="flex flex-wrap gap-x-4 gap-y-1 pt-4 text-xs text-muted-foreground">
+              {SHORTCUTS.map((s) => (
+                <span key={s.keys}>
+                  <kbd className="rounded border bg-muted px-1 font-mono">
+                    {s.keys}
+                  </kbd>{" "}
+                  {s.label}
+                </span>
               ))}
-            </>
-          )}
-          <footer className="flex flex-wrap gap-x-4 gap-y-1 pt-4 text-xs text-muted-foreground">
-            {SHORTCUTS.map((s) => (
-              <span key={s.keys}>
-                <kbd className="rounded border bg-muted px-1 font-mono">
-                  {s.keys}
-                </kbd>{" "}
-                {s.label}
-              </span>
-            ))}
-          </footer>
+            </footer>
+          </div>
+          <RepoSidebar current={trees.map((t) => t.repo)} withPrs={withPrs} />
         </div>
-        <RepoSidebar current={trees.map((t) => t.repo)} withPrs={withPrs} />
-      </div>
+      )}
     </main>
   )
 }
