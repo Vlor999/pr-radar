@@ -48,6 +48,7 @@
     d.appendChild(h);
     d.appendChild(a);
     if (p.extra) d.appendChild(extra(p.extra, ''));
+    if (p.note) d.appendChild(note(p.note));
     return d;
   }
 
@@ -60,6 +61,12 @@
     return s;
   }
 
+  function note(txt) {
+    var s = document.createElement('small');
+    s.textContent = txt;
+    return s;
+  }
+
   fetch('https://api.github.com/repos/' + REPO + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (rel) {
@@ -68,9 +75,10 @@
       var date = rel.published_at ? new Date(rel.published_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
       meta.textContent = 'Version ' + (rel.tag_name || rel.name) + (date ? ' · ' + date : '');
       box.innerHTML = '';
+      var SIGNED = '✓ Signée et notarisée par Apple';
       var all = [
-        { key: 'mac-arm', icon: 'mac', title: 'macOS Apple Silicon', main: find(a, /_aarch64\.dmg$/), label: 'Télécharger .dmg' },
-        { key: 'mac-x64', icon: 'mac', title: 'macOS Intel', main: find(a, /_x64\.dmg$/), label: 'Télécharger .dmg' },
+        { key: 'mac-arm', icon: 'mac', title: 'macOS Apple Silicon', main: find(a, /_aarch64\.dmg$/), label: 'Télécharger .dmg', note: SIGNED },
+        { key: 'mac-x64', icon: 'mac', title: 'macOS Intel', main: find(a, /_x64\.dmg$/), label: 'Télécharger .dmg', note: SIGNED },
         { key: 'win', icon: 'win', title: 'Windows', main: find(a, /_x64-setup\.exe$/) || find(a, /\.msi$/), label: 'Télécharger' },
         { key: 'linux', icon: 'linux', title: 'Linux', main: find(a, /\.AppImage$/), label: 'Télécharger AppImage', extra: find(a, /\.deb$/) }
       ].filter(function (p) { return p.main; });
@@ -86,6 +94,7 @@
         hero.appendChild(document.createTextNode(' Télécharger pour ' + mine.title));
         top.appendChild(hero);
         if (mine.extra) top.appendChild(extra(mine.extra, 'ou '));
+        if (mine.note) top.appendChild(note(mine.note));
         var other = document.createElement('p');
         other.className = 'muted dl-other';
         other.textContent = 'Autres plateformes';
