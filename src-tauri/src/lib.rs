@@ -1,7 +1,12 @@
 use keyring::{Entry, Error};
+use std::path::{Component, Path, PathBuf};
+use std::process::{Command, Stdio};
+use tauri::{AppHandle, Manager};
+
+const ID: &str = "io.github.vlor999.prradar";
 
 fn entry() -> Result<Entry, String> {
-    Entry::new("io.github.vlor999.prradar", "github").map_err(|e| e.to_string())
+    Entry::new(ID, "github").map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -52,6 +57,149 @@ fn gh_token() -> Option<String> {
     })
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UninstallPlan {
+    /// Ce qui retire l'app : bundle .app / AppImage, ou `uninstall.exe` (lancé, pas supprimé) ; None si impossible.
+    app_path: Option<String>,
+    /// Dossiers et fichiers de données existants qui seront supprimés.
+    data_paths: Vec<String>,
+    /// Message à afficher quand il reste une étape manuelle (.deb/.rpm, MSI).
+    note: Option<String>,
+}
+
+/// Garde-fou : chemin absolu, sans `..`, strictement sous le home (ou égal au bundle calculé), jamais `/`.
+fn is_safe(p: &Path, home: &Path, bundle: Option<&Path>) -> bool {
+    let clean = |x: &Path| {
+        x.is_absolute()
+            && x.parent().is_some()
+            && !x.components().any(|c| c == Component::ParentDir)
+    };
+    clean(p) && ((clean(home) && p.starts_with(home) && p != home) || Some(p) == bundle)
+}
+
+/// Ce qui retire l'app elle-même, selon la façon dont elle a été installée.
+fn app_removal() -> (Option<PathBuf>, Option<String>) {
+    #[cfg(target_os = "macos")]
+    return (
+        std::env::current_exe().ok().and_then(|e| {
+            e.ancestors()
+                .find(|a| a.extension().is_some_and(|x| x == "app"))
+                .map(Path::to_path_buf)
+        }),
+        None,
+    );
+    #[cfg(target_os = "linux")]
+    return match std::env::var_os("APPIMAGE") {
+        Some(p) => (Some(p.into()), None),
+        None => (None, Some("Installée via un paquet système : termine avec `sudo apt remove pr-radar` (ou `sudo dnf remove pr-radar`).".into())),
+    };
+    #[cfg(windows)]
+    return match std::env::current_exe()
+        .ok()
+        .and_then(|e| Some(e.parent()?.join("uninstall.exe")))
+        .filter(|u| u.exists())
+    {
+        Some(u) => (Some(u), None),
+        None => (
+            None,
+            Some("Termine depuis Paramètres > Applications > PR Radar.".into()),
+        ),
+    };
+}
+
+/// Inventaire de ce que la désinstallation va retirer (affiché avant confirmation).
+#[tauri::command]
+fn uninstall_plan(app: AppHandle) -> UninstallPlan {
+    let path = app.path();
+    let home = path.home_dir().unwrap_or_default();
+    // Linux (XDG) et Windows (%APPDATA%, %LOCALAPPDATA%\EBWebView) : couverts par les dossiers app_*.
+    let mut data: Vec<PathBuf> = [
+        path.app_data_dir(),
+        path.app_local_data_dir(),
+        path.app_config_dir(),
+        path.app_cache_dir(),
+        path.app_log_dir(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    #[cfg(target_os = "macos")]
+    for rel in [
+        format!("WebKit/{ID}"),
+        "WebKit/pr-radar".into(),
+        format!("HTTPStorages/{ID}"),
+        format!("HTTPStorages/{ID}.binarycookies"),
+        format!("Caches/{ID}"),
+        format!("Saved Application State/{ID}.savedState"),
+        format!("Preferences/{ID}.plist"),
+    ] {
+        data.push(home.join("Library").join(rel));
+    }
+    data.sort();
+    data.dedup();
+    data.retain(|p| p.exists() && is_safe(p, &home, None));
+    let (app_path, note) = app_removal();
+    let s = |p: &Path| p.to_string_lossy().into_owned();
+    UninstallPlan {
+        app_path: app_path.as_deref().map(s),
+        data_paths: data.iter().map(|p| s(p)).collect(),
+        note,
+    }
+}
+
+/// Supprime le jeton, lance un nettoyeur détaché qui attend la fermeture de l'app, puis quitte.
+#[tauri::command]
+fn uninstall_run(app: AppHandle) -> Result<(), String> {
+    delete_token()?;
+    let plan = uninstall_plan(app.clone());
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    let bundle = plan.app_path.as_deref().map(Path::new);
+    let data = plan
+        .data_paths
+        .iter()
+        .map(Path::new)
+        .filter(|p| is_safe(p, &home, None));
+
+    #[cfg(unix)]
+    let mut cmd = {
+        use std::os::unix::process::CommandExt;
+        let mut cmd = Command::new("sh");
+        // Chemins passés en arguments séparés : aucune interpolation dans le script.
+        cmd.args(["-c", "sleep 2; rm -rf -- \"$@\"", "sh"])
+            .args(data.chain(bundle.filter(|b| is_safe(b, &home, Some(b)))))
+            .process_group(0); // hors du groupe de l'app : survit à sa fermeture
+        cmd
+    };
+    #[cfg(windows)]
+    let mut cmd = {
+        use std::os::windows::process::CommandExt;
+        // `timeout` échoue sans console (stdin redirigé) : `ping` sert de pause.
+        let mut script = String::from("ping -n 3 127.0.0.1 >nul");
+        for p in data.filter_map(Path::to_str).filter(|p| !p.contains('"')) {
+            script += &format!(" & rmdir /s /q \"{p}\" 2>nul & del /f /q \"{p}\" 2>nul");
+        }
+        if let Some(u) = bundle.and_then(Path::to_str).filter(|u| !u.contains('"')) {
+            script += &format!(" & start \"\" \"{u}\"");
+        }
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/S").arg("/C").raw_arg(format!("\"{script}\""));
+        cmd.creation_flags(0x0800_0000 | 0x0000_0008); // CREATE_NO_WINDOW | DETACHED_PROCESS
+        cmd
+    };
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        app.exit(0);
+    });
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -60,7 +208,37 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![get_token, set_token, delete_token, gh_token])
+        .invoke_handler(tauri::generate_handler![
+            get_token,
+            set_token,
+            delete_token,
+            gh_token,
+            uninstall_plan,
+            uninstall_run
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn safety_filter() {
+        let home = Path::new("/Users/me");
+        assert!(is_safe(Path::new("/Users/me/Library/Caches/x"), home, None));
+        assert!(!is_safe(home, home, None));
+        assert!(!is_safe(Path::new("/"), home, None));
+        assert!(!is_safe(Path::new(""), home, None));
+        assert!(!is_safe(Path::new("/Users/me/../other"), home, None));
+        assert!(!is_safe(
+            Path::new("/Applications/PR Radar.app"),
+            home,
+            None
+        ));
+        let app = Path::new("/Applications/PR Radar.app");
+        assert!(is_safe(app, home, Some(app)));
+        assert!(!is_safe(Path::new("/Users/me/x"), Path::new(""), None));
+    }
 }

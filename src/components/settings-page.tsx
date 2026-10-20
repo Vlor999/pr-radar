@@ -1,4 +1,5 @@
 import { getVersion } from "@tauri-apps/api/app"
+import { invoke } from "@tauri-apps/api/core"
 import { cn } from "cn"
 import {
   ArrowLeft,
@@ -9,10 +10,12 @@ import {
   Moon,
   RefreshCw,
   Sun,
+  Trash2,
 } from "lucide-react"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { SHORTCUTS } from "@/hooks/use-keyboard-nav"
 import {
   testNotification,
@@ -641,7 +644,137 @@ function DataSection() {
             : "Réinitialiser les réglages"}
         </Button>
       </Row>
+      <UninstallRow />
     </Section>
+  )
+}
+
+type UninstallPlan = {
+  appPath: string | null
+  dataPaths: string[]
+  note: string | null
+}
+
+/** Désinstallation complète : liste ce qui sera supprimé, confirmation tapée, puis l'app se ferme. */
+function UninstallRow() {
+  const [plan, setPlan] = useState<UninstallPlan | null>(null)
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState("")
+  const [state, setState] = useState<"idle" | "running" | "error">("idle")
+  const [error, setError] = useState("")
+
+  const show = () => {
+    setOpen(true)
+    invoke<UninstallPlan>("uninstall_plan").then(setPlan, (e: unknown) => {
+      setState("error")
+      setError(String(e))
+    })
+  }
+
+  const run = async () => {
+    setState("running")
+    try {
+      try {
+        localStorage.clear() // réglages, repos suivis, marques « vu »
+      } catch {}
+      await invoke("uninstall_run") // jeton supprimé, nettoyage après fermeture, puis l'app quitte
+    } catch (e) {
+      setState("error")
+      setError(String(e))
+    }
+  }
+
+  return (
+    <div className="border-t py-3">
+      <Row
+        label="Désinstaller PR Radar"
+        description="Supprime l'app et tout ce qu'elle a créé sur cette machine : jeton GitHub, réglages, cache. Ton compte GitHub n'est pas touché."
+      >
+        {!open && (
+          <Button variant="destructive" size="sm" onClick={show}>
+            <Trash2 />
+            Désinstaller…
+          </Button>
+        )}
+      </Row>
+      {open && (
+        <div className="mb-1 flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+          {!plan && state !== "error" && (
+            <p className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
+              Inventaire de ce qui sera supprimé…
+            </p>
+          )}
+          {plan && (
+            <>
+              <div>
+                <p className="font-medium">Sera supprimé :</p>
+                <ul className="mt-1 flex flex-col gap-0.5 font-mono text-xs break-all text-muted-foreground">
+                  <li>Jeton GitHub du trousseau du système</li>
+                  {plan.appPath && <li>{plan.appPath}</li>}
+                  {plan.dataPaths.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              </div>
+              {plan.note && (
+                <p className="text-amber-700 dark:text-amber-400">
+                  {plan.note}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Pour révoquer aussi l'accès côté GitHub : Settings →
+                Applications → PR Radar.
+              </p>
+              <label
+                htmlFor="uninstall-confirm"
+                className="text-xs font-medium"
+              >
+                Tape SUPPRIMER pour confirmer
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  id="uninstall-confirm"
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  autoComplete="off"
+                  className="max-w-48"
+                />
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={typed.trim() !== "SUPPRIMER" || state === "running"}
+                  onClick={() => void run()}
+                >
+                  {state === "running" ? (
+                    <Loader2 className="animate-spin motion-reduce:animate-none" />
+                  ) : (
+                    <Trash2 />
+                  )}
+                  Tout supprimer et quitter
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={state === "running"}
+                  onClick={() => {
+                    setOpen(false)
+                    setTyped("")
+                  }}
+                >
+                  Annuler
+                </Button>
+              </div>
+            </>
+          )}
+          {state === "error" && (
+            <p className="text-destructive">
+              Désinstallation impossible : {error}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
