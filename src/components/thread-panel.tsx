@@ -125,13 +125,11 @@ function ThreadCard({ thread }: { thread: Thread }) {
           >
             Voir sur GitHub <ExternalLink className="size-3" />
           </a>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">⌘↵</span>
-            <Button type="submit" size="sm" disabled={sending || !draft.trim()}>
-              {sending ? <Loader2 className="animate-spin" /> : <Send />}
-              Répondre
-            </Button>
-          </div>
+          <Button type="submit" size="sm" disabled={sending || !draft.trim()}>
+            {sending ? <Loader2 className="animate-spin" /> : <Send />}
+            Répondre
+            <kbd className="font-sans text-xs opacity-70">⌘↵</kbd>
+          </Button>
         </div>
       </form>
     </Card>

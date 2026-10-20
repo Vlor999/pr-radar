@@ -1,8 +1,9 @@
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useState, useSyncExternalStore, useTransition } from "react"
 import {
   CalendarDays,
   CheckCheck,
   GitPullRequest,
+  PanelLeft,
   RefreshCw,
   Search,
   Settings as SettingsIcon,
@@ -22,6 +23,12 @@ import { RepoSection, type OpenState } from "@/components/repo-section"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 import { SHORTCUTS, useKeyboardNav } from "@/hooks/use-keyboard-nav"
 import { usePrNotifications } from "@/hooks/use-pr-notifications"
 import { useSeen } from "@/hooks/use-seen"
@@ -96,6 +103,8 @@ export function PrDashboard({
   fetchedAt: string
   error?: string
 }) {
+  const wide = useWide()
+  const [reposOpen, setReposOpen] = useState(false)
   const [refreshing, startRefresh] = useTransition()
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("all")
@@ -213,22 +222,48 @@ export function PrDashboard({
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Mes PR ouvertes
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {plural(trees.length, "repo")} · {plural(prs.length, "PR")} · mis à
-            jour{" "}
-            {new Date(fetchedAt).toLocaleTimeString("fr-FR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-            ,{" "}
-            {settings.refreshMinutes
-              ? `auto toutes les ${settings.refreshMinutes} min`
-              : "actualisation manuelle"}
-          </p>
+        <div className="flex items-start gap-3">
+          {!wide && (
+            <Sheet open={reposOpen} onOpenChange={setReposOpen}>
+              <SheetTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Repos suivis"
+                    title="Repos suivis"
+                  />
+                }
+              >
+                <PanelLeft />
+              </SheetTrigger>
+              <SheetContent side="left" className="p-4 pt-12">
+                <SheetTitle className="sr-only">Repos suivis</SheetTitle>
+                <RepoSidebar
+                  current={trees.map((t) => t.repo)}
+                  withPrs={withPrs}
+                  className="min-h-0 flex-1"
+                />
+              </SheetContent>
+            </Sheet>
+          )}
+          <div className="flex flex-col gap-1">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">
+              Mes PR ouvertes
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {plural(trees.length, "repo")} · {plural(prs.length, "PR")} · mis
+              à jour{" "}
+              {new Date(fetchedAt).toLocaleTimeString("fr-FR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              ,{" "}
+              {settings.refreshMinutes
+                ? `auto toutes les ${settings.refreshMinutes} min`
+                : "actualisation manuelle"}
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -319,16 +354,16 @@ export function PrDashboard({
                       />
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-col gap-3">
                     <div
-                      className="flex flex-wrap gap-1.5"
+                      className="flex flex-wrap gap-1"
                       role="group"
                       aria-label="Filtrer par statut"
                     >
                       {FILTERS.map((f) => (
                         <Button
                           key={f.id}
-                          size="sm"
+                          size="xs"
                           variant={filter === f.id ? "default" : "outline"}
                           aria-pressed={filter === f.id}
                           onClick={() => setFilter(f.id)}
@@ -421,9 +456,24 @@ export function PrDashboard({
               ))}
             </footer>
           </div>
-          <RepoSidebar current={trees.map((t) => t.repo)} withPrs={withPrs} />
+          {wide && (
+            <RepoSidebar current={trees.map((t) => t.repo)} withPrs={withPrs} />
+          )}
         </div>
       )}
     </main>
+  )
+}
+
+// même seuil que `lg:` : en dessous, le panneau des repos passe dans un tiroir
+const WIDE = "(min-width: 64rem)"
+function useWide() {
+  return useSyncExternalStore(
+    (l) => {
+      const m = matchMedia(WIDE)
+      m.addEventListener("change", l)
+      return () => m.removeEventListener("change", l)
+    },
+    () => matchMedia(WIDE).matches,
   )
 }

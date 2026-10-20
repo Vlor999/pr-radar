@@ -18,6 +18,8 @@ export type Settings = {
   staleDays: number
   /** période de la section « Mergées récemment » sous chaque repo */
   mergedDays: number
+  /** repos retirés du panneau latéral */
+  hiddenRepos: string[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultSort: "priority",
   staleDays: 5,
   mergedDays: 7,
+  hiddenRepos: [],
 }
 
 const KEY = "pr-radar:settings"
