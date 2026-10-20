@@ -4,16 +4,16 @@ import { useSyncExternalStore } from "react"
 
 import { pick, strings } from "./i18n"
 
-/**
- * Mise à jour intégrée : l'app lit latest.json sur la dernière release GitHub, vérifie la signature
- * (clé publique dans tauri.conf.json), télécharge, installe, puis redémarre.
- */
-export const S = strings(
+const S = strings(
   { unknownError: "erreur inconnue" },
   { unknownError: "unknown error" },
 )
 
-type UpdateState =
+/**
+ * Mise à jour intégrée : l'app lit latest.json sur la dernière release GitHub, vérifie la signature
+ * (clé publique dans tauri.conf.json), télécharge, installe, puis redémarre.
+ */
+export type UpdateState =
   | { status: "idle" | "checking" | "up-to-date" }
   | { status: "available"; version: string; notes?: string }
   | { status: "downloading"; version: string; progress: number | null }

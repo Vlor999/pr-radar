@@ -101,10 +101,7 @@ fn app_removal() -> (Option<PathBuf>, Option<&'static str>) {
         .filter(|u| u.exists())
     {
         Some(u) => (Some(u), None),
-        None => (
-            None,
-            Some("windows-settings"),
-        ),
+        None => (None, Some("windows-settings")),
     };
 }
 

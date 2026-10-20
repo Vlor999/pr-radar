@@ -30,11 +30,11 @@ const S = strings(
     merged: (days: number) => `Mergées ces ${days} derniers jours`,
   },
   {
-    attn: (n: number) => `${n} to handle`,
+    attn: (n: number) => `${n} need${n > 1 ? "" : "s"} action`,
     remove: (repo: string) => `Remove ${repo}`,
     noMatch: "No matching PRs",
     noOpen: "No open PRs",
-    noOwnPr: "(branch without a PR of mine)",
+    noOwnPr: "(none of my PRs on this branch)",
     agoNow: "just now",
     agoH: (h: number) => `${h}h ago`,
     agoD: (d: number) => `${d}d ago`,

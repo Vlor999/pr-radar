@@ -13,6 +13,7 @@ const S = strings(
       `${n} nouveau${n > 1 ? "x" : ""} commentaire${n > 1 ? "s" : ""}`,
     ciFailed: "CI en échec",
     testBody: "Les notifications fonctionnent.",
+    title: (key: string, text: string) => `${key} : ${text}`,
   },
   {
     approved: "approved",
@@ -20,6 +21,7 @@ const S = strings(
     comments: (n: number) => `${n} new comment${n > 1 ? "s" : ""}`,
     ciFailed: "CI failed",
     testBody: "Notifications are working.",
+    title: (key: string, text: string) => `${key}: ${text}`,
   },
 )
 
@@ -93,7 +95,7 @@ export function usePrNotifications(prs: Pr[]) {
       return what && getSettings().notify[what.kind] ? [{ key, now, what }] : []
     })
     for (const { key, now, what } of changes)
-      notify(`${key} : ${what.text}`, now.title).catch(() => {})
+      notify(pick(S).title(key, what.text), now.title).catch(() => {})
   }, [prs])
 }
 

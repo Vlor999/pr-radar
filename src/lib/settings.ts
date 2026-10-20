@@ -54,6 +54,8 @@ function read(): Settings {
       ...DEFAULT_SETTINGS,
       ...saved,
       notify: { ...DEFAULT_SETTINGS.notify, ...saved.notify },
+      // valeur inconnue (édition à la main, version plus récente) : on repose la question
+      lang: saved.lang === "fr" || saved.lang === "en" ? saved.lang : null,
     }
   } catch {
     return DEFAULT_SETTINGS

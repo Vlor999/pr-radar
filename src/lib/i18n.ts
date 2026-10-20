@@ -1,4 +1,4 @@
-import { getSettings, useSettings } from "./settings"
+import { getSettings, useSettings } from "./settings.ts" // extension : chargé aussi par node --test
 
 export type Lang = "fr" | "en"
 

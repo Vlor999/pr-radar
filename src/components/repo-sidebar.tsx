@@ -36,7 +36,7 @@ const S = strings(
     removeFromList: "Retirer de la liste",
   },
   {
-    followed: "Followed repos",
+    followed: "Tracked repos",
     filter: "Filter repos",
     follow: (repo: string) => `Follow ${repo}`,
     loading: "Loading accessible repos…",

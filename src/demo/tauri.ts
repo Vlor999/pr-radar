@@ -6,7 +6,7 @@ const commands: Record<string, unknown> = {
   uninstall_plan: {
     appPath: "/Applications/PR Radar.app",
     dataPaths: ["~/Library/Application Support/com.pr-radar.app"],
-    note: "linux-package", // démo : invoke journalisé, rien n'est supprimé
+    note: null, // démo : invoke journalisé, rien n'est supprimé
   },
 }
 
