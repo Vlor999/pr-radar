@@ -30,6 +30,7 @@ import {
   viewerProfile,
   type Profile,
 } from "@/lib/github"
+import { currentLang, type Lang } from "@/lib/i18n"
 import { openExternal } from "@/lib/open"
 import { LOW, resetTime, useQuota } from "@/lib/quota"
 import { resetSettings, updateSettings, useSettings } from "@/lib/settings"
@@ -319,6 +320,7 @@ function AccountSection() {
 
 function AppearanceSection() {
   const { theme, setTheme } = useTheme()
+  const { lang } = useSettings()
   return (
     <Section
       id="apparence"
@@ -334,6 +336,17 @@ function AppearanceSection() {
             { value: "light", label: "Clair", icon: <Sun /> },
             { value: "dark", label: "Sombre", icon: <Moon /> },
             { value: "system", label: "Auto", icon: <Monitor /> },
+          ]}
+        />
+      </Row>
+      <Row label="Langue · Language" labelId="lang-label">
+        <Segmented<Lang>
+          labelledBy="lang-label"
+          value={currentLang(lang)}
+          onChange={(v) => updateSettings({ lang: v })}
+          options={[
+            { value: "fr", label: "Français" },
+            { value: "en", label: "English" },
           ]}
         />
       </Row>
