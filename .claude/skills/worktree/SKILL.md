@@ -61,13 +61,13 @@ git push -u origin <branch>
 gh pr create --base dev --title "<conventional commit>" --body "..."
 ```
 
-Body, in French:
+Body:
 
 ```
-## Intention
+## Intent
 <What the PR does and why, 1-2 sentences. `Closes #<n>` if from an issue.>
 
-## Choix et points d'attention
+## Choices and caveats
 - <Each decision taken, as a statement.>
 ```
 

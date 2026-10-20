@@ -1,6 +1,6 @@
 name: Release
 
-# merge dev → main : release si la version de package.json n'est pas encore publiée
+# merge dev → main: release if the package.json version is not published yet
 on:
   push:
     branches: [main]
@@ -25,7 +25,7 @@ jobs:
 
   release:
     needs: version
-    # workflow_dispatch : relance manuelle d'une release ratée, même si elle existe déjà
+    # workflow_dispatch: manual rerun of a failed release, even if it already exists
     if: needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
@@ -43,7 +43,7 @@ jobs:
             args: ''
     runs-on: ${{ matrix.platform }}
     env:
-      # signature Developer ID + notarisation Apple : macOS seulement, si les secrets existent
+      # Developer ID signing + Apple notarization: macOS only, when the secrets exist
       HAS_APPLE: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -69,8 +69,8 @@ jobs:
 
       - run: npm ci
 
-      # sans ces secrets, la build macOS garde la signature ad hoc (tauri.conf.json)
-      # (une variable APPLE_* vide casserait l'ad hoc, d'où l'export conditionnel ; syntaxe <<EOF sûre pour les valeurs multilignes)
+      # without these secrets, the macOS build keeps the ad hoc signature (tauri.conf.json)
+      # (an empty APPLE_* variable would break ad hoc signing, hence the conditional export; <<EOF syntax is safe for multiline values)
       - name: Apple signing and notarization
         if: env.HAS_APPLE == 'true'
         env:
@@ -89,7 +89,7 @@ jobs:
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # signature des mises à jour intégrées (plugin updater) : clé privée gardée en secret du repo
+          # signs in-app updates (updater plugin): private key kept as a repo secret
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
@@ -104,7 +104,7 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
-  # cask Homebrew (Vlor999/homebrew-tap) : mis à jour seulement si le secret HOMEBREW_TAP_TOKEN existe
+  # Homebrew cask (Vlor999/homebrew-tap): updated only when the HOMEBREW_TAP_TOKEN secret exists
   homebrew:
     needs: release
     runs-on: ubuntu-latest

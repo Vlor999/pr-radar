@@ -1,27 +1,27 @@
 ---
 name: release
-description: Publier une nouvelle version de PR Radar (bump sur dev, PR dev → main, suivi du workflow release). Utiliser quand l'utilisateur demande une release, un tag ou « sortir la vX.Y.Z ».
+description: Publish a new PR Radar version (bump on dev, PR dev → main, follow the release workflow). Use when the user asks for a release, a tag, or "ship vX.Y.Z".
 ---
 
 # Release PR Radar
 
-Flux : tout passe par `dev` ; le merge de la PR `dev → main` déclenche `release.yml`, qui publie si la version de `package.json` n'a pas encore de release (sinon rien).
+Flow: everything goes through `dev`; merging the `dev → main` PR triggers `release.yml`, which publishes if the `package.json` version has no release yet (otherwise nothing).
 
-1. Pré-requis : `dev` propre et à jour, aucun run `release.yml` en cours (`gh run list --workflow release.yml --limit 3`). Une release à la fois.
-2. Vérifs : `npm run typecheck && npm test && (cd src-tauri && cargo clippy -- -D warnings && cargo test)`.
-3. Bump la même version `X.Y.Z` dans :
+1. Prerequisites: `dev` clean and up to date, no `release.yml` run in progress (`gh run list --workflow release.yml --limit 3`). One release at a time.
+2. Checks: `npm run typecheck && npm test && (cd src-tauri && cargo clippy -- -D warnings && cargo test)`.
+3. Bump the same `X.Y.Z` version in:
    - `package.json`
    - `src-tauri/tauri.conf.json`
    - `src-tauri/Cargo.toml` (`[package] version`)
-   puis `npm install --package-lock-only` (et `cargo check` dans `src-tauri` pour `Cargo.lock`).
-4. Commit `chore: release vX.Y.Z` sur `dev`, avec le trailer Co-Authored-By.
-5. Confirmer avec l'utilisateur avant de pousser (action publique), puis :
+   then `npm install --package-lock-only` (and `cargo check` in `src-tauri` for `Cargo.lock`).
+4. Commit `chore: release vX.Y.Z` on `dev`, with the Co-Authored-By trailer.
+5. Confirm with the user before pushing (public action), then:
    ```sh
    git push origin dev
    gh pr create --base main --head dev --title "chore: release vX.Y.Z" --body "..."
-   gh pr checks --watch && gh pr merge --merge   # merge commit, pas de squash (sinon dev et main divergent)
+   gh pr checks --watch && gh pr merge --merge   # merge commit, no squash (otherwise dev and main diverge)
    ```
-   Pas de tag manuel : `tauri-action` crée le tag `vX.Y.Z` et la release.
-6. Suivre : `gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')`. Les 4 builds (macOS arm64/x64, Windows, Linux) doivent être verts.
-7. Vérifier la release : `gh release view vX.Y.Z` → assets présents, `latest.json` contient la nouvelle version.
-8. Si les secrets Apple existent (`gh secret list | grep APPLE`) : vérifier la notarisation du `.dmg` arm64 (voir `docs/apple-notarization.md`, étape 7).
+   No manual tag: `tauri-action` creates the `vX.Y.Z` tag and the release.
+6. Follow: `gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')`. All 4 builds (macOS arm64/x64, Windows, Linux) must be green.
+7. Check the release: `gh release view vX.Y.Z` → assets present, `latest.json` holds the new version.
+8. If the Apple secrets exist (`gh secret list | grep APPLE`): check the notarization of the arm64 `.dmg` (see `docs/apple-notarization.md`, step 7).
