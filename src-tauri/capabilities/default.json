@@ -5,6 +5,20 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://**" }]
+    },
+    "notification:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://api.github.com/*" },
+        { "url": "https://api.github.com/**" },
+        { "url": "https://github.com/login/*" },
+        { "url": "https://github.com/login/**" }
+      ]
+    }
   ]
 }

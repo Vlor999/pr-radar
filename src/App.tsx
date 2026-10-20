@@ -1,51 +1,61 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useEffect } from "react"
+import { Loader2 } from "lucide-react"
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+import { Login } from "@/components/login"
+import { PrDashboard } from "@/components/pr-dashboard"
+import { Button } from "@/components/ui/button"
+import { useThemeEffects } from "@/hooks/use-theme"
+import { loadToken, logout, useAuth } from "@/lib/auth"
+import { clearCache } from "@/lib/github"
+import { reload, useData } from "@/lib/store"
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+export default function App() {
+  useThemeEffects()
+  const auth = useAuth()
 
-  return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+  useEffect(() => {
+    loadToken()
+  }, [])
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+  if (auth.status === "loading") return <Splash />
+  if (auth.status === "signed-out") return <Login />
+  return <Dashboard />
 }
 
-export default App;
+function Dashboard() {
+  const data = useData()
+
+  useEffect(() => {
+    clearCache({ all: true }) // nouveau compte possible : rien ne doit venir du précédent
+    reload()
+  }, [])
+
+  if (data.authError)
+    return (
+      <main className="flex min-h-svh flex-col items-center justify-center gap-3 px-4 text-center">
+        <p className="text-sm text-muted-foreground">
+          GitHub a refusé le jeton enregistré (révoqué ou expiré).
+        </p>
+        <Button onClick={() => logout()}>Se reconnecter</Button>
+      </main>
+    )
+  if (!data.fetchedAt && data.loading) return <Splash label="Chargement de tes PR…" />
+  return (
+    <PrDashboard
+      prs={data.prs}
+      trees={data.trees}
+      withPrs={data.withPrs}
+      fetchedAt={data.fetchedAt || new Date().toISOString()}
+      error={data.error}
+    />
+  )
+}
+
+function Splash({ label }: { label?: string }) {
+  return (
+    <main className="flex min-h-svh items-center justify-center gap-2 text-sm text-muted-foreground">
+      <Loader2 className="size-4 animate-spin" />
+      {label}
+    </main>
+  )
+}

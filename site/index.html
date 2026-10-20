@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PR Radar</title>
+<meta name="description" content="PR Radar : vos PR GitHub ouvertes, en arbre. Stacks, reviews, discussions avec le code, calendrier des merges. Gratuit, open source, sans serveur.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="PR Radar : vos PR GitHub ouvertes, en arbre">
+<meta property="og:description" content="Stacks, reviews, discussions avec le code, calendrier des merges. Gratuit, open source, sans serveur.">
+<meta property="og:url" content="https://vlor999.github.io/pr-radar/">
+<meta name="twitter:card" content="summary">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#download">Aller au téléchargement</a>
+<header class="wrap top">
+  <span class="brand">PR Radar</span>
+  <nav aria-label="Principal">
+    <a href="#download">Télécharger</a>
+    <a href="#first-run">Premier lancement</a>
+    <a href="#features">Fonctions</a>
+    <a href="https://github.com/Vlor999/pr-radar">GitHub</a>
+  </nav>
+</header>
+
+<main>
+<section class="wrap hero">
+  <div>
+    <h1>PR Radar<br><span class="accent">Vos PR GitHub ouvertes, en arbre.</span></h1>
+    <p class="lead">Stacks, reviews, discussions avec le code, calendrier des merges. Gratuit, open source, sans serveur : l'app parle directement à GitHub depuis votre machine.</p>
+    <p><a class="btn primary" href="#download">Télécharger</a> <a class="btn" href="https://github.com/Vlor999/pr-radar">Code source</a></p>
+  </div>
+  <svg class="tree" viewBox="0 0 360 260" role="img" aria-labelledby="tree-t">
+    <title id="tree-t">Illustration : la branche main avec des cartes de PR reliées en arbre</title>
+    <g fill="none" stroke="var(--line)" stroke-width="2">
+      <path d="M30 30V230"/><path d="M30 70H70"/><path d="M30 140H70"/><path d="M30 215H70"/><path d="M110 100V120Q110 140 130 140H150" /><path d="M200 168V180Q200 195 215 195H235"/>
+    </g>
+    <circle cx="30" cy="30" r="8" fill="var(--accent)"/>
+    <text x="46" y="35" class="svgt" font-size="13">main</text>
+    <g class="card"><rect x="70" y="50" width="270" height="48" rx="8"/><circle cx="90" cy="74" r="6" fill="var(--accent)"/><rect x="106" y="62" width="150" height="8" rx="4" class="bar"/><rect x="106" y="78" width="90" height="7" rx="3.5" class="bar2"/><rect x="290" y="66" width="36" height="16" rx="8" class="pill"/></g>
+    <g class="card"><rect x="70" y="120" width="270" height="48" rx="8"/><circle cx="90" cy="144" r="6" fill="var(--accent)"/><rect x="106" y="132" width="130" height="8" rx="4" class="bar"/><rect x="106" y="148" width="100" height="7" rx="3.5" class="bar2"/><rect x="290" y="136" width="36" height="16" rx="8" class="pill"/></g>
+    <g class="card"><rect x="150" y="190" width="190" height="44" rx="8"/><circle cx="168" cy="212" r="6" fill="var(--warn)"/><rect x="184" y="203" width="100" height="8" rx="4" class="bar"/><rect x="184" y="218" width="70" height="7" rx="3.5" class="bar2"/></g>
+    <path d="M110 168V196Q110 212 126 212H150" fill="none" stroke="var(--line)" stroke-width="2"/>
+  </svg>
+</section>
+
+<section id="download" class="wrap">
+  <h2>Télécharger</h2>
+  <p id="release-meta" class="muted" aria-live="polite">Recherche de la dernière version…</p>
+  <div id="downloads" class="dl-grid">
+    <noscript><a class="btn" href="https://github.com/Vlor999/pr-radar/releases/latest">Voir les versions sur GitHub</a></noscript>
+  </div>
+</section>
+
+<section id="first-run" class="wrap">
+  <h2>Premier lancement</h2>
+  <p>L'app n'est pas signée : un certificat payant n'a pas de sens pour un outil gratuit. Le système vous le signale une fois, voici comment passer.</p>
+  <div class="cols">
+    <article>
+      <h3>macOS</h3>
+      <p>Clic droit sur l'app, <strong>Ouvrir</strong>, puis <strong>Ouvrir</strong>. Ou, dans le terminal :</p>
+      <div class="code"><code id="xattr">xattr -dr com.apple.quarantine "/Applications/PR Radar.app"</code><button type="button" class="copy" data-copy="xattr">Copier</button></div>
+    </article>
+    <article>
+      <h3>Windows</h3>
+      <p>SmartScreen : <strong>Informations complémentaires</strong>, puis <strong>Exécuter quand même</strong>.</p>
+    </article>
+    <article>
+      <h3>Linux</h3>
+      <p>Rendez l'AppImage exécutable, puis lancez-la :</p>
+      <div class="code"><code id="chmod">chmod +x PR*Radar*.AppImage</code><button type="button" class="copy" data-copy="chmod">Copier</button></div>
+    </article>
+  </div>
+</section>
+
+<section id="auth" class="wrap">
+  <h2>Connexion à GitHub</h2>
+  <p>Deux options : le <strong>device flow</strong> (l'app affiche un code à saisir sur github.com) ou un <strong>jeton d'accès personnel</strong>. Le jeton reste dans le trousseau du système. Pas de backend, pas de télémétrie : les requêtes partent de votre machine vers GitHub, rien d'autre.</p>
+</section>
+
+<section id="features" class="wrap">
+  <h2>Fonctions</h2>
+  <ul class="features">
+    <li>Arbre des PR et des stacks</li>
+    <li>Statut review, CI, conflits</li>
+    <li>Discussions non résolues avec le code, réponse directe</li>
+    <li>Filtres, recherche, tri</li>
+    <li>PR prêtes à merger</li>
+    <li>PR inactives</li>
+    <li>Nouveau depuis la dernière visite</li>
+    <li>Calendrier des merges (mois, semaine, jour)</li>
+    <li>Repos par organisation</li>
+    <li>Notifications système</li>
+    <li>Thème clair et sombre</li>
+    <li>Raccourcis clavier</li>
+  </ul>
+</section>
+</main>
+
+<footer class="wrap foot">
+  <a href="https://github.com/Vlor999/pr-radar">github.com/Vlor999/pr-radar</a>
+  <span>Licence MIT</span>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>
