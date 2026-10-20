@@ -7,10 +7,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -25,21 +27,21 @@ jobs:
             args: ''
     runs-on: ${{ matrix.platform }}
     env:
-      # signature Developer ID + notarisation Apple : activées seulement si les secrets existent
-      HAS_APPLE: ${{ secrets.APPLE_CERTIFICATE != '' }}
+      # signature Developer ID + notarisation Apple : macOS seulement, si les secrets existent
+      HAS_APPLE: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: lts/*
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: './src-tauri -> target'
 
@@ -52,8 +54,9 @@ jobs:
       - run: npm ci
 
       # sans ces secrets, la build macOS garde la signature ad hoc (tauri.conf.json)
+      # (une variable APPLE_* vide casserait l'ad hoc, d'où l'export conditionnel ; syntaxe <<EOF sûre pour les valeurs multilignes)
       - name: Apple signing and notarization
-        if: startsWith(matrix.platform, 'macos') && env.HAS_APPLE == 'true'
+        if: env.HAS_APPLE == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -62,11 +65,12 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          d="EOF_$(openssl rand -hex 16)"
           for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
-            printf '%s=%s\n' "$v" "${!v}" >> "$GITHUB_ENV"
+            printf '%s<<%s\n%s\n%s\n' "$v" "$d" "${!v}" "$d" >> "$GITHUB_ENV"
           done
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # signature des mises à jour intégrées (plugin updater) : clé privée gardée en secret du repo
@@ -96,7 +100,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          if [[ $GITHUB_REF_TYPE == tag ]]; then
+            TAG=$GITHUB_REF_NAME
+          else
+            TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          fi
+          [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p '*_aarch64.dmg' -p '*_x64.dmg'
           arm=$(sha256sum *_aarch64.dmg | cut -d' ' -f1)
           intel=$(sha256sum *_x64.dmg | cut -d' ' -f1)
