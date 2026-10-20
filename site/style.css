@@ -47,7 +47,7 @@ code{font:13px/1.5 'JetBrains Mono',monospace;word-break:break-all;flex:1}
 .mainp{position:relative;padding:12px 16px;overflow:hidden}
 .rhead{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;padding-bottom:8px;margin-bottom:10px;border-bottom:1px solid var(--line);white-space:nowrap}
 .rhead small{margin-left:auto;font-weight:400;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
-.sync{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--muted);border-top-color:transparent}
+.sync{width:6px;height:6px;margin:0 2px;border-radius:50%;background:var(--accent)}
 .cnt{font-size:11px;padding:0 7px;border-radius:999px;background:var(--chip);color:var(--muted)}
 .branch{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:2px 8px 2px 6px;font:600 11px 'JetBrains Mono',monospace;background:var(--card)}
 .branch i{position:relative;width:7px;height:7px;border-radius:50%;background:var(--accent)}
@@ -99,7 +99,7 @@ code{font:13px/1.5 'JetBrains Mono',monospace;word-break:break-all;flex:1}
 .mock.play:not(.s-new) .b.new{transform:scale(0);opacity:0}
 .mock.play:not(.s-ci) .ci .spin{display:inline-block}.mock.play:not(.s-ci) .ci b{display:none}
 .mock.play:not(.s-ci) .ci{background:none;color:var(--muted);border-color:var(--line)}
-.mock.play:not(.s-sync) .sync{animation:spin .8s linear infinite}
+.mock.play:not(.s-sync) .sync{width:10px;height:10px;margin:0;background:none;border:1.5px solid var(--muted);border-top-color:transparent;animation:spin .8s linear infinite}
 .mock.play:not(.s-open) .thr{grid-template-rows:0fr}.mock.play:not(.s-open) .pc.open .chev{transform:none}
 .mock.play:not(.s-open) .pc.open{box-shadow:none}
 .mock.play:not(.s-sent) .grow{grid-template-rows:0fr;opacity:0}
