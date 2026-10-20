@@ -1,6 +1,7 @@
 import { fetch } from "@tauri-apps/plugin-http"
 
 import { currentToken } from "./auth"
+import { trackQuota } from "./quota"
 import type { Decision, MergedPr, Pr, Thread } from "./types"
 
 const API = "https://api.github.com"
@@ -37,6 +38,7 @@ async function gql<T>(
     headers: { ...headers(token), "Content-Type": "application/json" },
     body: JSON.stringify({ query, variables }),
   })
+  trackQuota(res.headers)
   if (res.status === 401) throw new AuthError("Jeton GitHub refusé")
   const json = (await res.json()) as {
     data?: T

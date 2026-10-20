@@ -31,6 +31,7 @@ import {
   type Profile,
 } from "@/lib/github"
 import { openExternal } from "@/lib/open"
+import { LOW, resetTime, useQuota } from "@/lib/quota"
 import { resetSettings, updateSettings, useSettings } from "@/lib/settings"
 import { checkForUpdate, installUpdate, useUpdate } from "@/lib/updater"
 import { getRepos, reload, setRepos } from "@/lib/store"
@@ -342,6 +343,7 @@ function AppearanceSection() {
 
 function RefreshSection() {
   const s = useSettings()
+  const quota = useQuota()
   const [busy, setBusy] = useState(false)
   const refresh = async () => {
     setBusy(true)
@@ -376,6 +378,40 @@ function RefreshSection() {
           checked={s.refreshOnFocus}
           onChange={(v) => updateSettings({ refreshOnFocus: v })}
         />
+      </Row>
+      <Row
+        label="Quota GitHub"
+        description="Points GraphQL par heure. Notification sous 10 % restants."
+      >
+        {quota ? (
+          <div className="flex w-full flex-col gap-1.5 sm:w-64">
+            <div
+              role="meter"
+              aria-label="Quota GitHub restant"
+              aria-valuemin={0}
+              aria-valuemax={quota.limit}
+              aria-valuenow={quota.remaining}
+              className="h-2 overflow-hidden rounded-full bg-muted"
+            >
+              <div
+                className={cn(
+                  "h-full rounded-full",
+                  quota.remaining <= quota.limit * LOW
+                    ? "bg-destructive"
+                    : "bg-primary",
+                )}
+                style={{ width: `${(quota.remaining / quota.limit) * 100}%` }}
+              />
+            </div>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {`${quota.remaining.toLocaleString("fr-FR")} / ${quota.limit.toLocaleString("fr-FR")} restants · réinitialisé à ${resetTime(quota.resetAt)}`}
+            </span>
+          </div>
+        ) : (
+          <span className="text-sm">
+            Inconnu avant la première actualisation
+          </span>
+        )}
       </Row>
       <Row label="Relire tout maintenant">
         <Button

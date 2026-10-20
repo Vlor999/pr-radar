@@ -1,4 +1,5 @@
 // Démo navigateur : même API que src/lib/github.ts, données fictives (org « acme »).
+import { trackQuota } from "@/lib/quota"
 import type { MergedPr, Pr, Thread } from "@/lib/types"
 
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
@@ -145,8 +146,17 @@ const has = (repos: string[]) => (r: string) =>
 
 export const viewerLogin = async () => "me"
 export const clearCache = () => {}
-export const fetchPrs = async (repos: string[]) =>
-  PRS.filter((p) => has(repos)(p.repo))
+export const fetchPrs = async (repos: string[]) => {
+  // quota bas pour montrer la notification et la ligne des réglages
+  trackQuota(
+    new Headers({
+      "x-ratelimit-limit": "5000",
+      "x-ratelimit-remaining": "420",
+      "x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 1800),
+    }),
+  )
+  return PRS.filter((p) => has(repos)(p.repo))
+}
 export const reposWithMyOpenPrs = async () => [
   ...new Set(PRS.map((p) => p.repo)),
 ]
