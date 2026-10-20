@@ -39,7 +39,7 @@ Order, separated by a blank line: external packages → `@/…` (alias for `src/
 
 - shadcn components in `src/components/ui/` (base-ui), added with `npx shadcn add`, not rewritten by hand.
 - Tailwind v4, classes merged with `cn(...)`. Icons from `lucide-react`.
-- UI strings stay in French (product language).
+- UI strings in French and English: a `strings(fr, en)` dictionary `S` at the top of the file (`src/lib/i18n.ts`), read with `useStrings(S)` in components and `pick(S)` outside React. Dates and numbers with `locale()`, never a hardcoded `"fr-FR"`.
 - Every new function in `src/lib/github.ts` or new `invoke` command gets its mock in `src/demo/` (same signature), otherwise `npm run demo` breaks.
 
 ## Rust side (`src-tauri/`)
