@@ -18,6 +18,7 @@ npm run tauri build -- --bundles app   # build macOS local
 - Le client ID OAuth dans `src/lib/auth.ts` est public, pas un secret.
 - Toute feature : démo locale dans le navigateur (skill `demo`, `npm run demo` → localhost:1420, données mockées) et validation explicite de l'utilisateur avant commit/release. Pas de release sans validation.
 - Branches : travail sur `dev` (ou branche → PR vers `dev`). `main` ne reçoit que des PR depuis `dev` ; le merge déclenche la release.
+- Règles détaillées : `.claude/rules/` (`projet`, `typescript`, `test`, `subagents`).
 - Skills : `worktree` (tâche → PR sur `dev`), `mr-review` (revue de PR), `grill-me` (stress-test d'un plan).
 - Release : skill `release` (`.claude/skills/release/SKILL.md`).
 - Notarisation Apple : `docs/apple-notarization.md`.
