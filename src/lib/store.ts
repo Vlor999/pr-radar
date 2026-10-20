@@ -68,7 +68,8 @@ export function useData(): Data {
 export async function reload() {
   const id = ++seq
   set({ ...data, loading: true })
-  listRepos().catch(() => {}) // préchauffe la liste du panneau des repos (~10 s)
+  // préchauffe la liste du panneau des repos (~1,5 Mo), au premier chargement seulement
+  if (!data.fetchedAt) listRepos().catch(() => {})
   try {
     const withPrs = await reposWithMyOpenPrs().catch(() => [] as string[])
     let repos = getRepos()

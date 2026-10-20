@@ -140,12 +140,13 @@ export function PrDashboard({
   useEffect(() => {
     if (!settings.refreshOnFocus) return
     const onFocus = () => {
-      if (Date.now() - Date.parse(fetchedAt) > 60_000)
-        startRefresh(() => reload())
+      // pas plus souvent que l'actualisation automatique (5 min en mode manuel)
+      const min = (settings.refreshMinutes || 5) * 60_000
+      if (Date.now() - Date.parse(fetchedAt) > min) startRefresh(() => reload())
     }
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
-  }, [settings.refreshOnFocus, fetchedAt])
+  }, [settings.refreshOnFocus, settings.refreshMinutes, fetchedAt])
 
   // mise à jour : vérifiée au lancement puis toutes les 6 h (bandeau + badge sur l'engrenage)
   useEffect(() => {

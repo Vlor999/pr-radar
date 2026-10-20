@@ -6,7 +6,7 @@ import type { Decision, MergedPr, Pr, Thread } from "./types"
 const API = "https://api.github.com"
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
-const PAGE_SIZE = 50 // limite GitHub : ~500k nœuds par requête avec les connexions imbriquées
+const PAGE_SIZE = 20 // le coût GraphQL suit les bornes demandées, pas les nœuds renvoyés : 20 × 50 fils × 20 messages ≈ 21 points (103 avec 50 × 100 × 50)
 const REPOS_PER_QUERY = 5 // une requête de recherche GitHub est limitée en longueur et en opérateurs
 const MAX_BODY = 4000 // caractères gardés par message de discussion
 const HUNK_LINES = 8 // GitHub montre aussi la fin du hunk, qui se termine sur la ligne commentée
@@ -74,9 +74,9 @@ query($q: String!, $after: String) {
       number title url isDraft updatedAt mergeable reviewDecision headRefName baseRefName additions deletions changedFiles
       repository { nameWithOwner }
       comments(first: 100) { nodes { author { login } } }
-      reviewThreads(first: 100) { nodes { id isResolved isOutdated path line
+      reviewThreads(first: 50) { nodes { id isResolved isOutdated path line
         hunk: comments(first: 1) { nodes { diffHunk } }
-        comments(first: 50) { nodes { author { login } bodyText url createdAt } } } }
+        comments(first: 20) { nodes { author { login } bodyText url createdAt } } } }
       latestOpinionatedReviews(first: 20) { nodes { author { login } state } }
       reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
