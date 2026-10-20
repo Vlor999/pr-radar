@@ -1,6 +1,6 @@
-# Signature et notarisation Apple — à faire
+# Signature et notarisation Apple
 
-CI déjà prête (commit `a0e2edd`) : `release.yml` signe + notarise les builds macOS dès que les 6 secrets ci-dessous existent. Sans eux → signature ad-hoc (comportement actuel).
+En place depuis v0.3.4 : `release.yml` signe + notarise les builds macOS avec les 6 secrets ci-dessous. Sans eux → signature ad hoc. Étapes ci-dessous = pour renouveler le certificat.
 
 Ne jamais coller les valeurs (mots de passe, .p12, base64) dans un chat ou un commit.
 
@@ -57,15 +57,18 @@ Claude s'occupe de :
 - tagger une nouvelle release ;
 - télécharger le `.dmg` arm64 et vérifier :
   ```sh
-  spctl --assess --type open --context context:primary-signature -v PR.Radar_*.dmg
-  xcrun stapler validate PR.Radar_*.dmg
+  # Tauri notarise l'app, pas le .dmg (qui reste seulement signé) → vérifier l'app montée
+  hdiutil attach -nobrowse -readonly PR.Radar_*.dmg
+  spctl --assess --type execute -v "/Volumes/PR Radar/PR Radar.app"   # accepted, Notarized Developer ID
+  xcrun stapler validate "/Volumes/PR Radar/PR Radar.app"
+  hdiutil detach "/Volumes/PR Radar"
   ```
-- simplifier les instructions de premier lancement macOS (`site/index.html`, README « Premier lancement », corps de release dans `release.yml`).
 
 ## À retenir
 
-- Le certificat Developer ID est valable 5 ans ; l'adhésion se renouvelle chaque année (99 $). Adhésion expirée → les builds déjà notarisés restent valides, les nouveaux ne le sont plus.
+- Certificat actuel (Team `4WTQGGKVHL`) expire le **19 novembre 2027** → recréer (étapes 2-3) et remettre `APPLE_CERTIFICATE` + `APPLE_CERTIFICATE_PASSWORD` avant ; l'adhésion se renouvelle chaque année (99 $). Adhésion expirée → les builds déjà notarisés restent valides, les nouveaux ne le sont plus.
 - Mot de passe d'app révoqué ou mot de passe Apple ID changé → recréer `APPLE_PASSWORD`.
+- Erreur `HTTP status code: 401` à la notarisation → `APPLE_ID`/`APPLE_PASSWORD` faux. Tester en local : `xcrun notarytool history --apple-id EMAIL --team-id 4WTQGGKVHL`.
 
 ## Reste à tester
 

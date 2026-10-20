@@ -25,12 +25,7 @@ Vos PR GitHub ouvertes, en arbre : stacks, reviews, discussions et merges, dans 
 
 ## Premier lancement
 
-L'app n'a pas de certificat Apple payant (signature ad hoc seulement).
-
-- macOS : lancer l'app une fois (macOS la bloque), puis Réglages Système > Confidentialité et sécurité > « Ouvrir quand même ». À faire une seule fois : les mises à jour s'installent ensuite depuis l'app. Ou
-  ```sh
-  xattr -dr com.apple.quarantine "/Applications/PR Radar.app"
-  ```
+- macOS : app signée et notarisée par Apple. Glisser dans Applications, lancer, confirmer « Ouvrir ».
 - Windows (SmartScreen) : Informations complémentaires > Exécuter quand même.
 
 ## Connexion GitHub

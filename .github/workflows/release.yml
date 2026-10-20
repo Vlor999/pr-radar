@@ -78,8 +78,7 @@ jobs:
           releaseBody: |
             Téléchargement : https://vlor999.github.io/pr-radar/
 
-            Application non signée (distribuée gratuitement) : au premier lancement, le système peut l'avertir.
-            - macOS : lancer l'app une fois, puis Réglages Système > Confidentialité et sécurité > « Ouvrir quand même ». Ou `xattr -dr com.apple.quarantine "/Applications/PR Radar.app"`.
+            - macOS : app signée et notarisée par Apple, rien à contourner.
             - Windows (SmartScreen) : Informations complémentaires > Exécuter quand même.
           releaseDraft: false
           prerelease: false
