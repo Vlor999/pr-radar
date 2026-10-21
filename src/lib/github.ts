@@ -1,11 +1,19 @@
 import { fetch } from "@tauri-apps/plugin-http"
 
-import { currentToken } from "./auth"
+import {
+  apiUrl,
+  byAccount,
+  GITHUB,
+  graphqlUrl,
+  repoKey,
+  splitKey,
+  type Account,
+} from "./accounts"
+import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
 import { pick, strings } from "./i18n"
 import { trackQuota } from "./quota"
 import type { Decision, MergedPr, Pr, Thread } from "./types"
 
-const API = "https://api.github.com"
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
 const PAGE_SIZE = 20 // le coût GraphQL suit les bornes demandées, pas les nœuds renvoyés : 20 × 50 fils × 20 messages ≈ 21 points (103 avec 50 × 100 × 50)
@@ -38,12 +46,25 @@ const S = strings(
 
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
-/** Jeton refusé par GitHub (révoqué, expiré) : l'app repasse à l'écran de connexion. */
+/** Jeton refusé par GitHub (révoqué, expiré) : l'app propose de reconnecter ce compte. */
 export class AuthError extends Error {
   name = "AuthError"
+  account?: string
+  constructor(message: string, account?: string) {
+    super(message)
+    this.account = account
+  }
 }
 
-function headers(token = currentToken()) {
+/** Où et avec quoi appeler GitHub : le jeton d'un compte ne part que vers l'hôte de ce compte. */
+type Conn = { host: string; token: string | null; account?: string }
+const conn = (a: Account): Conn => ({
+  host: a.host,
+  token: tokenOf(a.id),
+  account: a.id,
+})
+
+function headers(token: string | null) {
   if (!token) throw new AuthError(pick(S).notSignedIn)
   return {
     Authorization: `Bearer ${token}`,
@@ -53,17 +74,17 @@ function headers(token = currentToken()) {
 }
 
 async function gql<T>(
+  c: Conn,
   query: string,
   variables: Record<string, unknown> = {},
-  token?: string,
 ): Promise<T> {
-  const res = await fetch(`${API}/graphql`, {
+  const res = await fetch(graphqlUrl(c.host), {
     method: "POST",
-    headers: { ...headers(token), "Content-Type": "application/json" },
+    headers: { ...headers(c.token), "Content-Type": "application/json" },
     body: JSON.stringify({ query, variables }),
   })
   trackQuota(res.headers)
-  if (res.status === 401) throw new AuthError(pick(S).tokenRejected)
+  if (res.status === 401) throw new AuthError(pick(S).tokenRejected, c.account)
   const json = (await res.json()) as {
     data?: T
     errors?: { message: string }[]
@@ -78,16 +99,19 @@ async function gql<T>(
 }
 
 /** GET REST, toutes les pages (en-tête Link). */
-async function restAll<T>(path: string): Promise<T[]> {
+async function restAll<T>(c: Conn, path: string): Promise<T[]> {
   const out: T[] = []
-  let url: string | null = `${API}${path}`
+  const base = apiUrl(c.host)
+  let url: string | null = `${base}${path}`
   while (url) {
-    const res = await fetch(url, { headers: headers() })
-    if (res.status === 401) throw new AuthError(pick(S).tokenRejected)
+    const res = await fetch(url, { headers: headers(c.token) })
+    if (res.status === 401)
+      throw new AuthError(pick(S).tokenRejected, c.account)
     if (!res.ok) throw new Error(pick(S).httpOn(res.status, path))
     out.push(...((await res.json()) as T[]))
     url =
       /<([^>]+)>;\s*rel="next"/.exec(res.headers.get("link") ?? "")?.[1] ?? null
+    if (url && !url.startsWith(`${base}/`)) url = null // le jeton ne suit pas un lien vers un autre hôte
   }
   return out
 }
@@ -160,11 +184,11 @@ const chunk = <T>(xs: T[], n: number) =>
   )
 
 /** Tous les résultats d'une recherche GraphQL, page par page. */
-async function searchAll<N>(query: string, q: string): Promise<N[]> {
+async function searchAll<N>(c: Conn, query: string, q: string): Promise<N[]> {
   const out: N[] = []
   let after: string | null = null
   do {
-    const { search }: Page<N> = await gql<Page<N>>(query, { q, after })
+    const { search }: Page<N> = await gql<Page<N>>(c, query, { q, after })
     out.push(
       ...search.nodes.filter((n): n is N => !!n && Object.keys(n).length > 0),
     )
@@ -174,21 +198,40 @@ async function searchAll<N>(query: string, q: string): Promise<N[]> {
 }
 
 /** Login du compte connecté (sert aussi à valider un jeton avant de l'enregistrer). */
-export async function viewerLogin(token?: string): Promise<string> {
+export async function viewerLogin(
+  token: string,
+  host: string = GITHUB,
+): Promise<string> {
   return (
-    await gql<{ viewer: { login: string } }>("{ viewer { login } }", {}, token)
+    await gql<{ viewer: { login: string } }>(
+      { host, token },
+      "{ viewer { login } }",
+    )
   ).viewer.login
 }
 
-let viewer: Promise<string> | undefined
-const me = () => (viewer ??= viewerLogin())
+const viewers = new Map<string, Promise<string>>()
+function me(a: Account): Promise<string> {
+  let v = viewers.get(a.id)
+  if (!v) {
+    v = gql<{ viewer: { login: string } }>(
+      conn(a),
+      "{ viewer { login } }",
+    ).then(({ viewer }) => {
+      rememberLogin(a.id, viewer.login)
+      return viewer.login
+    })
+    viewers.set(a.id, v)
+  }
+  return v
+}
 
-function toPr(p: RawPr, login: string): Pr {
+function toPr(p: RawPr, login: string, account: string): Pr {
   const others = (nodes: Login[]) =>
     nodes.filter((n) => n.author?.login !== login).length
   const threads = p.reviewThreads.nodes
   return {
-    repo: p.repository.nameWithOwner,
+    repo: repoKey(account, p.repository.nameWithOwner),
     number: p.number,
     title: p.title,
     url: p.url,
@@ -254,33 +297,52 @@ function cached<T>(
 export function clearCache({ all = false } = {}) {
   for (const k of caches.keys())
     if (all || !k.startsWith("repos:")) caches.delete(k)
-  if (all) viewer = undefined
+  if (all) viewers.clear()
 }
 
+/** Une requête par compte connecté, chacun avec son jeton et sur son hôte ; résultats fusionnés. */
+const perAccount = async <T>(
+  run: (a: Account) => Promise<T[]>,
+  accounts = allAccounts(),
+): Promise<T[]> => (await Promise.all(accounts.map(run))).flat()
+
 export function fetchPrs(repos: string[]): Promise<Pr[]> {
-  return cached(`prs:${repos.join(",")}`, CACHE_TTL_MS, async () => {
-    const login = await me()
-    const parts = await Promise.all(
-      chunk(repos, REPOS_PER_QUERY).map((c) =>
-        searchAll<RawPr>(
-          QUERY,
-          "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" "),
-        ),
-      ),
-    )
-    return parts.flat().map((p) => toPr(p, login))
-  })
+  return cached(`prs:${repos.join(",")}`, CACHE_TTL_MS, async () =>
+    (
+      await Promise.all(
+        byAccount(repos, allAccounts()).map(async ([a, names]) => {
+          const login = await me(a)
+          const parts = await Promise.all(
+            chunk(names, REPOS_PER_QUERY).map((c) =>
+              searchAll<RawPr>(
+                conn(a),
+                QUERY,
+                "is:pr is:open author:@me " +
+                  c.map((r) => "repo:" + r).join(" "),
+              ),
+            ),
+          )
+          return parts.flat().map((p) => toPr(p, login, a.id))
+        }),
+      )
+    ).flat(),
+  )
 }
 
 /** Repos (suivis ou non) où j'ai au moins une PR ouverte. */
 export function reposWithMyOpenPrs(): Promise<string[]> {
   return cached("withPrs", CACHE_TTL_MS, async () => {
-    const nodes = await searchAll<{ repository: { nameWithOwner: string } }>(
-      `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
+    const keys = await perAccount(async (a) =>
+      (
+        await searchAll<{ repository: { nameWithOwner: string } }>(
+          conn(a),
+          `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
         pageInfo { hasNextPage endCursor } nodes { ... on PullRequest { repository { nameWithOwner } } } } }`,
-      "is:pr is:open author:@me",
+          "is:pr is:open author:@me",
+        )
+      ).map((n) => repoKey(a.id, n.repository.nameWithOwner)),
     )
-    return [...new Set(nodes.map((n) => n.repository.nameWithOwner))]
+    return [...new Set(keys)]
   })
 }
 
@@ -301,21 +363,27 @@ export function fetchMerged(
         mergedAt: string
         repository: { nameWithOwner: string }
       }
+      const groups = byAccount(repos, allAccounts())
       const parts = await Promise.all(
-        chunk(repos, REPOS_PER_QUERY).map((c) =>
-          searchAll<Raw>(
-            `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
+        groups.flatMap(([a, names]) =>
+          chunk(names, REPOS_PER_QUERY).map(async (c) =>
+            (
+              await searchAll<Raw>(
+                conn(a),
+                `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
             pageInfo { hasNextPage endCursor }
             nodes { ... on PullRequest { number title url mergedAt repository { nameWithOwner } } } } }`,
-            `is:pr is:merged author:@me merged:${from}..${to} ` +
-              c.map((r) => "repo:" + r).join(" "),
+                `is:pr is:merged author:@me merged:${from}..${to} ` +
+                  c.map((r) => "repo:" + r).join(" "),
+              )
+            ).map((p) => ({ ...p, account: a.id })),
           ),
         ),
       )
       return parts
         .flat()
         .map((p): MergedPr => ({
-          repo: p.repository.nameWithOwner,
+          repo: repoKey(p.account, p.repository.nameWithOwner),
           number: p.number,
           title: p.title,
           url: p.url,
@@ -328,26 +396,51 @@ export function fetchMerged(
 
 /** Tous les repos accessibles (les miens, collaborations, orgs), les plus récemment poussés d'abord. */
 export function listRepos(): Promise<string[]> {
-  return cached("repos:all", REPO_LIST_TTL_MS, async () =>
-    (
-      await restAll<{ full_name: string }>(
-        "/user/repos?per_page=100&affiliation=owner,collaborator,organization_member&sort=pushed",
-      )
-    ).map((r) => r.full_name),
+  return cached("repos:all", REPO_LIST_TTL_MS, () =>
+    perAccount(async (a) =>
+      (
+        await restAll<{ full_name: string }>(
+          conn(a),
+          "/user/repos?per_page=100&affiliation=owner,collaborator,organization_member&sort=pushed",
+        )
+      ).map((r) => repoKey(a.id, r.full_name)),
+    ),
   )
 }
 
-/** Vérifie que le repo existe et est accessible ; renvoie son nom canonique. */
+/**
+ * Vérifie que le repo existe et est accessible ; renvoie sa clé canonique.
+ * Sans préfixe de compte (`owner/repo` saisi à la main) : le premier compte connecté qui le voit.
+ */
 export async function resolveRepo(repo: string): Promise<string> {
-  if (!REPO_NAME.test(repo)) throw new Error(pick(S).invalidName(repo))
-  const res = await fetch(`${API}/repos/${repo}`, { headers: headers() })
-  if (!res.ok) throw new Error(pick(S).notFound(repo))
-  return ((await res.json()) as { full_name: string }).full_name
+  const { account, name } = splitKey(repo)
+  if (!REPO_NAME.test(name)) throw new Error(pick(S).invalidName(repo))
+  const candidates = repo.includes(":")
+    ? allAccounts().filter((a) => a.id === account)
+    : allAccounts()
+  for (const a of candidates) {
+    const res = await fetch(`${apiUrl(a.host)}/repos/${name}`, {
+      headers: headers(tokenOf(a.id)),
+    })
+    if (res.ok)
+      return repoKey(
+        a.id,
+        ((await res.json()) as { full_name: string }).full_name,
+      )
+  }
+  throw new Error(pick(S).notFound(repo))
 }
 
-/** Répond dans un fil de review, en tant que l'utilisateur connecté. */
-export async function replyToThread(threadId: string, body: string) {
+/** Répond dans un fil de review, en tant que le compte qui suit ce repo. */
+export async function replyToThread(
+  threadId: string,
+  body: string,
+  repo: string,
+) {
+  const a = findAccount(splitKey(repo).account)
+  if (!a) throw new AuthError(pick(S).notSignedIn)
   await gql(
+    conn(a),
     "mutation($id: ID!, $body: String!) { addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $id, body: $body }) { comment { id } } }",
     { id: threadId, body },
   )
@@ -361,8 +454,11 @@ export type Profile = {
 }
 
 /** Profil du compte connecté (réglages > Compte). */
-export async function viewerProfile(): Promise<Profile> {
+export async function viewerProfile(a: Account): Promise<Profile> {
   return (
-    await gql<{ viewer: Profile }>("{ viewer { login name avatarUrl url } }")
+    await gql<{ viewer: Profile }>(
+      conn(a),
+      "{ viewer { login name avatarUrl url } }",
+    )
   ).viewer
 }

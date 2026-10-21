@@ -2,6 +2,14 @@ import { invoke } from "@tauri-apps/api/core"
 import { fetch } from "@tauri-apps/plugin-http"
 import { useSyncExternalStore } from "react"
 
+import {
+  DEFAULT_ID,
+  GITHUB,
+  newAccountId,
+  savedAccounts,
+  type Account,
+  type AuthSource,
+} from "./accounts"
 import { pick, strings } from "./i18n"
 
 const S = strings(
@@ -18,21 +26,36 @@ const S = strings(
 )
 
 /**
- * Connexion GitHub sans serveur : le jeton vit dans le trousseau du système (commandes Rust
- * get_token / set_token / delete_token), et en mémoire pour la session.
+ * Connexion GitHub sans serveur, un ou plusieurs comptes (github.com, GitHub Enterprise) : chaque
+ * jeton vit dans le trousseau du système (commandes Rust get_token / set_token / delete_token, une
+ * entrée par compte), et en mémoire pour la session. La liste des comptes est dans localStorage.
  */
-export type AuthState = { status: "loading" | "signed-out" | "signed-in" }
+export type AuthState = {
+  status: "loading" | "signed-out" | "signed-in"
+  accounts: Account[]
+}
 
-let token: string | null = null
-let state: AuthState = { status: "loading" }
+const ACCOUNTS = "pr-radar:accounts"
+let accounts: Account[] = []
+const tokens = new Map<string, string>()
+let state: AuthState = { status: "loading", accounts }
 const listeners = new Set<() => void>()
 
-function set(next: AuthState) {
-  state = next
+function set(status: AuthState["status"]) {
+  state = { status, accounts }
   listeners.forEach((l) => l())
 }
 
-export const currentToken = () => token
+const persist = () => {
+  try {
+    localStorage.setItem(ACCOUNTS, JSON.stringify(accounts))
+  } catch {}
+}
+
+/** Jeton d'un compte : n'est envoyé qu'à l'hôte de ce compte (src/lib/github.ts). */
+export const tokenOf = (id: string) => tokens.get(id) ?? null
+export const allAccounts = () => accounts
+export const findAccount = (id: string) => accounts.find((a) => a.id === id)
 
 export function useAuth(): AuthState {
   return useSyncExternalStore(
@@ -60,64 +83,104 @@ const ghSkipped = () => {
   }
 }
 
-/** Comment la session a été ouverte : affiché dans les réglages. */
-export type AuthSource = "oauth" | "pat" | "gh"
-const SOURCE = "pr-radar:auth-source"
-let source: AuthSource | null = null
-export const authSource = () => source
-const setSource = (s: AuthSource | null) => {
-  source = s
-  try {
-    if (s) localStorage.setItem(SOURCE, s)
-    else localStorage.removeItem(SOURCE)
-  } catch {}
-}
+/** Source du compte unique d'avant le multi-compte : lue une fois, pour la migration. */
+const LEGACY_SOURCE = "pr-radar:auth-source"
 
 /** Jeton du CLI GitHub s'il est installé et connecté (commande Rust `gh_token`). */
 export const ghCliToken = () =>
   invoke<string | null>("gh_token").catch(() => null)
 
-/** Démarrage : jeton du trousseau, sinon compte `gh` déjà connecté sur la machine. */
+/** Autorise le plugin HTTP à joindre l'API d'un hôte GitHub Enterprise (commande Rust `allow_host`). */
+export const allowHost = (host: string) =>
+  host === GITHUB ? Promise.resolve() : invoke<void>("allow_host", { host })
+
+const readToken = (a: Account) =>
+  a.source === "gh"
+    ? ghCliToken()
+    : invoke<string | null>("get_token", { account: a.id }).catch(() => null)
+
+/** Démarrage : jetons du trousseau, sinon compte `gh` déjà connecté sur la machine. */
 export async function loadToken() {
-  token = await invoke<string | null>("get_token").catch(() => null)
+  let saved: Account[] | null = null
+  let legacy: AuthSource | null = null
   try {
-    source = token
-      ? ((localStorage.getItem(SOURCE) as AuthSource | null) ?? "pat")
-      : null
+    saved = JSON.parse(localStorage.getItem(ACCOUNTS) ?? "null") as
+      Account[] | null
+    legacy = localStorage.getItem(LEGACY_SOURCE) as AuthSource | null
   } catch {}
-  if (!token && !ghSkipped()) {
-    token = await ghCliToken()
-    if (token) source = "gh"
+  const live: Account[] = []
+  for (const a of savedAccounts(saved, legacy)) {
+    const t = await readToken(a)
+    if (!t) continue
+    await allowHost(a.host).catch(() => {}) // refusé : les appels à cet hôte échoueront, avec un message
+    tokens.set(a.id, t)
+    live.push(a)
   }
-  set({ status: token ? "signed-in" : "signed-out" })
+  if (!live.length && !ghSkipped()) {
+    const t = await ghCliToken()
+    if (t) {
+      tokens.set(DEFAULT_ID, t)
+      live.push({ id: DEFAULT_ID, host: GITHUB, source: "gh" })
+    }
+  }
+  accounts = live
+  if (!saved) persist() // migration : le jeton reste sous `github`, rien à recopier
+  set(accounts.length ? "signed-in" : "signed-out")
 }
 
-export async function saveToken(t: string, kind: "oauth" | "pat") {
-  await invoke("set_token", { token: t })
-  token = t
-  setSource(kind)
+/**
+ * Ajoute un compte (ou remplace le jeton d'un compte déjà connecté avec ce login sur cet hôte).
+ * Le jeton va au trousseau, sauf celui du CLI `gh` qui reste la source. Renvoie l'id du compte.
+ */
+export async function addAccount(
+  token: string,
+  source: AuthSource,
+  host: string,
+  login: string,
+): Promise<string> {
+  const id =
+    accounts.find((a) => a.host === host && a.login === login)?.id ??
+    newAccountId(accounts, host, login)
+  if (source === "gh")
+    await invoke("delete_token", { account: id }).catch(() => {})
+  else await invoke("set_token", { account: id, token })
+  tokens.set(id, token)
+  const account: Account = { id, host, source, login }
+  accounts = accounts.some((a) => a.id === id)
+    ? accounts.map((a) => (a.id === id ? account : a))
+    : [...accounts, account]
+  persist()
   skipGh(false)
-  set({ status: "signed-in" })
+  set("signed-in")
+  return id
 }
 
-/** Connexion avec le compte `gh` : rien n'est copié dans le trousseau, `gh` reste la source. */
-export async function signInWithGh(): Promise<boolean> {
-  const t = await ghCliToken()
-  if (!t) return false
-  skipGh(false)
-  token = t
-  setSource("gh")
-  set({ status: "signed-in" })
-  return true
+/** Login découvert après coup (compte migré) : sert à reconnaître ce compte s'il est ajouté de nouveau. */
+export function rememberLogin(id: string, login: string) {
+  if (!accounts.some((a) => a.id === id && !a.login)) return
+  accounts = accounts.map((a) => (a.id === id ? { ...a, login } : a))
+  persist()
 }
 
-export async function logout() {
-  await invoke("delete_token").catch(() => {})
-  token = null
-  setSource(null)
+/** Déconnecte un compte, ou tous sans argument. */
+export async function logout(id?: string) {
+  for (const a of accounts.filter((a) => !id || a.id === id)) {
+    await invoke("delete_token", { account: a.id }).catch(() => {})
+    tokens.delete(a.id)
+  }
+  accounts = id ? accounts.filter((a) => a.id !== id) : []
+  persist()
   skipGh(true)
-  set({ status: "signed-out" })
+  set(accounts.length ? "signed-in" : "signed-out")
 }
+
+/** Désinstallation : efface les jetons de tous les comptes du trousseau, sans changer d'écran. */
+export const forgetTokens = () =>
+  Promise.all(
+    accounts.map((a) =>
+      invoke("delete_token", { account: a.id }).catch(() => {}),
+    ),
+  )
 
 /* ---------- Device flow (comme `gh auth login`) ---------- */
 

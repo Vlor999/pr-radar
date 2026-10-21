@@ -9,6 +9,7 @@ import {
   LogOut,
   Monitor,
   Moon,
+  Plus,
   RefreshCw,
   Sun,
   Trash2,
@@ -25,7 +26,10 @@ import {
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { useThumb } from "@/hooks/use-thumb"
-import { authSource, CLIENT_ID, logout } from "@/lib/auth"
+import { Login } from "@/components/login"
+import { GITHUB, type Account } from "@/lib/accounts"
+import { accountAdded, signOut } from "@/lib/actions"
+import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
 import {
   clearCache,
   reposWithMyOpenPrs,
@@ -67,7 +71,9 @@ const S = strings(
     done: "Fait",
     failed: "Échec",
     account: {
-      description: "Le compte GitHub utilisé pour lire vos PR.",
+      description:
+        "Les comptes GitHub (github.com ou Enterprise) dont les PR sont affichées ensemble.",
+      add: "Ajouter un compte",
       profileError: "Impossible de charger le profil GitHub.",
       via: "Connecté via",
       ghNote:
@@ -216,7 +222,9 @@ const S = strings(
     done: "Done",
     failed: "Failed",
     account: {
-      description: "The GitHub account used to read your PRs.",
+      description:
+        "The GitHub accounts (github.com or Enterprise) whose PRs are shown together.",
+      add: "Add an account",
       profileError: "Couldn't load the GitHub profile.",
       via: "Signed in with",
       ghNote:
@@ -537,24 +545,52 @@ const Feedback = ({ msg }: { msg: string | null }) => (
 
 function AccountSection() {
   const t = useStrings(S)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [error, setError] = useState(false)
-  const source = authSource()
-  useEffect(() => {
-    viewerProfile().then(setProfile, () => setError(true))
-  }, [])
-  const manageUrl =
-    source === "oauth"
-      ? `https://github.com/settings/connections/applications/${CLIENT_ID}`
-      : source === "pat"
-        ? "https://github.com/settings/tokens"
-        : null
+  const { accounts } = useAuth()
+  const [adding, setAdding] = useState(false)
   return (
     <Section
       id="compte"
       title={t.sections.compte}
       description={t.account.description}
     >
+      {accounts.map((a) => (
+        <AccountRows key={a.id} account={a} />
+      ))}
+      <div className="border-t py-3">
+        {adding ? (
+          <Login
+            onDone={(id) => {
+              setAdding(false)
+              if (id) void accountAdded(id)
+            }}
+          />
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+            <Plus data-icon="inline-start" />
+            {t.account.add}
+          </Button>
+        )}
+      </div>
+    </Section>
+  )
+}
+
+function AccountRows({ account }: { account: Account }) {
+  const t = useStrings(S)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [error, setError] = useState(false)
+  const { source, host } = account
+  useEffect(() => {
+    viewerProfile(account).then(setProfile, () => setError(true))
+  }, [account])
+  const manageUrl =
+    source === "oauth"
+      ? `https://github.com/settings/connections/applications/${CLIENT_ID}`
+      : source === "pat"
+        ? `https://${host}/settings/tokens`
+        : null
+  return (
+    <div className="border-t first:border-t-0">
       <div className="flex h-16 items-center gap-3 py-3">
         {profile ? (
           <>
@@ -572,11 +608,15 @@ function AccountSection() {
                 className="text-xs text-muted-foreground hover:text-primary hover:underline"
               >
                 @{profile.login}
+                {host !== GITHUB && ` · ${host}`}
               </a>
             </div>
           </>
         ) : error ? (
-          <p className="text-sm text-destructive">{t.account.profileError}</p>
+          <p className="text-sm text-destructive">
+            {t.account.profileError}
+            {host !== GITHUB && ` (${host})`}
+          </p>
         ) : (
           <>
             <div className="size-10 animate-pulse rounded-full bg-muted motion-reduce:animate-none" />
@@ -616,13 +656,13 @@ function AccountSection() {
           variant="outline"
           size="sm"
           className="text-destructive hover:text-destructive"
-          onClick={() => void logout()}
+          onClick={() => void signOut(account.id)}
         >
           <LogOut data-icon="inline-start" />
           {t.account.logout}
         </Button>
       </Row>
-    </Section>
+    </div>
   )
 }
 
@@ -1037,6 +1077,7 @@ function UninstallRow() {
       try {
         localStorage.clear() // réglages, repos suivis, marques « vu »
       } catch {}
+      await forgetTokens() // un jeton par compte ; uninstall_run efface celui d'origine
       await invoke("uninstall_run") // jeton supprimé, nettoyage après fermeture, puis l'app quitte
     } catch (e) {
       setState("error")

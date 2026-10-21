@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react"
 
+import { splitKey } from "./accounts"
+import { findAccount } from "./auth"
 import { fetchMerged, fetchPrs, listRepos, reposWithMyOpenPrs } from "./github"
 import { getSettings } from "./settings"
 import { buildTree } from "./tree"
@@ -37,6 +39,8 @@ export type Data = {
   error?: string
   /** erreur de jeton : l'interface propose de se reconnecter */
   authError?: boolean
+  /** compte dont le jeton a été refusé */
+  authAccount?: string
 }
 
 let data: Data = {
@@ -78,6 +82,8 @@ export async function reload() {
       repos = withPrs
       setRepos(repos)
     }
+    // repos d'un compte déconnecté : gardés dans la liste, pas affichés
+    repos = repos.filter((r) => findAccount(splitKey(r).account))
     const now = new Date()
     const [prs, recent] = await Promise.all([
       fetchPrs(repos),
@@ -106,6 +112,7 @@ export async function reload() {
       loading: false,
       error: e instanceof Error ? e.message.slice(0, 300) : String(e),
       authError: e instanceof Error && e.name === "AuthError",
+      authAccount: (e as { account?: string }).account,
     })
   }
 }
