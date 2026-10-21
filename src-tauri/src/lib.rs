@@ -275,6 +275,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| Ok(setup_tray(app.handle())?))
+        // fermer la fenêtre la cache : l'app reste dans la barre des menus, « Quitter » (ou ⌘Q) la ferme
+        .on_window_event(|w, e| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+                api.prevent_close();
+                let _ = w.hide();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             get_token,
             set_token,
@@ -284,8 +291,15 @@ pub fn run() {
             uninstall_run,
             set_tray
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app, _e| {
+            // clic sur l'icône du Dock alors que la fenêtre est cachée
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _e {
+                show_main(_app);
+            }
+        });
 }
 
 #[cfg(test)]
