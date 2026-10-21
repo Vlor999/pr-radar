@@ -24,6 +24,10 @@ export type Settings = {
   hiddenRepos: string[]
   /** langue de l'interface ; null = pas encore choisie (question au premier lancement) */
   lang: Lang | null
+  /** mentions Slack : toutes les conversations (actuelles et futures), sans filtre */
+  slackAll: boolean
+  /** mentions Slack : ids des conversations cochées (ignorés si `slackAll`) */
+  slackChannels: string[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -40,6 +44,8 @@ export const DEFAULT_SETTINGS: Settings = {
   mergedDays: 7,
   hiddenRepos: [],
   lang: null,
+  slackAll: false,
+  slackChannels: [],
 }
 
 const KEY = "pr-radar:settings"

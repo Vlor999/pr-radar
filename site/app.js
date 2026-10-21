@@ -15,54 +15,66 @@
     win: '<path d="M3 5.500 10.500 4.500v7H3zM11.500 4.400 21 3v8.500h-9.500zM3 12.500h7.500v7L3 18.500zM11.500 12.500H21V21l-9.500-1.400z"/>',
     linux: '<path d="M12 2c-2 0-3 1.800-3 4 0 1.500-.8 2.500-1.800 4C6 11.700 5 13.500 5 16c0 1.500.8 2.500 2 3l-1 2h12l-1-2c1.200-.5 2-1.500 2-3 0-2.500-1-4.300-2.200-6C15.800 8.500 15 7.500 15 6c0-2.200-1-4-3-4z"/>'
   };
-  // EN strings; French stays in index.html (data-i18n / data-i18n-html / data-i18n-attr="attr:key").
-  var EN = {
-    skip: 'Skip to download', nav: 'Main', lang: 'Language', dl: 'Download', features: 'Features', how: 'How it works',
-    tagline: 'Your open GitHub PRs, <span class="accent">as a tree.</span>',
-    lead: 'Stacks, reviews, discussions and merge calendar, across all your repos. Free, open source, serverless.',
-    heroMeta: 'macOS, Windows, Linux · MIT License', mockcap: 'Animated preview, sample data.',
-    heroSr: 'Animated preview of the app: open PRs in the acme/web repo appear as a tree under the main branch, with one PR stacked under its parent. A card is selected with the keyboard, its review thread opens with a diff excerpt, and a reply is sent.',
-    now: 'just now', pr42: 'feat(checkout): one-click payment', ready: 'Ready to merge', approved: 'Approved', blocks1: 'blocks 1 PR',
-    pr45: 'feat(checkout): Apple Pay and Google Pay', 'new': 'New', by42: 'blocked by #42',
-    pr38: 'fix(api): retry on payment 502s', changes: 'Changes requested', unres: '1 unresolved', stale: 'inactive for 6d',
-    bob: '<b>bob</b> Cap the retries, or it loops forever.', alice: '<b>alice</b> Fixed: max 3 retries, with backoff.',
-    ph: 'Your reply…', reply: 'Reply',
-    auth1: 'On first launch, sign in with a code (<strong>device flow</strong>) or a <strong>personal access token</strong>.',
-    flead: 'Everything waiting on you, across all your repos, in one window.',
-    pr12: 'feat(cart): persistent cart', pr13: 'feat(cart): promo codes', by12: 'blocked by #12',
-    cap1: '<strong>Stacks</strong>Each stacked PR sits under its parent, so you know what to merge first.<span class="sr"> Animation: the tree main, PR #12, PR #13 draws in, then the Ready to merge badge appears on PR #12.</span>',
-    chloe: '<b>chloe</b> Why a one-day TTL?', alice2: '<b>alice</b> Matches session expiry', vtype: 'Matches session expiry',
-    cap2: '<strong>Discussions</strong>Unresolved threads open with the code in question, and you reply without leaving the app.<span class="sr"> Animation: a diff excerpt, a question from chloe, then a reply typed and sent.</span>',
-    month: 'October 2026', mo: 'M', m: 'Month', w: 'Week', d: 'Day', tu: 'T', we: 'W', th: 'T', fr: 'F', su: 'S',
-    cap3: '<strong>Merge calendar</strong>Month, week or day: each repo\'s shipping pace at a glance.<span class="sr"> Animation: merged PR chips drop into the days of October.</span>',
-    clock: 'Tue Oct 20 9:41 AM', t1: 'acme/web#42 approved', t1d: 'alice approved “feat(checkout): one-click payment”', tnow: 'now',
-    t2: 'acme/api#17 ready to merge', t2d: 'All checks passed.',
-    cap4: '<strong>Notifications</strong>An approval, a change request, a broken build: your system tells you.<span class="sr"> Animation: two system notifications slide in from the edge of the screen.</span>',
-    more: 'And also', c1: 'Filters and search', c2: 'Ready-to-merge PRs', c3: 'Stale PRs', c4: 'New since last visit', c5: 'Repos by organization', c6: 'Light and dark theme',
-    kbl: 'Everything works from the keyboard (Ctrl instead of ⌘ on Windows and Linux).',
-    vs: 'Why not github.com/pulls?', vsd: 'GitHub\'s PR dashboard and native stacks cover the basics; PR Radar adds a multi-repo overview, outside the browser.',
-    vsc: 'Comparison of github.com/pulls and PR Radar', r2: 'Stacks from every repo at a glance', r2a: 'one PR at a time',
-    r3: 'Native system notifications', r3a: 'web only', r4: 'Reply to unresolved threads from the list', r4a: 'by opening each PR',
-    r5: 'Merge calendar', r6: 'New since last visit',
-    privacy: 'Privacy',
-    pv: 'No server: the app only talks to github.com and api.github.com, from your machine. The token stays in the system keychain (macOS Keychain, Windows Credential Manager, Secret Service on Linux), and there is no telemetry.',
-    pvl: 'Read the code (MIT license)',
-    faq: 'Frequently asked questions',
-    q1: 'What permissions does the app ask for?',
-    a1: 'Two scopes: <code>repo</code> to read PRs in private repos and reply to discussions, <code>read:org</code> to list your organizations\' repos. With a personal access token (classic), check the same ones: <code>repo</code> and <code>read:org</code>.',
-    q3: 'My organization uses SAML SSO',
-    a3: 'With the device flow, start an SSO session on the org first, then confirm the code; if the org restricts third-party apps, an admin must approve PR Radar. With a personal access token, open it in your GitHub settings and click “Configure SSO” to authorize it for the org. Otherwise, that org\'s repos won\'t show up.',
-    q4: 'Is GitHub Enterprise supported?', a4: 'Not yet: the app only talks to github.com and api.github.com.',
-    q5: 'How do updates work?', a5: 'The app checks the latest GitHub release on startup, then every 6 hours. Every update is signed: the app verifies the signature before installing, then restarts.',
-    q7: 'How often does the app poll GitHub?', a7: 'Every 5 minutes by default, adjustable from 1 to 30 minutes, or manual. Requests count against your usual GitHub API quota.',
-    rels: 'Releases', bug: 'Report a bug', mit: 'MIT License'
+  // FR strings; English stays in index.html (data-i18n / data-i18n-html / data-i18n-attr="attr:key").
+  var FR = {
+    skip: 'Aller au téléchargement', features: 'Fonctions', dl: 'Télécharger',
+    tagline: 'Vos PR GitHub ouvertes, <span class="accent">en arbre.</span>',
+    lead: 'Stacks, reviews, discussions et calendrier des merges, sur tous vos repos. Gratuit, open source, sans serveur.',
+    how: 'Comment ça marche', heroMeta: 'macOS, Windows, Linux · Licence MIT',
+    heroSr: 'Aperçu animé de l\'app : la liste des PR ouvertes du repo acme/web s\'affiche en arbre sous la branche main, avec une PR empilée sous sa parente. Une carte est sélectionnée au clavier, sa discussion de review s\'ouvre avec un extrait de diff, et une réponse est envoyée.',
+    now: 'à l\'instant', pr42: 'feat(checkout): paiement en un clic', ready: 'Prête à merger', approved: 'Approuvée',
+    blocks1: 'bloque 1 PR', pr45: 'feat(checkout): Apple Pay et Google Pay', new: 'Nouveau', by42: 'bloquée par #42',
+    pr38: 'fix(api): retry sur les 502 du paiement', changes: 'Changements demandés', unres: '1 non résolu',
+    stale: 'inactive depuis 6 j', bob: '<b>bob</b> Il faut borner les essais, sinon boucle infinie.',
+    alice: '<b>alice</b> Corrigé : 3 essais max, avec backoff.', reply: 'Répondre',
+    mockcap: 'Aperçu animé, données fictives.',
+    auth1: 'Au premier lancement, connectez-vous par code (<strong>device flow</strong>) ou avec un <strong>jeton d\'accès personnel</strong>.',
+    flead: 'Tout ce qui attend une action de votre part, sur tous vos repos, dans une seule fenêtre.',
+    pr12: 'feat(cart): panier persistant', pr13: 'feat(cart): codes promo', by12: 'bloquée par #12',
+    cap1: '<strong>Stacks</strong>Chaque PR empilée s\'affiche sous sa parente : vous savez quoi merger en premier.<span class="sr"> Animation : l\'arbre main, PR #12, PR #13 se dessine, puis le badge Prête à merger apparaît sur la PR #12.</span>',
+    chloe: '<b>chloe</b> Pourquoi un TTL d\'un jour ?', alice2: '<b>alice</b> Aligné sur la session.',
+    vtype: 'Aligné sur la session.',
+    cap2: '<strong>Discussions</strong>Les fils non résolus s\'ouvrent avec le code concerné, et vous répondez sans quitter l\'app.<span class="sr"> Animation : un extrait de diff, une question de chloe, puis une réponse tapée et envoyée.</span>',
+    month: 'Octobre 2026', m: 'Mois', w: 'Semaine', d: 'Jour', mo: 'L', tu: 'M', we: 'M', th: 'J', fr: 'V', su: 'D',
+    cap3: '<strong>Calendrier des merges</strong>Mois, semaine ou jour : le rythme de livraison de chaque repo d\'un coup d\'œil.<span class="sr"> Animation : des pastilles de PR mergées tombent dans les jours d\'octobre.</span>',
+    clock: 'mar. 20 oct. 09:41', t1: 'acme/web#42 : approuvée',
+    t1d: 'alice a approuvé « feat(checkout): paiement en un clic »', tnow: 'maint.', t2: 'acme/api#17 : prête à merger',
+    t2d: 'Tous les checks sont passés.',
+    slk: 'Postée dans #reviews',
+    cap5: '<strong>Annonce Slack</strong>Voyez d\'un coup d\'œil si votre PR a déjà été postée dans un channel ou en DM.<span class="sr"> Animation : la PR #12 apparaît, puis un badge Postée dans #reviews surgit.</span>',
+    cap4: '<strong>Notifications</strong>Une approbation, un changement demandé, une CI cassée : le système vous prévient.<span class="sr"> Animation : deux notifications système glissent depuis le bord de l\'écran.</span>',
+    more: 'Et aussi', c1: 'Filtres et recherche', c2: 'PR prêtes à merger', c3: 'PR inactives',
+    c4: 'Nouveau depuis la dernière visite', c5: 'Repos par organisation', c6: 'Thème clair et sombre',
+    kbl: 'Tout se fait au clavier (Ctrl à la place de ⌘ sous Windows et Linux).', vs: 'Comparaison',
+    vsd: 'Le tableau de bord de GitHub et les autres apps de bureau font bien leur travail. PR Radar sert à suivre les stacks de PR sur tous vos repos et à répondre aux fils de review, sur n\'importe quel OS de bureau.',
+    vsc: 'Comparaison entre github.com/pulls, Gitify et PR Radar', r1: 'Plateformes', r1a: 'tout navigateur',
+    r7: 'Issues, releases, discussions', r7a: 'PR uniquement', r8a: '✓ (token)',
+    vsalt: 'Choisissez <strong>github.com/pulls</strong> pour ne rien installer, <strong>Gitify</strong> pour toute votre boîte de notifications dans la barre de menus, et <strong>PR Marmot</strong> pour une app de bureau native, avec des builds signés pour les Mac Apple silicon.', r2: 'Stacks de tous les repos d\'un coup d\'œil',
+    r2a: 'une PR à la fois', r3: 'Notifications système natives', r3a: 'web uniquement',
+    r4: 'Répondre aux fils non résolus depuis la liste', r4a: 'en ouvrant chaque PR', r5: 'Calendrier des merges',
+    privacy: 'Confidentialité',
+    pv: 'PR Radar parle uniquement à GitHub et, si vous le connectez, à Slack. Aucun serveur : les jetons restent dans le trousseau de votre OS, les jetons Slack sont en lecture seule avec rotation automatique (ils expirent toutes les 12 h), et révocables à tout moment. Vos messages ne quittent jamais votre machine.',
+    pvl: 'Lire le code (licence MIT)', faq: 'Questions fréquentes', q1: 'Quels droits l\'app demande-t-elle ?',
+    a1: 'Deux scopes : <code>repo</code> pour lire les PR des repos privés et répondre aux discussions, <code>read:org</code> pour lister les repos de vos organisations. Avec un jeton d\'accès personnel (classic), cochez les mêmes : <code>repo</code> et <code>read:org</code>.',
+    q3: 'Mon organisation utilise le SSO SAML',
+    a3: 'Avec le device flow, ouvrez d\'abord une session SSO sur l\'org, puis validez le code ; si l\'org restreint les apps tierces, un admin doit approuver PR Radar. Avec un jeton d\'accès personnel, ouvrez-le dans les réglages GitHub et cliquez sur « Configure SSO » pour l\'autoriser sur l\'org. Sinon, les repos de cette org n\'apparaissent pas.',
+    q4: 'GitHub Enterprise est-il pris en charge ?',
+    a4: 'Oui, avec un personal access token : dans les Réglages, ajoutez un compte avec l\'hôte de votre serveur. « Se connecter avec GitHub » ne marche que sur github.com.',
+    q5: 'Comment se font les mises à jour ?',
+    a5: 'L\'app vérifie la dernière release GitHub au démarrage puis toutes les 6 heures. Chaque mise à jour est signée : l\'app vérifie la signature avant d\'installer, puis redémarre.',
+    q7: 'À quelle fréquence l\'app interroge-t-elle GitHub ?',
+    a7: 'Toutes les 5 minutes par défaut, réglable de 1 à 30 minutes ou en manuel. Les requêtes comptent dans votre quota d\'API GitHub habituel.',
+    q8: 'Mon admin Slack doit-il approuver ?',
+    a8: 'Oui si votre workspace l\'exige. Cliquez sur Connecter, Slack propose de demander l\'installation.',
+    rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT', nav: 'Principal', lang: 'Langue',
+    ph: 'Votre réponse…'
   };
-  var lang, FR = {};
+  var lang, EN = {};
   try { lang = localStorage.getItem('lang'); } catch (e) {}
   if (lang !== 'fr' && lang !== 'en') lang = /^fr/i.test(navigator.language || '') ? 'fr' : 'en';
   function t(fr, en) { return lang === 'en' ? en : fr; }
-  // First call per key stores the French original; then pick FR or EN.
-  function str(k, cur) { if (!(k in FR)) FR[k] = cur; return lang === 'en' && EN[k] != null ? EN[k] : FR[k]; }
+  // First call per key stores the English original; then pick EN or FR.
+  function str(k, cur) { if (!(k in EN)) EN[k] = cur; return lang === 'fr' && FR[k] != null ? FR[k] : EN[k]; }
   function translate() {
     document.documentElement.lang = lang;
     document.querySelectorAll('[data-i18n]').forEach(function (el) { el.textContent = str(el.dataset.i18n, el.textContent); });

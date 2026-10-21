@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import type { Thread } from "@/lib/types"
 
+/** initiales affichées dans l'en-tête d'une discussion, au-delà : un « +N » */
+const MAX_INITIALS = 3
+
 const S = strings(
   {
     agoNow: "à l'instant",
@@ -35,27 +38,40 @@ function ago(iso: string, t: typeof S.fr) {
 }
 
 /** Colonne des discussions ouvertes d'une PR, reliée à sa carte par des traits (affichée sous la carte). */
-export function ThreadColumn({ threads }: { threads: Thread[] }) {
+export function ThreadColumn({
+  threads,
+  repo,
+}: {
+  threads: Thread[]
+  repo: string
+}) {
   return (
-    <ul className="flex min-w-0 animate-in flex-col gap-3 pl-6 duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none">
+    <ul className="flex min-w-0 animate-in flex-col gap-3 pl-14 duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none">
       {threads.map((t) => (
         <li
           key={t.id}
           className={cn(
             "relative",
-            // coude qui part de la carte de la PR vers chaque discussion
-            "before:absolute before:top-0 before:-left-5 before:h-7 before:w-5 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-border",
-            "not-last:after:absolute not-last:after:top-0 not-last:after:-bottom-3 not-last:after:-left-5 not-last:after:border-l-2 not-last:after:border-border",
+            // coude qui part de la carte de la PR vers chaque discussion.
+            // Valeurs liées : -top-3 = gap-3 sous la carte (repo-section) ; -left-4.5 sous pl-14 ;
+            // trait du coude à y = 15px (-top-3 + h-7), pointe de la queue au même y (top-2.25 + 6px).
+            "before:absolute before:-top-3 before:-left-4.5 before:h-7 before:w-3 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-border",
+            "not-last:after:absolute not-last:after:top-0 not-last:after:-bottom-3 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-border",
           )}
         >
-          <ThreadCard thread={t} />
+          {/* queue de la bulle : pointe sur le trait du coude (y = 15px), même trait que le coude */}
+          <span
+            aria-hidden
+            className="absolute top-2.25 -left-1.5 z-10 size-3 rotate-45 border-b-2 border-l-2 border-border bg-card"
+          />
+          <ThreadCard thread={t} repo={repo} />
         </li>
       ))}
     </ul>
   )
 }
 
-function ThreadCard({ thread }: { thread: Thread }) {
+function ThreadCard({ thread, repo }: { thread: Thread; repo: string }) {
   const t = useStrings(S)
   const [draft, setDraft] = useState("")
   const [error, setError] = useState("")
@@ -63,19 +79,27 @@ function ThreadCard({ thread }: { thread: Thread }) {
 
   const send = () =>
     start(async () => {
-      const res = await reply(thread.id, draft)
+      const res = await reply(thread.id, draft, repo)
       setError(res.error ?? "")
       if (!res.error) setDraft("")
     })
 
+  const authors = [...new Set(thread.comments.map((c) => c.author))]
+  const extra = authors.length - MAX_INITIALS
+  const chip =
+    "grid size-5 place-items-center rounded-full bg-muted text-[10px] font-medium uppercase ring-2 ring-card"
+
   return (
-    <Card size="sm" className="gap-0 rounded-2xl py-0">
+    <Card
+      size="sm"
+      className="gap-0 rounded-2xl rounded-tl-md py-0 shadow-sm ring-foreground/10"
+    >
       <header className="flex items-center justify-between gap-2 border-b px-4 py-2">
         <a
           href={thread.comments[0]?.url}
           target="_blank"
           rel="noopener"
-          className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-foreground hover:underline"
+          className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground hover:text-foreground hover:underline"
           title={thread.path}
         >
           {thread.path}
@@ -86,6 +110,22 @@ function ThreadCard({ thread }: { thread: Thread }) {
             {t.outdated}
           </span>
         )}
+        {/* participants : décoratif, les auteurs sont lus dans la liste des commentaires */}
+        <span aria-hidden className="flex shrink-0 -space-x-1.5">
+          {authors.slice(0, MAX_INITIALS).map((a) => (
+            <span key={a} title={a} className={chip}>
+              {a[0]}
+            </span>
+          ))}
+          {extra > 0 && (
+            <span
+              title={authors.slice(MAX_INITIALS).join(", ")}
+              className={chip}
+            >
+              +{extra}
+            </span>
+          )}
+        </span>
       </header>
 
       {thread.hunk && <Hunk hunk={thread.hunk} />}

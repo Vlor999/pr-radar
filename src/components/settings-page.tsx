@@ -9,6 +9,7 @@ import {
   LogOut,
   Monitor,
   Moon,
+  Plus,
   RefreshCw,
   Sun,
   Trash2,
@@ -25,7 +26,10 @@ import {
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { useThumb } from "@/hooks/use-thumb"
-import { authSource, CLIENT_ID, logout } from "@/lib/auth"
+import { Login } from "@/components/login"
+import { GITHUB, type Account } from "@/lib/accounts"
+import { accountAdded, signOut } from "@/lib/actions"
+import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
 import {
   clearCache,
   reposWithMyOpenPrs,
@@ -38,9 +42,17 @@ import { LOW, resetTime, useQuota } from "@/lib/quota"
 import { resetSettings, updateSettings, useSettings } from "@/lib/settings"
 import { checkForUpdate, installUpdate, useUpdate } from "@/lib/updater"
 import { getRepos, reload, setRepos } from "@/lib/store"
+import {
+  connectSlack,
+  disconnectSlack,
+  listConversations,
+  useSlack,
+} from "@/lib/slack"
+import type { SlackConversation } from "@/lib/types"
 
 const SECTIONS = [
   "compte",
+  "slack",
   "apparence",
   "actualisation",
   "notifications",
@@ -55,6 +67,7 @@ const S = strings(
   {
     sections: {
       compte: "Compte",
+      slack: "Slack",
       apparence: "Apparence",
       actualisation: "Actualisation",
       notifications: "Notifications",
@@ -67,7 +80,9 @@ const S = strings(
     done: "Fait",
     failed: "Échec",
     account: {
-      description: "Le compte GitHub utilisé pour lire vos PR.",
+      description:
+        "Les comptes GitHub (github.com ou Enterprise) dont les PR sont affichées ensemble.",
+      add: "Ajouter un compte",
       profileError: "Impossible de charger le profil GitHub.",
       via: "Connecté via",
       ghNote:
@@ -79,6 +94,31 @@ const S = strings(
       session: "Session",
       manage: "Gérer l'accès sur GitHub",
       logout: "Se déconnecter",
+    },
+    slack: {
+      description:
+        "Repère les PR dont le lien a déjà été posté sur Slack (badge sur la carte). Un seul workspace.",
+      workspace: "Workspace",
+      notConnected: "Non connecté",
+      connect: "Connecter Slack",
+      reconnect: "Reconnecter Slack",
+      waiting: "En attente de Slack…",
+      expired: "Session expirée",
+      timeout: "Délai dépassé, recommence la connexion.",
+      disconnect: "Déconnecter",
+      privacy:
+        "Lecture seule, jetons dans le trousseau du système, messages lus uniquement sur ta machine. Ton admin Slack peut devoir approuver l'app : Slack propose alors de demander l'installation.",
+      all: "Toutes les conversations (actuelles et futures)",
+      allDescription:
+        "Sinon, coche les conversations à surveiller. Rien de coché : fonctionnalité inactive.",
+      filter: "Filtrer les conversations",
+      loading: "Chargement des conversations…",
+      kinds: {
+        public: "public",
+        private: "privé",
+        im: "DM",
+        mpim: "DM de groupe",
+      },
     },
     appearance: {
       description: "Le thème de l'interface.",
@@ -204,6 +244,7 @@ const S = strings(
   {
     sections: {
       compte: "Account",
+      slack: "Slack",
       apparence: "Appearance",
       actualisation: "Refresh",
       notifications: "Notifications",
@@ -216,7 +257,9 @@ const S = strings(
     done: "Done",
     failed: "Failed",
     account: {
-      description: "The GitHub account used to read your PRs.",
+      description:
+        "The GitHub accounts (github.com or Enterprise) whose PRs are shown together.",
+      add: "Add an account",
       profileError: "Couldn't load the GitHub profile.",
       via: "Signed in with",
       ghNote:
@@ -228,6 +271,31 @@ const S = strings(
       session: "Session",
       manage: "Manage access on GitHub",
       logout: "Sign out",
+    },
+    slack: {
+      description:
+        "Spots PRs whose link was already posted on Slack (badge on the card). One workspace.",
+      workspace: "Workspace",
+      notConnected: "Not connected",
+      connect: "Connect Slack",
+      reconnect: "Reconnect Slack",
+      waiting: "Waiting for Slack…",
+      expired: "Session expired",
+      timeout: "Timed out, start the sign-in again.",
+      disconnect: "Disconnect",
+      privacy:
+        "Read-only, tokens in the system keychain, messages read on your machine only. Your Slack admin may have to approve the app: Slack then offers to request the install.",
+      all: "All conversations (current and future)",
+      allDescription:
+        "Otherwise, check the conversations to watch. Nothing checked: feature off.",
+      filter: "Filter conversations",
+      loading: "Loading conversations…",
+      kinds: {
+        public: "public",
+        private: "private",
+        im: "DM",
+        mpim: "group DM",
+      },
     },
     appearance: {
       description: "The interface theme.",
@@ -537,24 +605,52 @@ const Feedback = ({ msg }: { msg: string | null }) => (
 
 function AccountSection() {
   const t = useStrings(S)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [error, setError] = useState(false)
-  const source = authSource()
-  useEffect(() => {
-    viewerProfile().then(setProfile, () => setError(true))
-  }, [])
-  const manageUrl =
-    source === "oauth"
-      ? `https://github.com/settings/connections/applications/${CLIENT_ID}`
-      : source === "pat"
-        ? "https://github.com/settings/tokens"
-        : null
+  const { accounts } = useAuth()
+  const [adding, setAdding] = useState(false)
   return (
     <Section
       id="compte"
       title={t.sections.compte}
       description={t.account.description}
     >
+      {accounts.map((a) => (
+        <AccountRows key={a.id} account={a} />
+      ))}
+      <div className="border-t py-3">
+        {adding ? (
+          <Login
+            onDone={(id) => {
+              setAdding(false)
+              if (id) void accountAdded(id)
+            }}
+          />
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+            <Plus data-icon="inline-start" />
+            {t.account.add}
+          </Button>
+        )}
+      </div>
+    </Section>
+  )
+}
+
+function AccountRows({ account }: { account: Account }) {
+  const t = useStrings(S)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [error, setError] = useState(false)
+  const { source, host } = account
+  useEffect(() => {
+    viewerProfile(account).then(setProfile, () => setError(true))
+  }, [account])
+  const manageUrl =
+    source === "oauth"
+      ? `https://github.com/settings/connections/applications/${CLIENT_ID}`
+      : source === "pat"
+        ? `https://${host}/settings/tokens`
+        : null
+  return (
+    <div className="border-t first:border-t-0">
       <div className="flex h-16 items-center gap-3 py-3">
         {profile ? (
           <>
@@ -572,11 +668,15 @@ function AccountSection() {
                 className="text-xs text-muted-foreground hover:text-primary hover:underline"
               >
                 @{profile.login}
+                {host !== GITHUB && ` · ${host}`}
               </a>
             </div>
           </>
         ) : error ? (
-          <p className="text-sm text-destructive">{t.account.profileError}</p>
+          <p className="text-sm text-destructive">
+            {t.account.profileError}
+            {host !== GITHUB && ` (${host})`}
+          </p>
         ) : (
           <>
             <div className="size-10 animate-pulse rounded-full bg-muted motion-reduce:animate-none" />
@@ -616,12 +716,172 @@ function AccountSection() {
           variant="outline"
           size="sm"
           className="text-destructive hover:text-destructive"
-          onClick={() => void logout()}
+          onClick={() => void signOut(account.id)}
         >
           <LogOut data-icon="inline-start" />
           {t.account.logout}
         </Button>
       </Row>
+    </div>
+  )
+}
+
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
+function SlackSection() {
+  const t = useStrings(S)
+  const { team, expired, error: searchError } = useSlack()
+  const { slackAll, slackChannels } = useSettings()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const [convs, setConvs] = useState<SlackConversation[] | null>(null)
+  const [query, setQuery] = useState("")
+  const live = !!team && !expired
+  useEffect(() => {
+    if (!live || slackAll || convs) return
+    setError("")
+    // DM d'abord affichés avec l'id du destinataire, puis avec son nom
+    listConversations(setConvs).then(setConvs, (e: unknown) =>
+      setError(message(e)),
+    )
+  }, [live, slackAll, convs])
+
+  const connect = async () => {
+    setBusy(true)
+    setError("")
+    try {
+      await connectSlack()
+      setConvs(null)
+    } catch (e) {
+      setError(e === "timeout" ? t.slack.timeout : message(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const toggle = (id: string, on: boolean) =>
+    updateSettings({
+      slackChannels: on
+        ? [...slackChannels, id]
+        : slackChannels.filter((c) => c !== id),
+    })
+  const shown = convs?.filter((c) =>
+    c.name.toLowerCase().includes(query.trim().toLowerCase()),
+  )
+
+  return (
+    <Section
+      id="slack"
+      title={t.sections.slack}
+      description={t.slack.description}
+    >
+      <>
+        <Row
+          label={t.slack.workspace}
+          description={
+            <>
+              {team ? (
+                <span className={cn(expired && "text-destructive")}>
+                  {team.name}
+                  {expired && ` · ${t.slack.expired}`}
+                </span>
+              ) : (
+                t.slack.notConnected
+              )}
+              <br />
+              {t.slack.privacy}
+            </>
+          }
+        >
+          {(!team || expired) && (
+            <Button variant="outline" size="sm" onClick={() => void connect()}>
+              {busy && (
+                <Loader2
+                  data-icon="inline-start"
+                  className="animate-spin motion-reduce:animate-none"
+                />
+              )}
+              {busy
+                ? t.slack.waiting
+                : team
+                  ? t.slack.reconnect
+                  : t.slack.connect}
+            </Button>
+          )}
+          {team && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => void disconnectSlack().then(() => setConvs(null))}
+            >
+              <LogOut data-icon="inline-start" />
+              {t.slack.disconnect}
+            </Button>
+          )}
+        </Row>
+        {(error || searchError) && (
+          <p className="pb-3 text-xs text-destructive">
+            {error || searchError}
+          </p>
+        )}
+        {live && (
+          <Row
+            label={t.slack.all}
+            labelId="slack-all-label"
+            description={t.slack.allDescription}
+          >
+            <Toggle
+              checked={slackAll}
+              onChange={(v) => updateSettings({ slackAll: v })}
+              labelledBy="slack-all-label"
+            />
+          </Row>
+        )}
+        {live && !slackAll && (
+          <div className="flex flex-col gap-2 border-t py-3">
+            {!shown ? (
+              !error && (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
+                  {t.slack.loading}
+                </p>
+              )
+            ) : (
+              <>
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t.slack.filter}
+                  aria-label={t.slack.filter}
+                  className="max-w-64"
+                />
+                <ul className="flex max-h-64 flex-col overflow-y-auto">
+                  {shown.map((c) => (
+                    <li key={c.id}>
+                      <label className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-muted">
+                        <input
+                          type="checkbox"
+                          checked={slackChannels.includes(c.id)}
+                          onChange={(e) => toggle(c.id, e.target.checked)}
+                          className="accent-primary"
+                        />
+                        <span className="min-w-0 truncate">
+                          {c.kind === "public" || c.kind === "private"
+                            ? `#${c.name}`
+                            : c.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {t.slack.kinds[c.kind]}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
+      </>
     </Section>
   )
 }
@@ -1034,9 +1294,12 @@ function UninstallRow() {
   const run = async () => {
     setState("running")
     try {
+      // avant localStorage.clear() : la déconnexion réécrit les réglages ; révocation bornée à 5 s
+      await disconnectSlack() // jeton Slack révoqué et effacé du trousseau
       try {
         localStorage.clear() // réglages, repos suivis, marques « vu »
       } catch {}
+      await forgetTokens() // un jeton par compte ; uninstall_run efface celui d'origine
       await invoke("uninstall_run") // jeton supprimé, nettoyage après fermeture, puis l'app quitte
     } catch (e) {
       setState("error")
@@ -1324,6 +1587,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
       </nav>
       <div className="flex w-full max-w-2xl min-w-0 flex-col gap-8 pb-16">
         <AccountSection />
+        <SlackSection />
         <AppearanceSection />
         <RefreshSection />
         <NotificationsSection />

@@ -1,17 +1,23 @@
 use keyring::{Entry, Error};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
-use tauri::{AppHandle, Manager};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Emitter, Manager, ipc::CapabilityBuilder};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 const ID: &str = "io.github.vlor999.prradar";
+/// Compte d'origine (avant le multi-compte) : son entrée du trousseau garde ce nom.
+const DEFAULT_ACCOUNT: &str = "github";
 
-fn entry() -> Result<Entry, String> {
-    Entry::new(ID, "github").map_err(|e| e.to_string())
+/// Une entrée du trousseau par compte (`github`, ou `login@hôte`).
+fn entry(account: &str) -> Result<Entry, String> {
+    Entry::new(ID, account).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn get_token() -> Result<Option<String>, String> {
-    match entry()?.get_password() {
+fn get_token(account: String) -> Result<Option<String>, String> {
+    match entry(&account)?.get_password() {
         Ok(t) => Ok(Some(t)),
         Err(Error::NoEntry) => Ok(None),
         Err(e) => Err(e.to_string()),
@@ -19,16 +25,48 @@ fn get_token() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn set_token(token: String) -> Result<(), String> {
-    entry()?.set_password(&token).map_err(|e| e.to_string())
+fn set_token(account: String, token: String) -> Result<(), String> {
+    entry(&account)?
+        .set_password(&token)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn delete_token() -> Result<(), String> {
-    match entry()?.delete_credential() {
+fn delete_token(account: String) -> Result<(), String> {
+    match entry(&account)?.delete_credential() {
         Ok(()) | Err(Error::NoEntry) => Ok(()),
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// Nom d'hôte en minuscules (`ghe.example.com`, port optionnel) : rien qui élargisse le motif d'URL.
+fn valid_host(host: &str) -> bool {
+    let (name, port) = host.split_once(':').unwrap_or((host, "1"));
+    let label = |l: &str| {
+        !l.is_empty()
+            && !l.starts_with('-')
+            && !l.ends_with('-')
+            && l.bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    };
+    name.split('.').all(label)
+        && (1..=5).contains(&port.len())
+        && port.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// GitHub Enterprise : autorise le plugin HTTP à joindre `https://<hôte>/api/…`, et rien d'autre de cet hôte.
+#[tauri::command]
+fn allow_host(app: AppHandle, host: String) -> Result<(), String> {
+    if !valid_host(&host) {
+        return Err(format!("invalid host: {host}"));
+    }
+    let url = |p: &str| serde_json::json!({ "url": format!("https://{host}/api/{p}") });
+    app.add_capability(
+        CapabilityBuilder::new(format!("ghe-{host}"))
+            .window("main")
+            .permission_scoped("http:default", vec![url("*"), url("**")], vec![]),
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Jeton du CLI GitHub (`gh auth token`) s'il est installé et connecté : connexion sans aucune étape.
@@ -55,6 +93,18 @@ fn gh_token() -> Option<String> {
         let token = String::from_utf8(out.stdout).ok()?.trim().to_string();
         (out.status.success() && !token.is_empty()).then_some(token)
     })
+}
+
+/* ---------- Connexion Slack : retour OAuth par le lien profond `prradar://oauth?…` ---------- */
+
+/// Transmet à l'interface la query string du retour Slack (elle vérifie `state`) et ramène la fenêtre.
+fn on_deep_link(app: &AppHandle, urls: Vec<tauri::Url>) {
+    for url in urls {
+        if url.scheme() == "prradar" && url.host_str() == Some("oauth") {
+            let _ = app.emit("slack-oauth", url.query().unwrap_or_default());
+            show_main(app);
+        }
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -148,7 +198,7 @@ fn uninstall_plan(app: AppHandle) -> UninstallPlan {
 /// Supprime le jeton, lance un nettoyeur détaché qui attend la fermeture de l'app, puis quitte.
 #[tauri::command]
 fn uninstall_run(app: AppHandle) -> Result<(), String> {
-    delete_token()?;
+    delete_token(DEFAULT_ACCOUNT.into())?;
     let plan = uninstall_plan(app.clone());
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
     let bundle = plan.app_path.as_deref().map(Path::new);
@@ -197,29 +247,158 @@ fn uninstall_run(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/* ---------- Icône de la barre des menus / zone de notification ---------- */
+
+const TRAY: &str = "main";
+
+fn tray_menu(app: &AppHandle, open: &str, quit: &str) -> tauri::Result<Menu<tauri::Wry>> {
+    Menu::with_items(
+        app,
+        &[
+            &MenuItem::with_id(app, "open", open, true, None::<&str>)?,
+            &MenuItem::with_id(app, "quit", quit, true, None::<&str>)?,
+        ],
+    )
+}
+
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
+    // glyphe PR du logo, blanc sur fond transparent ; modèle macOS : suit le thème de la barre des menus
+    let tray = TrayIconBuilder::with_id(TRAY)
+        .icon(tauri::include_image!("icons/tray.png"))
+        .icon_as_template(true)
+        .tooltip("PR Radar")
+        .menu(&tray_menu(app, "Open PR Radar", "Quit")?)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, e| match e.id().as_ref() {
+            "open" => show_main(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, e| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = e
+            {
+                show_main(tray.app_handle());
+            }
+        });
+    tray.build(app)?;
+    Ok(())
+}
+
+/// Compteur (titre à côté de l'icône sur macOS, infobulle partout) et libellés du menu dans la langue de l'app.
+#[tauri::command]
+fn set_tray(
+    app: AppHandle,
+    count: usize,
+    tooltip: String,
+    open: String,
+    quit: String,
+) -> Result<(), String> {
+    let tray = app.tray_by_id(TRAY).ok_or("no tray")?;
+    let e = |e: tauri::Error| e.to_string();
+    tray.set_title((count > 0).then(|| count.to_string()))
+        .map_err(e)?;
+    tray.set_tooltip(Some(tooltip)).map_err(e)?;
+    tray.set_menu(Some(tray_menu(&app, &open, &quit).map_err(e)?))
+        .map_err(e)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // en premier (doc du plugin) : relancer l'app ramène la fenêtre au lieu d'ouvrir un second processus
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            show_main(app)
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            // retour de la connexion Slack ; Windows/Linux : arrive par single-instance (feature deep-link)
+            let handle = app.handle().clone();
+            app.deep_link()
+                .on_open_url(move |e| on_deep_link(&handle, e.urls()));
+            // Windows/Linux (AppImage, dev) : enregistre le schéma `prradar` au lancement
+            #[cfg(any(windows, target_os = "linux"))]
+            if let Err(e) = app.deep_link().register_all() {
+                eprintln!("deep link registration failed: {e}");
+            }
+            // sans barre d'icônes (ex. GNOME sans AppIndicator) l'app démarre quand même
+            if let Err(e) = setup_tray(app.handle()) {
+                eprintln!("tray unavailable: {e}");
+            }
+            Ok(())
+        })
+        // fermer la fenêtre la cache : l'app reste dans la barre des menus, « Quitter » (ou ⌘Q) la ferme.
+        // Sans icône, la fermeture quitte (sinon plus aucun moyen de rouvrir l'app).
+        .on_window_event(|w, e| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = e
+                && w.app_handle().tray_by_id(TRAY).is_some()
+            {
+                api.prevent_close();
+                let _ = w.hide();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             get_token,
             set_token,
             delete_token,
+            allow_host,
             gh_token,
             uninstall_plan,
-            uninstall_run
+            uninstall_run,
+            set_tray
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app, _e| {
+            // clic sur l'icône du Dock alors que la fenêtre est cachée
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _e {
+                show_main(_app);
+            }
+        });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn host_filter() {
+        assert!(valid_host("ghe.example.com"));
+        assert!(valid_host("ghe.example.com:8443"));
+        assert!(valid_host("localhost"));
+        for bad in [
+            "",
+            "GHE.example.com",
+            "ghe.example.com/",
+            "*.example.com",
+            "user@ghe.example.com",
+            "ghe..example.com",
+            "-ghe.example.com",
+            "ghe.example.com:",
+            "ghe.example.com:123456",
+            "ghe.example.com:8443:1",
+            "ghe.example.com?x",
+        ] {
+            assert!(!valid_host(bad), "{bad}");
+        }
+    }
 
     #[test]
     fn safety_filter() {

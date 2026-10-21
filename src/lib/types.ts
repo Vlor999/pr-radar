@@ -52,3 +52,21 @@ export type MergedPr = {
 }
 
 export type RepoTree = { repo: string; roots: Root[]; merged: MergedPr[] }
+
+/** Message Slack qui contient le lien d'une PR. */
+export type SlackMention = {
+  author: string
+  channelId: string
+  /** `#nom` d'un channel, `DM` pour un message direct ou de groupe */
+  where: string
+  at: string
+  text: string
+  permalink: string
+}
+
+/** Conversation Slack proposée dans les réglages. */
+export type SlackConversation = {
+  id: string
+  name: string
+  kind: "public" | "private" | "im" | "mpim"
+}

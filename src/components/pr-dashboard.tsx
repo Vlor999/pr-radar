@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore, useTransition } from "react"
+import { invoke } from "@tauri-apps/api/core"
 import {
   CalendarDays,
   CheckCheck,
@@ -12,7 +13,7 @@ import { cn } from "cn"
 
 import { refreshPrs } from "@/lib/actions"
 import { reload } from "@/lib/store"
-import { locale, strings, useStrings } from "@/lib/i18n"
+import { locale, pick, strings, useStrings } from "@/lib/i18n"
 import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
@@ -20,6 +21,7 @@ import { SettingsPage } from "@/components/settings-page"
 import { UpdateBanner } from "@/components/update-banner"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
 import { getSettings, useSettings } from "@/lib/settings"
+import { refreshMentions, useSlack } from "@/lib/slack"
 import { RepoSection, type OpenState } from "@/components/repo-section"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -87,6 +89,11 @@ const S = strings(
       "Aucun repo suivi. Coche des repos dans le panneau « Repos suivis ».",
     noMatch: "Aucune PR ne correspond à la recherche.",
     repo: "repo",
+    tray: {
+      tooltip: (n: number) => `PR Radar : ${n} PR à traiter`,
+      open: "Ouvrir PR Radar",
+      quit: "Quitter",
+    },
   },
   {
     tabs: { open: "Open PRs", calendar: "Merge calendar" },
@@ -128,6 +135,12 @@ const S = strings(
     noRepos: "No tracked repos. Tick repos in the “Tracked repos” panel.",
     noMatch: "No PRs match the search.",
     repo: "repo",
+    tray: {
+      tooltip: (n: number) =>
+        `PR Radar: ${n} PR${n > 1 ? "s" : ""} need action`,
+      open: "Open PR Radar",
+      quit: "Quit",
+    },
   },
 )
 
@@ -212,6 +225,26 @@ export function PrDashboard({
     `${tab}:${showSettings}`,
   )
   usePrNotifications(prs)
+  // icône de la barre des menus : PR « À traiter » (même filtre que l'onglet)
+  const attention = prs.filter(needsAttention).length
+  useEffect(() => {
+    invoke("set_tray", {
+      count: attention,
+      tooltip: t.tray.tooltip(attention),
+      open: t.tray.open,
+      quit: t.tray.quit,
+    }).catch(() => {})
+  }, [attention, t])
+  // déconnexion (le tableau de bord disparaît) : plus de compteur
+  useEffect(
+    () => () => {
+      const { open, quit } = pick(S).tray
+      invoke("set_tray", { count: 0, tooltip: "PR Radar", open, quit }).catch(
+        () => {},
+      )
+    },
+    [],
+  )
   const seen = useSeen(prs)
   useKeyboardNav()
   const shortcuts = useStrings(SHORTCUTS)
@@ -224,6 +257,15 @@ export function PrDashboard({
     isNew: seen.isNew,
     markSeen: seen.markSeen,
   }
+
+  // mentions Slack : relues avec chaque actualisation GitHub (cache 10 min par PR). Dépendances : seulement
+  // ce qui change la recherche, pas l'état Slack entier (une erreur affichée ne doit pas relancer la file).
+  const { team: slackTeam, expired: slackExpired } = useSlack()
+  const slackTeamId = slackTeam?.id
+  useEffect(
+    () => refreshMentions(prs),
+    [prs, slackTeamId, slackExpired, settings.slackAll, settings.slackChannels],
+  )
 
   // actualisation automatique (0 = manuelle) et au retour sur la fenêtre
   useEffect(() => {

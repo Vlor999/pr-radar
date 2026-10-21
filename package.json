@@ -1,7 +1,7 @@
 {
   "name": "pr-radar",
   "private": true,
-  "version": "0.3.6",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -40,6 +40,6 @@
     "typescript": "~6.0.3",
     "vite": "^8.0.16"
   },
-  "description": "Vos PR GitHub ouvertes, en arbre",
+  "description": "Your open GitHub PRs, as a tree",
   "license": "MIT"
 }

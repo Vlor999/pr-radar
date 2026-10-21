@@ -5,7 +5,8 @@ import { Login } from "@/components/login"
 import { PrDashboard } from "@/components/pr-dashboard"
 import { Button } from "@/components/ui/button"
 import { useThemeEffects } from "@/hooks/use-theme"
-import { loadToken, logout, useAuth } from "@/lib/auth"
+import { signOut } from "@/lib/actions"
+import { loadToken, useAuth } from "@/lib/auth"
 import { clearCache } from "@/lib/github"
 import { currentLang, strings, useStrings, type Lang } from "@/lib/i18n"
 import { updateSettings, useSettings } from "@/lib/settings"
@@ -82,7 +83,14 @@ function Dashboard() {
     return (
       <main className="flex min-h-svh flex-col items-center justify-center gap-3 px-4 text-center">
         <p className="text-sm text-muted-foreground">{t.rejected}</p>
-        <Button onClick={() => logout()}>{t.reconnect}</Button>
+        <Button
+          onClick={() =>
+            // compte inconnu : on relit sans déconnecter personne
+            data.authAccount ? signOut(data.authAccount) : reload()
+          }
+        >
+          {t.reconnect}
+        </Button>
       </main>
     )
   if (!data.fetchedAt && data.loading) return <Splash label={t.loading} />

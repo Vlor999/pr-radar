@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react"
 
+import { describeErrors, splitKey } from "./accounts"
+import { findAccount } from "./auth"
 import { fetchMerged, fetchPrs, listRepos, reposWithMyOpenPrs } from "./github"
 import { getSettings } from "./settings"
 import { buildTree } from "./tree"
@@ -37,6 +39,8 @@ export type Data = {
   error?: string
   /** erreur de jeton : l'interface propose de se reconnecter */
   authError?: boolean
+  /** compte dont le jeton a été refusé */
+  authAccount?: string
 }
 
 let data: Data = {
@@ -71,15 +75,17 @@ export async function reload() {
   // préchauffe la liste du panneau des repos (~1,5 Mo), au premier chargement seulement
   if (!data.fetchedAt) listRepos().catch(() => {})
   try {
-    const withPrs = await reposWithMyOpenPrs().catch(() => [] as string[])
+    const withPrs = await reposWithMyOpenPrs().catch(() => data.withPrs)
     let repos = getRepos()
     if (!repos) {
       // premier lancement : on suit d'office les repos où j'ai des PR ouvertes
       repos = withPrs
       setRepos(repos)
     }
+    // repos d'un compte déconnecté : gardés dans la liste, pas affichés
+    repos = repos.filter((r) => findAccount(splitKey(r).account))
     const now = new Date()
-    const [prs, recent] = await Promise.all([
+    const [{ data: prs, errors }, recent] = await Promise.all([
       fetchPrs(repos),
       fetchMerged(
         repos,
@@ -88,14 +94,19 @@ export async function reload() {
       ).catch(() => [] as MergedPr[]),
     ])
     if (id !== seq) return
+    // compte en échec (les autres ont répondu) : ses repos sont masqués, l'erreur le nomme
+    const failed = new Set(errors.map((e) => e.account.id))
     set({
       prs,
       withPrs,
-      trees: repos.map((repo) => ({
-        repo,
-        roots: buildTree(prs.filter((p) => p.repo === repo)),
-        merged: recent.filter((p) => p.repo === repo),
-      })),
+      error: errors.length ? describeErrors(errors).slice(0, 300) : undefined,
+      trees: repos
+        .filter((r) => !failed.has(splitKey(r).account))
+        .map((repo) => ({
+          repo,
+          roots: buildTree(prs.filter((p) => p.repo === repo)),
+          merged: recent.filter((p) => p.repo === repo),
+        })),
       fetchedAt: now.toISOString(),
       loading: false,
     })
@@ -106,6 +117,7 @@ export async function reload() {
       loading: false,
       error: e instanceof Error ? e.message.slice(0, 300) : String(e),
       authError: e instanceof Error && e.name === "AuthError",
+      authAccount: (e as { account?: string }).account,
     })
   }
 }
