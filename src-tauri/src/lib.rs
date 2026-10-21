@@ -3,7 +3,8 @@ use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, ipc::CapabilityBuilder};
+use tauri::{AppHandle, Emitter, Manager, ipc::CapabilityBuilder};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 const ID: &str = "io.github.vlor999.prradar";
 /// Compte d'origine (avant le multi-compte) : son entrée du trousseau garde ce nom.
@@ -92,6 +93,18 @@ fn gh_token() -> Option<String> {
         let token = String::from_utf8(out.stdout).ok()?.trim().to_string();
         (out.status.success() && !token.is_empty()).then_some(token)
     })
+}
+
+/* ---------- Connexion Slack : retour OAuth par le lien profond `prradar://oauth?…` ---------- */
+
+/// Transmet à l'interface la query string du retour Slack (elle vérifie `state`) et ramène la fenêtre.
+fn on_deep_link(app: &AppHandle, urls: Vec<tauri::Url>) {
+    for url in urls {
+        if url.scheme() == "prradar" && url.host_str() == Some("oauth") {
+            let _ = app.emit("slack-oauth", url.query().unwrap_or_default());
+            show_main(app);
+        }
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -308,12 +321,22 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             show_main(app)
         }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // retour de la connexion Slack ; Windows/Linux : arrive par single-instance (feature deep-link)
+            let handle = app.handle().clone();
+            app.deep_link()
+                .on_open_url(move |e| on_deep_link(&handle, e.urls()));
+            // Windows/Linux (AppImage, dev) : enregistre le schéma `prradar` au lancement
+            #[cfg(any(windows, target_os = "linux"))]
+            if let Err(e) = app.deep_link().register_all() {
+                eprintln!("deep link registration failed: {e}");
+            }
             // sans barre d'icônes (ex. GNOME sans AppIndicator) l'app démarre quand même
             if let Err(e) = setup_tray(app.handle()) {
                 eprintln!("tray unavailable: {e}");

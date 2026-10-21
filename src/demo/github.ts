@@ -109,6 +109,16 @@ const PRS: Pr[] = [
     number: 88,
     title: "Pagination par curseur sur /orders",
     decision: "CHANGES_REQUESTED",
+    // discussion + messages Slack, sans PR stackée (voir src/demo/slack.ts)
+    unresolved: 1,
+    comments: 2,
+    threads: [
+      thread(
+        "t2",
+        "src/orders/cursor.ts",
+        "Le curseur devrait être opaque (base64) plutôt qu'un id brut.",
+      ),
+    ],
     reviews: [{ who: "bob", state: "CHANGES_REQUESTED" }],
     updated: ago(30),
   }),
