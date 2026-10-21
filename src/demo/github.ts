@@ -1,6 +1,11 @@
 // Démo navigateur : même API que src/lib/github.ts, données fictives (org « acme »).
 // Un compte GitHub Enterprise ajouté dans les réglages (hôte au choix, jeton quelconque) voit `globex/ledger`.
-import { DEFAULT_ID, repoKey, type Account } from "@/lib/accounts"
+import {
+  DEFAULT_ID,
+  repoKey,
+  type Account,
+  type AccountError,
+} from "@/lib/accounts"
 import { allAccounts } from "@/lib/auth"
 import { trackQuota } from "@/lib/quota"
 import type { MergedPr, Pr, Thread } from "@/lib/types"
@@ -10,6 +15,10 @@ export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 export class AuthError extends Error {
   name = "AuthError"
   account?: string
+  constructor(message: string, account?: string) {
+    super(message)
+    this.account = account
+  }
 }
 
 const ago = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
@@ -205,7 +214,10 @@ export const fetchPrs = async (repos: string[]) => {
       "x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 1800),
     }),
   )
-  return [...PRS, ...otherPrs()].filter((p) => has(repos)(p.repo))
+  return {
+    data: [...PRS, ...otherPrs()].filter((p) => has(repos)(p.repo)),
+    errors: [] as AccountError[],
+  }
 }
 export const reposWithMyOpenPrs = async () => [
   ...new Set([...PRS.map((p) => p.repo), ...otherRepos()]),
