@@ -221,7 +221,7 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
                       "relative before:absolute before:-top-3 before:bottom-0 before:left-2.5 before:border-l-2 before:border-border",
                   )}
                 >
-                  <ThreadColumn threads={n.threads} />
+                  <ThreadColumn threads={n.threads} repo={n.repo} />
                 </div>
               )}
             </div>

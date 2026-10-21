@@ -2,8 +2,11 @@
  * Actions de l'interface (ex-server actions de la version web) : mêmes noms, mêmes retours,
  * exécutées ici dans l'app, puis rechargement des données.
  */
+import { splitKey } from "./accounts"
+import { allAccounts, logout } from "./auth"
 import {
   clearCache,
+  reposWithMyOpenPrs,
   fetchMerged,
   listRepos,
   replyToThread,
@@ -64,6 +67,7 @@ export async function refreshPrs() {
 export async function reply(
   threadId: string,
   body: string,
+  repo: string,
 ): Promise<{ error?: string }> {
   const text = body.trim()
   if (!/^[\w=-]+$/.test(threadId))
@@ -71,13 +75,33 @@ export async function reply(
   if (!text) return { error: "Message vide" }
   if (text.length > 65_000) return { error: "Message trop long" }
   try {
-    await replyToThread(threadId, text)
+    await replyToThread(threadId, text, repo)
   } catch (e) {
     return { error: message(e) }
   }
   clearCache()
   await reload()
   return {}
+}
+
+/** Compte ajouté dans les réglages : on suit d'office ses repos où j'ai des PR ouvertes. */
+export async function accountAdded(id: string) {
+  clearCache({ all: true })
+  const repos = getRepos()
+  if (repos) {
+    const mine = await reposWithMyOpenPrs().catch(() => [] as string[])
+    setRepos([
+      ...new Set([...repos, ...mine.filter((k) => splitKey(k).account === id)]),
+    ])
+  }
+  await reload()
+}
+
+/** Déconnecte un compte (tous sans argument) ; ses repos suivis sont gardés pour une reconnexion. */
+export async function signOut(id?: string) {
+  await logout(id)
+  clearCache({ all: true })
+  if (allAccounts().length) await reload()
 }
 
 /** Calendrier : mes PR mergées sur une période (YYYY-MM-DD inclus), repos suivis. */

@@ -38,7 +38,13 @@ function ago(iso: string, t: typeof S.fr) {
 }
 
 /** Colonne des discussions ouvertes d'une PR, reliée à sa carte par des traits (affichée sous la carte). */
-export function ThreadColumn({ threads }: { threads: Thread[] }) {
+export function ThreadColumn({
+  threads,
+  repo,
+}: {
+  threads: Thread[]
+  repo: string
+}) {
   return (
     <ul className="flex min-w-0 animate-in flex-col gap-3 pl-14 duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none">
       {threads.map((t) => (
@@ -58,14 +64,14 @@ export function ThreadColumn({ threads }: { threads: Thread[] }) {
             aria-hidden
             className="absolute top-2.25 -left-1.5 z-10 size-3 rotate-45 border-b-2 border-l-2 border-border bg-card"
           />
-          <ThreadCard thread={t} />
+          <ThreadCard thread={t} repo={repo} />
         </li>
       ))}
     </ul>
   )
 }
 
-function ThreadCard({ thread }: { thread: Thread }) {
+function ThreadCard({ thread, repo }: { thread: Thread; repo: string }) {
   const t = useStrings(S)
   const [draft, setDraft] = useState("")
   const [error, setError] = useState("")
@@ -73,7 +79,7 @@ function ThreadCard({ thread }: { thread: Thread }) {
 
   const send = () =>
     start(async () => {
-      const res = await reply(thread.id, draft)
+      const res = await reply(thread.id, draft, repo)
       setError(res.error ?? "")
       if (!res.error) setDraft("")
     })

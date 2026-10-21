@@ -1,4 +1,7 @@
 // Démo navigateur : même API que src/lib/github.ts, données fictives (org « acme »).
+// Un compte GitHub Enterprise ajouté dans les réglages (hôte au choix, jeton quelconque) voit `globex/ledger`.
+import { DEFAULT_ID, repoKey, type Account } from "@/lib/accounts"
+import { allAccounts } from "@/lib/auth"
 import { trackQuota } from "@/lib/quota"
 import type { MergedPr, Pr, Thread } from "@/lib/types"
 
@@ -6,6 +9,7 @@ export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
 export class AuthError extends Error {
   name = "AuthError"
+  account?: string
 }
 
 const ago = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
@@ -160,10 +164,37 @@ try {
     )
 } catch {}
 
+// comptes ajoutés : un repo et deux PR stackées chacun, sur leur hôte
+const others = () => allAccounts().filter((a) => a.id !== DEFAULT_ID)
+const otherRepos = () => others().map((a) => repoKey(a.id, "globex/ledger"))
+const otherPrs = () =>
+  others().flatMap((a) => {
+    const repo = repoKey(a.id, "globex/ledger")
+    const url = (n: number) => `https://${a.host}/globex/ledger/pull/${n}`
+    return [
+      pr({
+        repo,
+        number: 31,
+        title: "Rapprochement bancaire automatique",
+        url: url(31),
+        head: "feat/reconcile",
+      }),
+      pr({
+        repo,
+        number: 33,
+        title: "Rapprochement : import OFX",
+        url: url(33),
+        head: "feat/reconcile-ofx",
+        base: "feat/reconcile",
+        ci: "PENDING",
+      }),
+    ]
+  })
+
 const has = (repos: string[]) => (r: string) =>
   repos.some((x) => x.toLowerCase() === r.toLowerCase())
 
-export const viewerLogin = async () => "me"
+export const viewerLogin = async (_token: string, _host?: string) => "me"
 export const clearCache = () => {}
 export const fetchPrs = async (repos: string[]) => {
   // quota bas pour montrer la notification et la ligne des réglages
@@ -174,10 +205,10 @@ export const fetchPrs = async (repos: string[]) => {
       "x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 1800),
     }),
   )
-  return PRS.filter((p) => has(repos)(p.repo))
+  return [...PRS, ...otherPrs()].filter((p) => has(repos)(p.repo))
 }
 export const reposWithMyOpenPrs = async () => [
-  ...new Set(PRS.map((p) => p.repo)),
+  ...new Set([...PRS.map((p) => p.repo), ...otherRepos()]),
 ]
 export const fetchMerged = async (repos: string[], from: string, to: string) =>
   MERGED.filter(
@@ -186,14 +217,18 @@ export const fetchMerged = async (repos: string[], from: string, to: string) =>
       m.mergedAt.slice(0, 10) >= from &&
       m.mergedAt.slice(0, 10) <= to,
   )
-export const listRepos = async () => REPOS
+export const listRepos = async () => [...REPOS, ...otherRepos()]
 export async function resolveRepo(repo: string) {
   if (!REPO_NAME.test(repo))
     throw new Error(`Nom invalide : « ${repo} » (attendu : owner/repo)`)
   return repo
 }
-export const replyToThread = async (threadId: string, body: string) => {
-  console.info("[demo] reply", threadId, body)
+export const replyToThread = async (
+  threadId: string,
+  body: string,
+  repo: string,
+) => {
+  console.info("[demo] reply", threadId, body, repo)
 }
 
 export type Profile = {
@@ -202,7 +237,7 @@ export type Profile = {
   avatarUrl: string
   url: string
 }
-export const viewerProfile = async (): Promise<Profile> => ({
+export const viewerProfile = async (_a: Account): Promise<Profile> => ({
   login: "me",
   name: "Démo",
   avatarUrl: "https://github.com/identicons/me.png",
