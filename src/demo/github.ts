@@ -115,6 +115,15 @@ const PRS: Pr[] = [
     deletions: 12,
     files: 14,
   }),
+  // repo public hors de listRepos() : visible dans le panneau, pas suivi d'office
+  pr({
+    repo: "globex/status-page",
+    number: 23,
+    title: "Corrige le lien du flux RSS",
+    additions: 4,
+    deletions: 2,
+    files: 1,
+  }),
 ]
 
 const MERGED: MergedPr[] = [
