@@ -89,3 +89,33 @@ export const toPersist = (live: Account[], kept: Account[]) => [
   ...live,
   ...kept.filter((k) => !live.some((a) => a.id === k.id)),
 ]
+
+export type AccountError = { account: Account; error: unknown }
+
+/**
+ * Une tâche par compte : un compte en échec n'empêche pas les autres d'être affichés.
+ * Tous en échec : la première erreur est levée, comme avec un seul compte.
+ */
+export async function settle<T>(
+  accounts: Account[],
+  run: (a: Account) => Promise<T[]>,
+): Promise<{ data: T[]; errors: AccountError[] }> {
+  const results = await Promise.allSettled(accounts.map(run))
+  const errors = results.flatMap((r, i) =>
+    r.status === "rejected" ? [{ account: accounts[i], error: r.reason }] : [],
+  )
+  if (errors.length && errors.length === accounts.length) throw errors[0].error
+  return {
+    data: results.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
+    errors,
+  }
+}
+
+/** Message des comptes en échec, chacun nommé : `me (ghe.example.com) : HTTP 502`. */
+export const describeErrors = (errors: AccountError[]) =>
+  errors
+    .map(({ account: a, error }) => {
+      const who = a.login ? `${a.login} (${a.host})` : a.host
+      return `${who} : ${error instanceof Error ? error.message : String(error)}`
+    })
+    .join(" ; ")

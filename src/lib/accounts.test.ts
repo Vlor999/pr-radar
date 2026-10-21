@@ -5,12 +5,14 @@ import {
   apiUrl,
   byAccount,
   DEFAULT_ID,
+  describeErrors,
   GITHUB,
   graphqlUrl,
   newAccountId,
   normalizeHost,
   repoKey,
   savedAccounts,
+  settle,
   sortReads,
   splitKey,
   toPersist,
@@ -111,4 +113,32 @@ test("la liste enregistrée garde les comptes illisibles, sans doublon d'id", ()
   const locked = account({ host: "ghe.acme.test", id: "me@ghe.acme.test" })
   const fresh = account({ source: "oauth" })
   assert.deepEqual(toPersist([fresh], [locked, account()]), [fresh, locked])
+})
+
+test("un compte en échec n'empêche pas les autres d'être lus", async () => {
+  const ghe = account({
+    id: "me@ghe.acme.test",
+    host: "ghe.acme.test",
+    login: "me",
+  })
+  const down = new Error("HTTP 502")
+  const res = await settle([account(), ghe], async (a) => {
+    if (a === ghe) throw down
+    return ["acme/web"]
+  })
+  assert.deepEqual(res, {
+    data: ["acme/web"],
+    errors: [{ account: ghe, error: down }],
+  })
+  assert.equal(describeErrors(res.errors), "me (ghe.acme.test) : HTTP 502")
+})
+
+test("tous les comptes en échec : la première erreur est levée", async () => {
+  const down = new Error("HTTP 502")
+  await assert.rejects(
+    settle([account()], async () => {
+      throw down
+    }),
+    down,
+  )
 })

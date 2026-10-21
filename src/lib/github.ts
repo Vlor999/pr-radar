@@ -6,8 +6,10 @@ import {
   GITHUB,
   graphqlUrl,
   repoKey,
+  settle,
   splitKey,
   type Account,
+  type AccountError,
 } from "./accounts"
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
 import { pick, strings } from "./i18n"
@@ -303,32 +305,40 @@ export function clearCache({ all = false } = {}) {
   if (all) viewers.clear()
 }
 
-/** Une requête par compte connecté, chacun avec son jeton et sur son hôte ; résultats fusionnés. */
-const perAccount = async <T>(
-  run: (a: Account) => Promise<T[]>,
-  accounts = allAccounts(),
-): Promise<T[]> => (await Promise.all(accounts.map(run))).flat()
+/** Une requête par compte connecté, chacun avec son jeton et sur son hôte ; comptes en échec ignorés. */
+const perAccount = async <T>(run: (a: Account) => Promise<T[]>) =>
+  (await settle(allAccounts(), run)).data
 
-export function fetchPrs(repos: string[]): Promise<Pr[]> {
-  return cached(`prs:${repos.join(",")}`, CACHE_TTL_MS, async () =>
-    (
-      await Promise.all(
-        byAccount(repos, allAccounts()).map(async ([a, names]) => {
-          const login = await me(a)
-          const parts = await Promise.all(
-            chunk(names, REPOS_PER_QUERY).map((c) =>
-              searchAll<RawPr>(
-                conn(a),
-                QUERY,
-                "is:pr is:open author:@me " +
-                  c.map((r) => "repo:" + r).join(" "),
-              ),
-            ),
-          )
-          return parts.flat().map((p) => toPr(p, login, a.id))
-        }),
+/** Repos suivis par compte ; `run` reçoit les noms `owner/name` de ce compte. */
+const perFollowed = <T>(
+  repos: string[],
+  run: (a: Account, names: string[]) => Promise<T[]>,
+) => {
+  const groups = byAccount(repos, allAccounts())
+  return settle(
+    groups.map(([a]) => a),
+    (a) => run(a, groups.find(([g]) => g === a)![1]),
+  )
+}
+
+/** Mes PR ouvertes ; `errors` : comptes en échec, les autres sont gardés. */
+export function fetchPrs(
+  repos: string[],
+): Promise<{ data: Pr[]; errors: AccountError[] }> {
+  return cached(`prs:${repos.join(",")}`, CACHE_TTL_MS, () =>
+    perFollowed(repos, async (a, names) => {
+      const login = await me(a)
+      const parts = await Promise.all(
+        chunk(names, REPOS_PER_QUERY).map((c) =>
+          searchAll<RawPr>(
+            conn(a),
+            QUERY,
+            "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" "),
+          ),
+        ),
       )
-    ).flat(),
+      return parts.flat().map((p) => toPr(p, login, a.id))
+    }),
   )
 }
 
@@ -366,25 +376,25 @@ export function fetchMerged(
         mergedAt: string
         repository: { nameWithOwner: string }
       }
-      const groups = byAccount(repos, allAccounts())
-      const parts = await Promise.all(
-        groups.flatMap(([a, names]) =>
-          chunk(names, REPOS_PER_QUERY).map(async (c) =>
-            (
-              await searchAll<Raw>(
+      const { data } = await perFollowed(repos, async (a, names) =>
+        (
+          await Promise.all(
+            chunk(names, REPOS_PER_QUERY).map((c) =>
+              searchAll<Raw>(
                 conn(a),
                 `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
             pageInfo { hasNextPage endCursor }
             nodes { ... on PullRequest { number title url mergedAt repository { nameWithOwner } } } } }`,
                 `is:pr is:merged author:@me merged:${from}..${to} ` +
                   c.map((r) => "repo:" + r).join(" "),
-              )
-            ).map((p) => ({ ...p, account: a.id })),
-          ),
-        ),
+              ),
+            ),
+          )
+        )
+          .flat()
+          .map((p) => ({ ...p, account: a.id })),
       )
-      return parts
-        .flat()
+      return data
         .map((p): MergedPr => ({
           repo: repoKey(p.account, p.repository.nameWithOwner),
           number: p.number,
