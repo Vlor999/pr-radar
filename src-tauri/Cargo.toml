@@ -1,7 +1,7 @@
 [package]
 name = "pr-radar"
 version = "0.3.6"
-description = "PR Radar — vos PR GitHub ouvertes"
+description = "PR Radar: your open GitHub PRs, as a tree"
 authors = ["Vlor999"]
 edition = "2024"
 
