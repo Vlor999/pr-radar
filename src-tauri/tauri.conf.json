@@ -55,7 +55,7 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "Vos PR GitHub ouvertes, en arbre",
+    "shortDescription": "Your open GitHub PRs, as a tree",
     "publisher": "Vlor999",
     "copyright": "MIT",
     "createUpdaterArtifacts": true,
