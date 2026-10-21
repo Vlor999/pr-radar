@@ -64,8 +64,8 @@ const conn = (a: Account): Conn => ({
   account: a.id,
 })
 
-function headers(token: string | null) {
-  if (!token) throw new AuthError(pick(S).notSignedIn)
+function headers(token: string | null, account?: string) {
+  if (!token) throw new AuthError(pick(S).notSignedIn, account)
   return {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
@@ -80,7 +80,10 @@ async function gql<T>(
 ): Promise<T> {
   const res = await fetch(graphqlUrl(c.host), {
     method: "POST",
-    headers: { ...headers(c.token), "Content-Type": "application/json" },
+    headers: {
+      ...headers(c.token, c.account),
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ query, variables }),
   })
   trackQuota(res.headers)
@@ -104,7 +107,7 @@ async function restAll<T>(c: Conn, path: string): Promise<T[]> {
   const base = apiUrl(c.host)
   let url: string | null = `${base}${path}`
   while (url) {
-    const res = await fetch(url, { headers: headers(c.token) })
+    const res = await fetch(url, { headers: headers(c.token, c.account) })
     if (res.status === 401)
       throw new AuthError(pick(S).tokenRejected, c.account)
     if (!res.ok) throw new Error(pick(S).httpOn(res.status, path))
@@ -420,7 +423,7 @@ export async function resolveRepo(repo: string): Promise<string> {
     : allAccounts()
   for (const a of candidates) {
     const res = await fetch(`${apiUrl(a.host)}/repos/${name}`, {
-      headers: headers(tokenOf(a.id)),
+      headers: headers(tokenOf(a.id), a.id),
     })
     if (res.ok)
       return repoKey(

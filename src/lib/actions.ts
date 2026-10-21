@@ -97,8 +97,8 @@ export async function accountAdded(id: string) {
   await reload()
 }
 
-/** Déconnecte un compte (tous sans argument) ; ses repos suivis sont gardés pour une reconnexion. */
-export async function signOut(id?: string) {
+/** Déconnecte un compte ; ses repos suivis sont gardés pour une reconnexion. */
+export async function signOut(id: string) {
   await logout(id)
   clearCache({ all: true })
   if (allAccounts().length) await reload()
