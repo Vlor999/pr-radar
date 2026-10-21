@@ -155,6 +155,15 @@
         </div>
         <figcaption data-i18n-html="cap4"><strong>Notifications</strong>An approval, a change request, a broken build: your system tells you.<span class="sr"> Animation: two system notifications slide in from the edge of the screen.</span></figcaption>
       </figure>
+      <figure class="vig">
+        <div class="vm v-stack" aria-hidden="true">
+          <ul class="tree"><li><div class="pc">
+              <div class="r1"><span class="num">#12</span><span class="ti" data-i18n="pr12">feat(cart): persistent cart</span></div>
+              <div class="r3" style="padding:0"><span class="b go v-pop" data-i18n="slk">Posted in #reviews</span><span class="b ok" data-i18n="approved">Approved</span></div>
+            </div></li></ul>
+        </div>
+        <figcaption data-i18n-html="cap5"><strong>Slack announcement</strong>See at a glance whether your PR was already posted in a channel or a DM.<span class="sr"> Animation: PR #12 appears, then a Posted in #reviews badge pops in.</span></figcaption>
+      </figure>
     </div>
     <h3 class="more" data-i18n="more">And also</h3>
     <ul class="chips">
@@ -195,7 +204,7 @@
 <section id="privacy">
   <div class="wrap">
     <h2 data-i18n="privacy">Privacy</h2>
-    <p class="lead" data-i18n="pv">No server: the app only talks to github.com and api.github.com, from your machine. The token stays in the system keychain (macOS Keychain, Windows Credential Manager, Secret Service on Linux), and there is no telemetry.</p>
+    <p class="lead" data-i18n="pv">PR Radar only talks to GitHub and, if you connect it, to Slack. No server: tokens live in your OS keychain, Slack tokens are read-only and rotate automatically (they expire every 12 hours), and you can revoke them at any time. Your messages never leave your machine.</p>
     <p><a href="https://github.com/Vlor999/pr-radar" data-i18n="pvl">Read the code (MIT license)</a></p>
   </div>
 </section>
@@ -223,6 +232,10 @@
       <details>
         <summary data-i18n="q7">How often does the app poll GitHub?</summary>
         <p data-i18n="a7">Every 5 minutes by default, adjustable from 1 to 30 minutes, or manual. Requests count against your usual GitHub API quota.</p>
+      </details>
+      <details>
+        <summary data-i18n="q8">Does my Slack admin need to approve it?</summary>
+        <p data-i18n="a8">Yes, if your workspace requires it. Click Connect and Slack offers to request the installation.</p>
       </details>
     </div>
   </div>
