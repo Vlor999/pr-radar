@@ -73,3 +73,19 @@ export const byAccount = (keys: string[], accounts: Account[]) =>
         .map((k) => k.name),
     ])
     .filter(([, names]) => names.length > 0)
+
+/** Au démarrage : lecture du trousseau par compte (`undefined` = lecture en échec, pas « aucun jeton »). */
+export function sortReads(reads: [Account, string | null | undefined][]) {
+  return {
+    /** jeton lu : compte utilisable */
+    live: reads.filter(([, t]) => t).map(([a]) => a),
+    /** lecture en échec (trousseau verrouillé, refus) : gardé dans la liste enregistrée, inutilisé */
+    kept: reads.filter(([, t]) => t === undefined).map(([a]) => a),
+  }
+}
+
+/** Liste à enregistrer : comptes connectés, puis ceux dont la lecture a échoué (sans doublon d'id). */
+export const toPersist = (live: Account[], kept: Account[]) => [
+  ...live,
+  ...kept.filter((k) => !live.some((a) => a.id === k.id)),
+]

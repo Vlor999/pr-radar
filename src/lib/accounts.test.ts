@@ -11,7 +11,9 @@ import {
   normalizeHost,
   repoKey,
   savedAccounts,
+  sortReads,
   splitKey,
+  toPersist,
   type Account,
 } from "./accounts.ts"
 
@@ -89,4 +91,24 @@ test("les repos suivis sont répartis par compte, ceux d'un compte absent ignor�
     [ghe, ["globex/billing"]],
   ])
   assert.deepEqual(byAccount(["acme/web"], [ghe]), [])
+})
+
+test("un trousseau illisible garde le compte, un jeton absent le retire", () => {
+  const ok = account()
+  const missing = account({ id: "gone@github.com" })
+  const locked = account({ id: "me@ghe.acme.test", host: "ghe.acme.test" })
+  assert.deepEqual(
+    sortReads([
+      [ok, "t"],
+      [missing, null],
+      [locked, undefined],
+    ]),
+    { live: [ok], kept: [locked] },
+  )
+})
+
+test("la liste enregistrée garde les comptes illisibles, sans doublon d'id", () => {
+  const locked = account({ host: "ghe.acme.test", id: "me@ghe.acme.test" })
+  const fresh = account({ source: "oauth" })
+  assert.deepEqual(toPersist([fresh], [locked, account()]), [fresh, locked])
 })
