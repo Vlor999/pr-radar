@@ -47,7 +47,7 @@
     vsd: 'Le tableau de bord de GitHub et les autres apps de bureau font bien leur travail. PR Radar sert à suivre les stacks de PR sur tous vos repos et à répondre aux fils de review, sur n\'importe quel OS de bureau.',
     vsc: 'Comparaison entre github.com/pulls, Gitify et PR Radar', r1: 'Plateformes', r1a: 'tout navigateur',
     r7: 'Issues, releases, discussions', r7a: 'PR uniquement', r8a: 'pas encore',
-    vsalt: 'Choisissez <strong>github.com/pulls</strong> pour ne rien installer ou pour GitHub Enterprise, <strong>Gitify</strong> pour toute votre boîte de notifications dans la barre de menus, et <strong>PR Marmot</strong> pour une app native de barre de menus si vous n\'utilisez que des Mac Apple silicon.', r2: 'Stacks de tous les repos d\'un coup d\'œil',
+    vsalt: 'Choisissez <strong>github.com/pulls</strong> pour ne rien installer ou pour GitHub Enterprise, <strong>Gitify</strong> pour toute votre boîte de notifications dans la barre de menus, et <strong>PR Marmot</strong> pour une app de bureau native, avec des builds signés pour les Mac Apple silicon.', r2: 'Stacks de tous les repos d\'un coup d\'œil',
     r2a: 'une PR à la fois', r3: 'Notifications système natives', r3a: 'web uniquement',
     r4: 'Répondre aux fils non résolus depuis la liste', r4a: 'en ouvrant chaque PR', r5: 'Calendrier des merges',
     privacy: 'Confidentialité',

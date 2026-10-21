@@ -63,7 +63,7 @@ Where the alternatives win:
 
 - **github.com/pulls**: nothing to install, full review UI, GitHub Enterprise.
 - **Gitify**: your whole notification inbox (issues, releases, discussions) in the menu bar, GitHub Enterprise support.
-- **PR Marmot**: a native macOS menu bar app, if you only use Apple silicon Macs.
+- **PR Marmot**: a native desktop app, with signed builds for Apple silicon Macs (Linux and Intel Macs via a source build).
 
 PR Radar is for following PR stacks across repos and answering review threads without opening the browser, on any desktop OS.
 
