@@ -215,7 +215,8 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
                 <div
                   className={cn(
                     "w-full max-w-xl min-w-0",
-                    // rail continues past the threads down to the stacked PRs
+                    // le rail continue sous les discussions jusqu'aux PR stackées.
+                    // Valeurs liées : left-2.5 = pl-7 - 4.5 (coudes -left-4.5 de Branches) ; -top-3 = gap-3 sous la carte.
                     n.children.length > 0 &&
                       "relative before:absolute before:-top-3 before:bottom-0 before:left-2.5 before:border-l-2 before:border-border",
                   )}

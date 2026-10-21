@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import type { Thread } from "@/lib/types"
 
+/** initiales affichées dans l'en-tête d'une discussion, au-delà : un « +N » */
+const MAX_INITIALS = 3
+
 const S = strings(
   {
     agoNow: "à l'instant",
@@ -43,13 +46,18 @@ export function ThreadColumn({ threads }: { threads: Thread[] }) {
           key={t.id}
           className={cn(
             "relative",
-            // short rail hanging from the PR card; the elbow line (y=15px) runs under the bubble tail
+            // coude qui part de la carte de la PR vers chaque discussion.
+            // Valeurs liées : -top-3 = gap-3 sous la carte (repo-section) ; -left-4.5 sous pl-14 ;
+            // trait du coude à y = 15px (-top-3 + h-7), pointe de la queue au même y (top-2.25 + 6px).
             "before:absolute before:-top-3 before:-left-4.5 before:h-7 before:w-3 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-border",
             "not-last:after:absolute not-last:after:top-0 not-last:after:-bottom-3 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-border",
           )}
         >
-          {/* bubble tail: tip at the elbow line (y=15px), same stroke as the elbow */}
-          <span className="absolute top-[9px] -left-1.5 z-10 size-3 rotate-45 border-b-2 border-l-2 border-border bg-card" />
+          {/* queue de la bulle : pointe sur le trait du coude (y = 15px), même trait que le coude */}
+          <span
+            aria-hidden
+            className="absolute top-2.25 -left-1.5 z-10 size-3 rotate-45 border-b-2 border-l-2 border-border bg-card"
+          />
           <ThreadCard thread={t} />
         </li>
       ))}
@@ -69,6 +77,11 @@ function ThreadCard({ thread }: { thread: Thread }) {
       setError(res.error ?? "")
       if (!res.error) setDraft("")
     })
+
+  const authors = [...new Set(thread.comments.map((c) => c.author))]
+  const extra = authors.length - MAX_INITIALS
+  const chip =
+    "grid size-5 place-items-center rounded-full bg-muted text-[10px] font-medium uppercase ring-2 ring-card"
 
   return (
     <Card
@@ -91,16 +104,21 @@ function ThreadCard({ thread }: { thread: Thread }) {
             {t.outdated}
           </span>
         )}
-        <span className="flex shrink-0 -space-x-1.5">
-          {[...new Set(thread.comments.map((c) => c.author))].map((a) => (
-            <span
-              key={a}
-              title={a}
-              className="grid size-5 place-items-center rounded-full bg-muted text-[10px] font-medium uppercase ring-2 ring-card"
-            >
+        {/* participants : décoratif, les auteurs sont lus dans la liste des commentaires */}
+        <span aria-hidden className="flex shrink-0 -space-x-1.5">
+          {authors.slice(0, MAX_INITIALS).map((a) => (
+            <span key={a} title={a} className={chip}>
               {a[0]}
             </span>
           ))}
+          {extra > 0 && (
+            <span
+              title={authors.slice(MAX_INITIALS).join(", ")}
+              className={chip}
+            >
+              +{extra}
+            </span>
+          )}
         </span>
       </header>
 
