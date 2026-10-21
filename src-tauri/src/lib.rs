@@ -1,6 +1,8 @@
 use keyring::{Entry, Error};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
 const ID: &str = "io.github.vlor999.prradar";
@@ -197,6 +199,73 @@ fn uninstall_run(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/* ---------- Icône de la barre des menus / zone de notification ---------- */
+
+const TRAY: &str = "main";
+
+fn tray_menu(app: &AppHandle, open: &str, quit: &str) -> tauri::Result<Menu<tauri::Wry>> {
+    Menu::with_items(
+        app,
+        &[
+            &MenuItem::with_id(app, "open", open, true, None::<&str>)?,
+            &MenuItem::with_id(app, "quit", quit, true, None::<&str>)?,
+        ],
+    )
+}
+
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
+    // glyphe PR du logo, blanc sur fond transparent ; modèle macOS : suit le thème de la barre des menus
+    let tray = TrayIconBuilder::with_id(TRAY)
+        .icon(tauri::include_image!("icons/tray.png"))
+        .icon_as_template(true)
+        .tooltip("PR Radar")
+        .menu(&tray_menu(app, "Open PR Radar", "Quit")?)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, e| match e.id().as_ref() {
+            "open" => show_main(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, e| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = e
+            {
+                show_main(tray.app_handle());
+            }
+        });
+    tray.build(app)?;
+    Ok(())
+}
+
+/// Compteur (titre à côté de l'icône sur macOS, infobulle partout) et libellés du menu dans la langue de l'app.
+#[tauri::command]
+fn set_tray(
+    app: AppHandle,
+    count: usize,
+    tooltip: String,
+    open: String,
+    quit: String,
+) -> Result<(), String> {
+    let tray = app.tray_by_id(TRAY).ok_or("no tray")?;
+    let e = |e: tauri::Error| e.to_string();
+    tray.set_title((count > 0).then(|| count.to_string()))
+        .map_err(e)?;
+    tray.set_tooltip(Some(tooltip)).map_err(e)?;
+    tray.set_menu(Some(tray_menu(&app, &open, &quit).map_err(e)?))
+        .map_err(e)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -205,13 +274,15 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .setup(|app| Ok(setup_tray(app.handle())?))
         .invoke_handler(tauri::generate_handler![
             get_token,
             set_token,
             delete_token,
             gh_token,
             uninstall_plan,
-            uninstall_run
+            uninstall_run,
+            set_tray
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
