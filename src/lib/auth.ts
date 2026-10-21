@@ -7,6 +7,8 @@ import {
   GITHUB,
   newAccountId,
   savedAccounts,
+  sortReads,
+  toPersist,
   type Account,
   type AuthSource,
 } from "./accounts"
@@ -37,6 +39,8 @@ export type AuthState = {
 
 const ACCOUNTS = "pr-radar:accounts"
 let accounts: Account[] = []
+/** comptes dont le jeton n'a pas pu être lu au démarrage : gardés dans la liste enregistrée */
+let kept: Account[] = []
 const tokens = new Map<string, string>()
 let state: AuthState = { status: "loading", accounts }
 const listeners = new Set<() => void>()
@@ -48,7 +52,7 @@ function set(status: AuthState["status"]) {
 
 const persist = () => {
   try {
-    localStorage.setItem(ACCOUNTS, JSON.stringify(accounts))
+    localStorage.setItem(ACCOUNTS, JSON.stringify(toPersist(accounts, kept)))
   } catch {}
 }
 
@@ -94,10 +98,13 @@ export const ghCliToken = () =>
 export const allowHost = (host: string) =>
   host === GITHUB ? Promise.resolve() : invoke<void>("allow_host", { host })
 
-const readToken = (a: Account) =>
+/** `null` : aucun jeton enregistré ; `undefined` : trousseau illisible (verrouillé, refus). */
+const readToken = (a: Account): Promise<string | null | undefined> =>
   a.source === "gh"
     ? ghCliToken()
-    : invoke<string | null>("get_token", { account: a.id }).catch(() => null)
+    : invoke<string | null>("get_token", { account: a.id }).catch(
+        () => undefined,
+      )
 
 /** Démarrage : jetons du trousseau, sinon compte `gh` déjà connecté sur la machine. */
 export async function loadToken() {
@@ -108,15 +115,18 @@ export async function loadToken() {
       Account[] | null
     legacy = localStorage.getItem(LEGACY_SOURCE) as AuthSource | null
   } catch {}
-  const live: Account[] = []
+  const reads: [Account, string | null | undefined][] = []
   for (const a of savedAccounts(saved, legacy)) {
     const t = await readToken(a)
+    reads.push([a, t])
     if (!t) continue
     await allowHost(a.host).catch(() => {}) // refusé : les appels à cet hôte échoueront, avec un message
     tokens.set(a.id, t)
-    live.push(a)
   }
-  if (!live.length && !ghSkipped()) {
+  const sorted = sortReads(reads)
+  const live = sorted.live
+  kept = sorted.kept
+  if (!live.length && !kept.length && !ghSkipped()) {
     const t = await ghCliToken()
     if (t) {
       tokens.set(DEFAULT_ID, t)
@@ -124,7 +134,8 @@ export async function loadToken() {
     }
   }
   accounts = live
-  if (!saved) persist() // migration : le jeton reste sous `github`, rien à recopier
+  // migration : le jeton reste sous `github`, rien à recopier ; pas d'écriture après une lecture en échec
+  if (!saved && !kept.length) persist()
   set(accounts.length ? "signed-in" : "signed-out")
 }
 
@@ -169,6 +180,7 @@ export async function logout(id?: string) {
     tokens.delete(a.id)
   }
   accounts = id ? accounts.filter((a) => a.id !== id) : []
+  kept = id ? kept.filter((a) => a.id !== id) : []
   persist()
   skipGh(true)
   set(accounts.length ? "signed-in" : "signed-out")
