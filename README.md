@@ -57,7 +57,7 @@ No backend, no telemetry.
 | Native notifications | web only | yes | yes |
 | Merge calendar | no | no | yes |
 | Issues, releases, discussions | yes | yes | PRs only |
-| GitHub Enterprise | yes | yes | not yet |
+| GitHub Enterprise | yes | yes | yes (personal access token) |
 
 Where the alternatives win:
 
