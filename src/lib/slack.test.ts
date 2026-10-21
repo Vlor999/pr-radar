@@ -2,12 +2,18 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import {
+  dueUrls,
   filterMentions,
+  isAuthError,
+  matchesState,
   mentionsUrl,
   needsRefresh,
   pkceChallenge,
   rateLimitWait,
+  sameState,
+  SlackError,
   toMentions,
+  toTokens,
   userIds,
 } from "./slack.ts"
 import type { SlackMention } from "./types.ts"
@@ -127,4 +133,75 @@ test("DM nommé par son destinataire, DM de groupe par ses participants, mention
     ["DM · Alice Martin", "DM · alice, bob, carol", "#dev"],
   )
   assert.equal(out[0].text, `<@U2|Bob> ${URL}`)
+})
+
+test("Retry-After plafonné à 60 s, 30 s si nul, négatif ou invalide", () => {
+  assert.equal(rateLimitWait(429, undefined, "600"), 60)
+  assert.equal(rateLimitWait(429, undefined, "0"), 30)
+  assert.equal(rateLimitWait(429, undefined, "-5"), 30)
+  assert.equal(rateLimitWait(429, undefined, null), 30)
+})
+
+test("jetons lus dans authed_user (code) ou à la racine (refresh)", () => {
+  const now = 1_000
+  assert.deepEqual(
+    toTokens(
+      {
+        authed_user: {
+          access_token: "xoxp-1",
+          refresh_token: "xoxe-1",
+          expires_in: 43_200,
+        },
+      },
+      now,
+    ),
+    { access: "xoxp-1", refresh: "xoxe-1", expiresAt: now + 43_200_000 },
+  )
+  assert.deepEqual(
+    toTokens(
+      { access_token: "xoxp-2", refresh_token: "xoxe-2", expires_in: 60 },
+      now,
+    ),
+    { access: "xoxp-2", refresh: "xoxe-2", expiresAt: now + 60_000 },
+  )
+  assert.deepEqual(toTokens({ authed_user: { access_token: "xoxp-3" } }, now), {
+    access: "xoxp-3",
+    refresh: null,
+    expiresAt: null,
+  })
+  assert.throws(() => toTokens({}, now))
+})
+
+test("seul un jeton refusé expire la session, pas une erreur passagère", () => {
+  const refresh = (code: string) => new SlackError("oauth.v2.access", code)
+  assert.ok(isAuthError(refresh("invalid_refresh_token")))
+  assert.ok(isAuthError(refresh("token_revoked")))
+  assert.ok(isAuthError(refresh("invalid_auth")))
+  assert.ok(!isAuthError(refresh("HTTP 503")))
+  assert.ok(!isAuthError(refresh("ratelimited")))
+  assert.ok(!isAuthError(new TypeError("Failed to fetch")))
+})
+
+test("une recherche en échec répétée ne relance pas la file", () => {
+  const before = {
+    team: { id: "T1", name: "acme" },
+    expired: false,
+    error: "Slack search.messages : missing_scope",
+  }
+  assert.ok(sameState(before, { ...before }))
+  assert.ok(!sameState(before, { ...before, error: undefined }))
+  const now = 1_000_000
+  const cache = new Map([[URL, { at: now }]]) // échec enregistré comme une lecture
+  assert.deepEqual(dueUrls([URL], cache, now + 1_000), [])
+  assert.deepEqual(dueUrls([URL], cache, now + 10 * 60_000 + 1), [URL])
+  assert.deepEqual(
+    dueUrls(["https://github.com/acme/web/pull/13"], cache, now),
+    ["https://github.com/acme/web/pull/13"],
+  )
+})
+
+test("un retour OAuth avec un autre state est ignoré", () => {
+  assert.ok(matchesState("code=1.2&state=abc", "abc"))
+  assert.ok(!matchesState("code=1.2&state=forged", "abc"))
+  assert.ok(!matchesState("code=1.2", "abc"))
 })

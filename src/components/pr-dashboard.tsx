@@ -258,11 +258,13 @@ export function PrDashboard({
     markSeen: seen.markSeen,
   }
 
-  // mentions Slack : relues avec chaque actualisation GitHub (cache 10 min par PR)
-  const slack = useSlack()
+  // mentions Slack : relues avec chaque actualisation GitHub (cache 10 min par PR). Dépendances : seulement
+  // ce qui change la recherche, pas l'état Slack entier (une erreur affichée ne doit pas relancer la file).
+  const { team: slackTeam, expired: slackExpired } = useSlack()
+  const slackTeamId = slackTeam?.id
   useEffect(
     () => refreshMentions(prs),
-    [prs, slack, settings.slackAll, settings.slackChannels],
+    [prs, slackTeamId, slackExpired, settings.slackAll, settings.slackChannels],
   )
 
   // actualisation automatique (0 = manuelle) et au retour sur la fenêtre
