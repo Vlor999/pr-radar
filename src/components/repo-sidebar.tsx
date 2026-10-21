@@ -128,10 +128,10 @@ export function RepoSidebar({
       if (!res.error) setQuery("")
     })
 
-  // repos suivis hors de la liste accessible (ajoutés à la main) inclus aussi
-  const repos = [...new Set([...(all ?? []), ...current])].filter(
-    (r) => !isHidden(r),
-  )
+  // inclus aussi hors de la liste accessible : repos suivis (ajoutés à la main)
+  // et repos où j'ai une PR ouverte (non suivis d'office)
+  const known = [...(all ?? []), ...current, ...withPrs]
+  const repos = [...new Set(known)].filter((r) => !isHidden(r))
   const q = lower(query.trim())
   const byOrg = new Map<string, string[]>()
   for (const r of repos.filter((r) => lower(r).includes(q))) {
@@ -143,9 +143,7 @@ export function RepoSidebar({
   // ordre figé sur l'état à l'ouverture : masquer ou cocher ne fait pas bouger la liste.
   // orgs avec des repos suivis d'abord, puis par nombre de repos
   const rank = (org: string) => {
-    const rs = [...(all ?? []), ...current].filter(
-      (r) => r.split("/")[0] === org,
-    )
+    const rs = [...new Set(known)].filter((r) => r.split("/")[0] === org)
     return [rs.filter((r) => followedAtMount.has(lower(r))).length, rs.length]
   }
   const orgs = [...byOrg].sort(([a], [b]) => {
