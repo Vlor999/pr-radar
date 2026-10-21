@@ -40,6 +40,8 @@
     clock: 'mar. 20 oct. 09:41', t1: 'acme/web#42 : approuvée',
     t1d: 'alice a approuvé « feat(checkout): paiement en un clic »', tnow: 'maint.', t2: 'acme/api#17 : prête à merger',
     t2d: 'Tous les checks sont passés.',
+    slk: 'Postée dans #reviews',
+    cap5: '<strong>Annonce Slack</strong>Voyez d\'un coup d\'œil si votre PR a déjà été postée dans un channel ou en DM.<span class="sr"> Animation : la PR #12 apparaît, puis un badge Postée dans #reviews surgit.</span>',
     cap4: '<strong>Notifications</strong>Une approbation, un changement demandé, une CI cassée : le système vous prévient.<span class="sr"> Animation : deux notifications système glissent depuis le bord de l\'écran.</span>',
     more: 'Et aussi', c1: 'Filtres et recherche', c2: 'PR prêtes à merger', c3: 'PR inactives',
     c4: 'Nouveau depuis la dernière visite', c5: 'Repos par organisation', c6: 'Thème clair et sombre',
@@ -51,7 +53,7 @@
     r2a: 'une PR à la fois', r3: 'Notifications système natives', r3a: 'web uniquement',
     r4: 'Répondre aux fils non résolus depuis la liste', r4a: 'en ouvrant chaque PR', r5: 'Calendrier des merges',
     privacy: 'Confidentialité',
-    pv: 'Aucun serveur : l\'app parle seulement à github.com et api.github.com, depuis votre machine. Le jeton reste dans le trousseau du système (Trousseau macOS, Gestionnaire d\'identification Windows, Secret Service sous Linux), et il n\'y a aucune télémétrie.',
+    pv: 'PR Radar parle uniquement à GitHub et, si vous le connectez, à Slack. Aucun serveur : les jetons restent dans le trousseau de votre OS, les jetons Slack sont en lecture seule avec rotation automatique (ils expirent toutes les 12 h), et révocables à tout moment. Vos messages ne quittent jamais votre machine.',
     pvl: 'Lire le code (licence MIT)', faq: 'Questions fréquentes', q1: 'Quels droits l\'app demande-t-elle ?',
     a1: 'Deux scopes : <code>repo</code> pour lire les PR des repos privés et répondre aux discussions, <code>read:org</code> pour lister les repos de vos organisations. Avec un jeton d\'accès personnel (classic), cochez les mêmes : <code>repo</code> et <code>read:org</code>.',
     q3: 'Mon organisation utilise le SSO SAML',
@@ -62,6 +64,8 @@
     a5: 'L\'app vérifie la dernière release GitHub au démarrage puis toutes les 6 heures. Chaque mise à jour est signée : l\'app vérifie la signature avant d\'installer, puis redémarre.',
     q7: 'À quelle fréquence l\'app interroge-t-elle GitHub ?',
     a7: 'Toutes les 5 minutes par défaut, réglable de 1 à 30 minutes ou en manuel. Les requêtes comptent dans votre quota d\'API GitHub habituel.',
+    q8: 'Mon admin Slack doit-il approuver ?',
+    a8: 'Oui si votre workspace l\'exige. Cliquez sur Connecter, Slack propose de demander l\'installation.',
     rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT', nav: 'Principal', lang: 'Langue',
     ph: 'Votre réponse…'
   };
