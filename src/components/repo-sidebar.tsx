@@ -81,6 +81,7 @@ export function RepoSidebar({
   const hidden = new Set(useSettings().hiddenRepos.map(lower))
   const hasPr = new Set(withPrs.map(lower))
   const [followedAtMount] = useState(() => new Set(current.map(lower)))
+  const [withPrsAtMount] = useState(withPrs)
   const [all, setAll] = useState<string[] | null>(null)
   const [error, setError] = useState("")
   const [query, setQuery] = useState("")
@@ -140,10 +141,11 @@ export function RepoSidebar({
   }
   const count = (rs: string[]) =>
     rs.filter((r) => followed.has(lower(r))).length
-  // ordre figé sur l'état à l'ouverture : masquer ou cocher ne fait pas bouger la liste.
-  // orgs avec des repos suivis d'abord, puis par nombre de repos
+  // ordre figé sur l'état à l'ouverture : masquer, cocher ou rafraîchir ne fait pas bouger
+  // la liste (repos masqués inclus). Orgs avec des repos suivis d'abord, puis par nombre de repos
+  const ranked = [...new Set([...(all ?? []), ...current, ...withPrsAtMount])]
   const rank = (org: string) => {
-    const rs = [...new Set(known)].filter((r) => r.split("/")[0] === org)
+    const rs = ranked.filter((r) => r.split("/")[0] === org)
     return [rs.filter((r) => followedAtMount.has(lower(r))).length, rs.length]
   }
   const orgs = [...byOrg].sort(([a], [b]) => {
