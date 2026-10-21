@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { slackParts } from "./slack-text.ts"
+import { slackParts, spoofedHost } from "./slack-text.ts"
 
 test("les liens restent cliquables, avec ou sans libellé", () => {
   assert.deepEqual(
@@ -46,4 +46,25 @@ test("sauts de ligne, puces et entités gardés, sans lien hors http(s)", () => 
       { text: "x" },
     ],
   )
+})
+
+test("hôte de la cible quand le libellé est l'URL d'un autre hôte", () => {
+  const host = (text: string, href: string) => spoofedHost({ text, href })
+  assert.equal(
+    host("https://github.com/acme/web/pull/12", "https://evil.dev/x"),
+    "evil.dev",
+  )
+  assert.equal(
+    host("github.com/acme/web/pull/12", "https://evil.dev"),
+    "evil.dev",
+  )
+  assert.equal(
+    host("https://GitHub.com/acme", "https://github.com/acme/web/pull/12"),
+    undefined,
+  )
+  assert.equal(host("#12", "https://evil.dev"), undefined)
+  assert.equal(host("voir la PR", "https://evil.dev"), undefined)
+  assert.equal(host("https://x.dev", "https://x.dev"), undefined)
+  assert.equal(host("texte", ""), undefined)
+  assert.equal(host("github.com", "https://"), undefined)
 })

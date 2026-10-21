@@ -19,7 +19,7 @@ import {
 import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
 import { useSettings } from "@/lib/settings"
 import { useMentions } from "@/lib/slack"
-import { slackParts } from "@/lib/slack-text"
+import { slackParts, spoofedHost } from "@/lib/slack-text"
 import { idleDays, isStale, mergeState, needsAttention } from "@/lib/tree"
 import type { PrNode } from "@/lib/types"
 
@@ -404,9 +404,18 @@ export function SlackColumn({
                     href={p.href}
                     target="_blank"
                     rel="noopener"
+                    // le libellé peut mentir sur la cible : la vraie URL en infobulle, son hôte en clair si
+                    // le libellé ressemble à l'URL d'un autre site
+                    title={p.href}
                     className="text-primary hover:underline"
                   >
                     {p.text}
+                    {spoofedHost(p) && (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        ({spoofedHost(p)})
+                      </span>
+                    )}
                   </a>
                 ) : (
                   p.text

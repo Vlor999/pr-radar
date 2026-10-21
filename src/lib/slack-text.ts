@@ -27,3 +27,22 @@ export function slackParts(text: string): SlackPart[] {
   if (last < text.length) parts.push({ text: unescape(text.slice(last)) })
   return parts
 }
+
+/**
+ * Hôte de la cible quand le libellé d'un lien ressemble à une URL d'un autre hôte
+ * (`<https://evil.dev|https://github.com/…>`), sinon `undefined` : à afficher à côté du libellé.
+ */
+export function spoofedHost(part: SlackPart): string | undefined {
+  if (!part.href) return
+  const label =
+    /^(?:https?:\/\/)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)(?:[/:?#]|$)/i.exec(
+      part.text.trim(),
+    )?.[1]
+  let host: string
+  try {
+    host = new URL(part.href).hostname
+  } catch {
+    return // href invalide (`https://`) : pas d'hôte à comparer
+  }
+  return label && label.toLowerCase() !== host ? host : undefined
+}
