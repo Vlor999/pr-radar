@@ -1,23 +1,23 @@
 ---
 name: demo
-description: Lancer une démo locale de PR Radar dans le navigateur (localhost:1420) avec GitHub et Tauri mockés, pour que l'utilisateur valide une feature. Utiliser après chaque feature, ou quand l'utilisateur demande une démo, un aperçu ou « montre-moi ».
+description: Run a local PR Radar demo in the browser (localhost:1420) with GitHub and Tauri mocked, so the user can validate a feature. Use after each feature, or when the user asks for a demo, a preview, or "show me".
 ---
 
-# Démo locale (navigateur, données fictives)
+# Local demo (browser, mock data)
 
-`npm run demo` = `vite --mode demo` sur http://localhost:1420. En mode `demo`, `vite.config.ts` remplace :
-- `@/lib/github` / `./github` → `src/demo/github.ts` (repos et PR fictifs, orgs `acme`, `globex`, `me`) ;
-- `@tauri-apps/api/{core,app}` et `@tauri-apps/plugin-*` → `src/demo/tauri.ts` (jeton factice, pas d'updater, `invoke` journalisé dans la console).
+`npm run demo` = `vite --mode demo` on http://localhost:1420. In `demo` mode, `vite.config.ts` replaces:
+- `@/lib/github` / `./github` → `src/demo/github.ts` (mock repos and PRs, orgs `acme`, `globex`, `me`);
+- `@tauri-apps/api/{core,app}` and `@tauri-apps/plugin-*` → `src/demo/tauri.ts` (fake token, no updater, `invoke` logged to the console).
 
-Pas de connexion gh, aucun appel réseau à GitHub.
+No gh login, no network call to GitHub.
 
-## Étapes
+## Steps
 
-1. Si la feature dépend de données absentes (nouveau champ de `Pr`, nouvel état CI, cas limite), compléter `src/demo/github.ts`. Garder des données fictives uniquement.
-2. Si la feature appelle une nouvelle fonction de `src/lib/github.ts` ou une nouvelle commande `invoke`, l'ajouter au mock (même signature). Vérifier : `npm run typecheck`.
-3. Lancer en arrière-plan : `npm run demo` (port 1420 strict, le même que `tauri dev` : arrêter `tauri dev` avant ; si la démo tourne déjà, la réutiliser).
-4. Ouvrir : `open http://localhost:1420`.
-5. Donner à l'utilisateur une liste courte de quoi tester (étapes concrètes, tailles de fenêtre si responsive).
-6. Attendre sa validation explicite avant commit/release (règle de `CLAUDE.md`).
+1. If the feature depends on missing data (new `Pr` field, new CI state, edge case), extend `src/demo/github.ts`. Mock data only.
+2. If the feature calls a new function of `src/lib/github.ts` or a new `invoke` command, add it to the mock (same signature). Check: `npm run typecheck`.
+3. Run in the background: `npm run demo` (strict port 1420, the same as `tauri dev`: stop `tauri dev` first; if the demo already runs, reuse it).
+4. Open: `open http://localhost:1420`.
+5. Give the user a short list of what to test (concrete steps, window sizes if responsive).
+6. Wait for explicit validation before commit/release (rule in `CLAUDE.md`).
 
-État navigateur (repos suivis, réglages) en localStorage de `localhost:1420`, séparé de l'app installée. Repartir de zéro : vider le stockage du site dans le navigateur.
+Browser state (followed repos, settings) lives in the `localhost:1420` localStorage, separate from the installed app. To start over: clear the site storage in the browser.

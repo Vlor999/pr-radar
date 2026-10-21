@@ -4,6 +4,7 @@ import { cn } from "cn"
 
 import { accessibleRepos, addRepo, setFollowed } from "@/lib/actions"
 import { CLIENT_ID } from "@/lib/auth"
+import { strings, useStrings } from "@/lib/i18n"
 import { updateSettings, useSettings } from "@/lib/settings"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,6 +15,44 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
+
+const S = strings(
+  {
+    followed: "Repos suivis",
+    filter: "Filtrer les repos",
+    follow: (repo: string) => `Suivre ${repo}`,
+    loading: "Chargement des repos accessibles…",
+    noMatch: "Aucun repo ne correspond",
+    orgOpenPr: "PR ouverte dans cette organisation",
+    myOpenPr: "J'ai une PR ouverte",
+    hidden: (n: number) => `${n} masqué${n > 1 ? "s" : ""}`,
+    unhide: "Réafficher",
+    unhideAll: "Tout réafficher",
+    orgMissing:
+      "Une organisation manque ? Elle bloque peut-être les apps tierces :",
+    requestAccess: "demander l'accès pour PR Radar",
+    orgTail: "(un admin de l'org valide), ou connecte-toi avec le CLI gh.",
+    hide: (name: string) => `Masquer ${name}`,
+    removeFromList: "Retirer de la liste",
+  },
+  {
+    followed: "Tracked repos",
+    filter: "Filter repos",
+    follow: (repo: string) => `Follow ${repo}`,
+    loading: "Loading accessible repos…",
+    noMatch: "No matching repos",
+    orgOpenPr: "Open PR in this organization",
+    myOpenPr: "I have an open PR",
+    hidden: (n: number) => `${n} hidden`,
+    unhide: "Show again",
+    unhideAll: "Show all again",
+    orgMissing: "Missing an organization? It may block third-party apps:",
+    requestAccess: "request access for PR Radar",
+    orgTail: "(an org admin approves it), or sign in with the gh CLI.",
+    hide: (name: string) => `Hide ${name}`,
+    removeFromList: "Remove from list",
+  },
+)
 
 const ORG_ACCESS_URL = `https://github.com/settings/connections/applications/${CLIENT_ID}`
 
@@ -38,6 +77,7 @@ export function RepoSidebar({
   withPrs: string[]
   className?: string
 }) {
+  const t = useStrings(S)
   const hidden = new Set(useSettings().hiddenRepos.map(lower))
   const hasPr = new Set(withPrs.map(lower))
   const [followedAtMount] = useState(() => new Set(current.map(lower)))
@@ -125,7 +165,7 @@ export function RepoSidebar({
       )}
     >
       <div className="flex items-center justify-between">
-        <h2 className="font-heading text-sm font-semibold">Repos suivis</h2>
+        <h2 className="font-heading text-sm font-semibold">{t.followed}</h2>
         <span className="text-xs text-muted-foreground">
           {followed.size} / {repos.length || "…"}
         </span>
@@ -143,8 +183,8 @@ export function RepoSidebar({
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filtrer les repos"
-          aria-label="Filtrer les repos"
+          placeholder={t.filter}
+          aria-label={t.filter}
           className="pl-9"
           autoComplete="off"
         />
@@ -157,7 +197,7 @@ export function RepoSidebar({
           onClick={addTyped}
         >
           <Plus />
-          Suivre {query.trim()}
+          {t.follow(query.trim())}
         </Button>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
@@ -165,14 +205,11 @@ export function RepoSidebar({
       <div className="-mx-1 flex min-h-0 flex-col gap-1 overflow-y-auto px-1 pb-2">
         {all === null && (
           <p className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Chargement des repos
-            accessibles…
+            <Loader2 className="size-4 animate-spin" /> {t.loading}
           </p>
         )}
         {all !== null && orgs.length === 0 && (
-          <p className="py-2 text-sm text-muted-foreground">
-            Aucun repo ne correspond
-          </p>
+          <p className="py-2 text-sm text-muted-foreground">{t.noMatch}</p>
         )}
         {orgs.map(([org, rs]) => (
           <Collapsible
@@ -186,7 +223,7 @@ export function RepoSidebar({
                 <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]:rotate-90" />
                 <span className="min-w-0 flex-1 truncate">{org}</span>
                 {rs.some((r) => hasPr.has(lower(r))) && (
-                  <PrDot title="PR ouverte dans cette organisation" />
+                  <PrDot title={t.orgOpenPr} />
                 )}
                 <Badge variant={count(rs) ? "secondary" : "outline"}>
                   {count(rs)} / {rs.length}
@@ -213,9 +250,7 @@ export function RepoSidebar({
                         <span className="min-w-0 truncate font-mono text-xs">
                           {r.slice(org.length + 1)}
                         </span>
-                        {hasPr.has(lower(r)) && (
-                          <PrDot title="J'ai une PR ouverte" />
-                        )}
+                        {hasPr.has(lower(r)) && <PrDot title={t.myOpenPr} />}
                         {/* place pour le bouton masquer */}
                         <span className="w-5 shrink-0" />
                       </label>
@@ -232,7 +267,7 @@ export function RepoSidebar({
         <Collapsible>
           <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
             <ChevronRight className="size-3.5 shrink-0 transition-transform group-data-[panel-open]:rotate-90" />
-            {hidden.size} masqué{hidden.size > 1 ? "s" : ""}
+            {t.hidden(hidden.size)}
           </CollapsibleTrigger>
           <CollapsibleContent>
             <ul className="flex flex-col py-0.5 pl-5">
@@ -251,7 +286,7 @@ export function RepoSidebar({
                     }
                     className="shrink-0 text-primary hover:underline"
                   >
-                    Réafficher
+                    {t.unhide}
                   </button>
                 </li>
               ))}
@@ -262,7 +297,7 @@ export function RepoSidebar({
                     onClick={() => updateSettings({ hiddenRepos: [] })}
                     className="text-xs text-muted-foreground hover:text-foreground hover:underline"
                   >
-                    Tout réafficher
+                    {t.unhideAll}
                   </button>
                 </li>
               )}
@@ -271,23 +306,24 @@ export function RepoSidebar({
         </Collapsible>
       )}
       <p className="border-t pt-3 text-xs text-muted-foreground">
-        Une organisation manque ? Elle bloque peut-être les apps tierces :{" "}
+        {t.orgMissing}{" "}
         <a href={ORG_ACCESS_URL} className="text-primary hover:underline">
-          demander l'accès pour PR Radar
+          {t.requestAccess}
         </a>{" "}
-        (un admin de l'org valide), ou connecte-toi avec le CLI gh.
+        {t.orgTail}
       </p>
     </aside>
   )
 }
 
 function HideButton({ name, onClick }: { name: string; onClick: () => void }) {
+  const t = useStrings(S)
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`Masquer ${name}`}
-      title="Retirer de la liste"
+      aria-label={t.hide(name)}
+      title={t.removeFromList}
       className="absolute top-1/2 right-1 -translate-y-1/2 rounded p-0.5 text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:bg-background hover:text-foreground focus-visible:opacity-100"
     >
       <X className="size-3.5" />

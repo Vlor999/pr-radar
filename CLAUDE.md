@@ -1,21 +1,24 @@
 # PR Radar
 
-App desktop Tauri v2 + React 19 + Vite + Tailwind v4 + shadcn (preset `b7ClNF3YW`, base-ui, `cn` importé depuis `"cn"`). TypeScript strict, prettier `semi: false`. Pas de backend : appels directs à api.github.com via `@tauri-apps/plugin-http`.
+Tauri v2 desktop app + React 19 + Vite + Tailwind v4 + shadcn (preset `b7ClNF3YW`, base-ui, `cn` imported from `"cn"`). Strict TypeScript, prettier `semi: false`. No backend: direct calls to api.github.com through `@tauri-apps/plugin-http`.
 
-## Vérifs
+## Checks
 
 ```sh
 npm run typecheck
 npm test
 cd src-tauri && cargo clippy -- -D warnings && cargo test
-npm run tauri build -- --bundles app   # build macOS local
+npm run tauri build -- --bundles app   # local macOS build
 ```
 
-## Règles
+## Rules
 
-- Jamais afficher ni commiter `~/.tauri/pr-radar.key` ou son mot de passe (secrets CI `TAURI_SIGNING_PRIVATE_KEY*`).
-- `site/` (landing GitHub Pages) : données fictives uniquement (`acme`), jamais de vrais repos privés.
-- Le client ID OAuth dans `src/lib/auth.ts` est public, pas un secret.
-- Toute feature : démo locale dans le navigateur (skill `demo`, `npm run demo` → localhost:1420, données mockées) et validation explicite de l'utilisateur avant commit/release. Pas de release sans validation.
-- Release : skill `release` (`.claude/skills/release/SKILL.md`).
-- Notarisation Apple : `docs/apple-notarization.md`.
+- Never print or commit `~/.tauri/pr-radar.key` or its password (CI secrets `TAURI_SIGNING_PRIVATE_KEY*`).
+- `site/` (GitHub Pages landing): mock data only (`acme`), never real private repos.
+- The OAuth client ID in `src/lib/auth.ts` is public, not a secret.
+- Every feature: local browser demo (skill `demo`, `npm run demo` → localhost:1420, mocked data) and explicit user validation before commit/release. No release without validation.
+- Branches: work on `dev` (or a branch → PR to `dev`). `main` only accepts PRs from `dev`; the merge triggers the release.
+- Detailed rules: `.claude/rules/` (`project`, `typescript`, `test`, `subagents`).
+- Skills: `worktree` (task → PR to `dev`), `mr-review` (PR review), `grill-me` (stress-test a plan).
+- Release: skill `release` (`.claude/skills/release/SKILL.md`).
+- Apple notarization: `docs/apple-notarization.md`.

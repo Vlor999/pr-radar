@@ -12,9 +12,35 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { strings, useStrings } from "@/lib/i18n"
 import { useSettings } from "@/lib/settings"
 import { descendants, needsAttention } from "@/lib/tree"
 import type { MergedPr, PrNode, RepoTree } from "@/lib/types"
+
+const S = strings(
+  {
+    attn: (n: number) => `${n} à traiter`,
+    remove: (repo: string) => `Retirer ${repo}`,
+    noMatch: "Aucune PR ne correspond",
+    noOpen: "Aucune PR ouverte",
+    noOwnPr: "(branche sans PR à moi)",
+    agoNow: "à l'instant",
+    agoH: (h: number) => `il y a ${h} h`,
+    agoD: (d: number) => `il y a ${d} j`,
+    merged: (days: number) => `Mergées ces ${days} derniers jours`,
+  },
+  {
+    attn: (n: number) => `${n} need${n > 1 ? "" : "s"} action`,
+    remove: (repo: string) => `Remove ${repo}`,
+    noMatch: "No matching PRs",
+    noOpen: "No open PRs",
+    noOwnPr: "(none of my PRs on this branch)",
+    agoNow: "just now",
+    agoH: (h: number) => `${h}h ago`,
+    agoD: (d: number) => `${d}d ago`,
+    merged: (days: number) => `Merged in the last ${days} days`,
+  },
+)
 
 export type OpenState = {
   isOpen: (key: string, fallback: boolean) => boolean
@@ -35,6 +61,7 @@ export function RepoSection({
   const shown = tree.roots.flatMap(descendants)
   const attn = shown.filter(needsAttention).length
   const [removing, start] = useTransition()
+  const t = useStrings(S)
 
   return (
     <Collapsible
@@ -49,13 +76,13 @@ export function RepoSection({
           <Badge variant="secondary">
             {shown.length === total ? total : `${shown.length} / ${total}`}
           </Badge>
-          {attn > 0 && <Badge variant="destructive">{attn} à traiter</Badge>}
+          {attn > 0 && <Badge variant="destructive">{t.attn(attn)}</Badge>}
         </CollapsibleTrigger>
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label={`Retirer ${tree.repo}`}
-          title={`Retirer ${tree.repo}`}
+          aria-label={t.remove(tree.repo)}
+          title={t.remove(tree.repo)}
           disabled={removing}
           className="opacity-0 group-hover/repo:opacity-100 focus-visible:opacity-100"
           onClick={() => start(() => removeRepo(tree.repo))}
@@ -66,7 +93,7 @@ export function RepoSection({
       <CollapsibleContent>
         {tree.roots.length === 0 ? (
           <p className="py-2 pl-6 text-sm text-muted-foreground">
-            {total ? "Aucune PR ne correspond" : "Aucune PR ouverte"}
+            {total ? t.noMatch : t.noOpen}
           </p>
         ) : (
           <ul className="flex flex-col gap-2 pt-2 pb-4 pl-1">
@@ -82,7 +109,7 @@ export function RepoSection({
                   {root.branch}
                   {!root.trunk && (
                     <span className="font-sans font-normal text-muted-foreground">
-                      (branche sans PR à moi)
+                      {t.noOwnPr}
                     </span>
                   )}
                 </span>
@@ -99,13 +126,9 @@ export function RepoSection({
   )
 }
 
-function mergedAgo(iso: string) {
+function mergedAgo(iso: string, t: typeof S.fr) {
   const h = Math.floor((Date.now() - Date.parse(iso)) / 3_600_000)
-  return h >= 24
-    ? `il y a ${Math.floor(h / 24)} j`
-    : h
-      ? `il y a ${h} h`
-      : "à l'instant"
+  return h >= 24 ? t.agoD(Math.floor(h / 24)) : h ? t.agoH(h) : t.agoNow
 }
 
 /** PR mergées ces derniers jours : une ligne chacune, sous l'arbre des PR ouvertes. */
@@ -119,6 +142,7 @@ function MergedList({
   state: OpenState
 }) {
   const { mergedDays } = useSettings()
+  const t = useStrings(S)
   const key = `${repo}:merged`
   return (
     <Collapsible
@@ -129,7 +153,7 @@ function MergedList({
       <CollapsibleTrigger className="group flex items-center gap-1.5 rounded-md py-1 text-sm font-medium text-muted-foreground hover:text-foreground">
         <ChevronRight className="size-3.5 transition-transform group-data-[panel-open]:rotate-90" />
         <GitMerge className="size-3.5 text-violet-600 dark:text-violet-400" />
-        Mergées ces {mergedDays} derniers jours
+        {t.merged(mergedDays)}
         <Badge variant="outline">{prs.length}</Badge>
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -147,7 +171,7 @@ function MergedList({
                 </span>
                 <span className="min-w-0 flex-1 truncate">{p.title}</span>
                 <span className="shrink-0 text-xs text-muted-foreground">
-                  {mergedAgo(p.mergedAt)}
+                  {mergedAgo(p.mergedAt, t)}
                 </span>
               </a>
             </li>
