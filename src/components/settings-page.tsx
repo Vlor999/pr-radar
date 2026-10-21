@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core"
 import { cn } from "cn"
 import {
   ArrowLeft,
+  ChevronDown,
   ExternalLink,
   Loader2,
   LogOut,
@@ -23,8 +24,8 @@ import {
 } from "@/hooks/use-pr-notifications"
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
-import { authSource, CLIENT_ID, logout } from "@/lib/auth"
 import { useThumb } from "@/hooks/use-thumb"
+import { authSource, CLIENT_ID, logout } from "@/lib/auth"
 import {
   clearCache,
   reposWithMyOpenPrs,
@@ -447,18 +448,17 @@ function Segmented<T extends string | number>(props: {
   onChange: (v: T) => void
   labelledBy: string
 }) {
-  return (
   const [box, thumb] = useThumb<HTMLDivElement>(
     '[aria-checked="true"]',
     props.value,
   )
+  return (
     <div
-      role="radiogroup"
       ref={box}
+      role="radiogroup"
       aria-labelledby={props.labelledBy}
       className="relative inline-flex flex-wrap rounded-lg border bg-muted p-0.5"
     >
-      {props.options.map((o) => {
       {thumb && (
         <span
           aria-hidden
@@ -466,6 +466,7 @@ function Segmented<T extends string | number>(props: {
           className="absolute rounded-md bg-background shadow-sm transition-[left,top,width,height] duration-200 ease-out motion-reduce:transition-none"
         />
       )}
+      {props.options.map((o) => {
         const active = o.value === props.value
         return (
           <button
@@ -683,20 +684,24 @@ function RefreshSection() {
       description={t.refresh.description}
     >
       <Row label={t.refresh.frequency} labelId="refresh-label">
-        <select
-          aria-labelledby="refresh-label"
-          value={s.refreshMinutes}
-          onChange={(e) =>
-            updateSettings({ refreshMinutes: Number(e.target.value) })
-          }
-          className="h-8 rounded-lg border bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
-        >
-          {[0, 1, 2, 5, 10, 15, 30].map((m) => (
-            <option key={m} value={m}>
-              {m === 0 ? t.refresh.manual : `${m} min`}
-            </option>
-          ))}
-        </select>
+        {/* appearance-none : sinon le navigateur impose son propre style (pilule sombre) */}
+        <div className="relative">
+          <select
+            aria-labelledby="refresh-label"
+            value={s.refreshMinutes}
+            onChange={(e) =>
+              updateSettings({ refreshMinutes: Number(e.target.value) })
+            }
+            className="h-8 appearance-none rounded-lg border bg-background pr-7 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+          >
+            {[0, 1, 2, 5, 10, 15, 30].map((m) => (
+              <option key={m} value={m}>
+                {m === 0 ? t.refresh.manual : `${m} min`}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        </div>
       </Row>
       <Row label={t.refresh.onFocus} labelId="focus-label">
         <Toggle
