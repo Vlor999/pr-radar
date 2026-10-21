@@ -39,7 +39,19 @@
           "url": "https://github.com/login/**"
         },
         {
-          "url": "https://slack.com/api/*"
+          "url": "https://slack.com/api/oauth.v2.access"
+        },
+        {
+          "url": "https://slack.com/api/auth.revoke"
+        },
+        {
+          "url": "https://slack.com/api/search.messages"
+        },
+        {
+          "url": "https://slack.com/api/conversations.list"
+        },
+        {
+          "url": "https://slack.com/api/users.info"
         }
       ]
     },
