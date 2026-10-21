@@ -37,17 +37,19 @@ function ago(iso: string, t: typeof S.fr) {
 /** Colonne des discussions ouvertes d'une PR, reliée à sa carte par des traits (affichée sous la carte). */
 export function ThreadColumn({ threads }: { threads: Thread[] }) {
   return (
-    <ul className="flex min-w-0 animate-in flex-col gap-3 pl-6 duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none">
+    <ul className="flex min-w-0 animate-in flex-col gap-3 pl-14 duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none">
       {threads.map((t) => (
         <li
           key={t.id}
           className={cn(
             "relative",
-            // coude qui part de la carte de la PR vers chaque discussion
-            "before:absolute before:top-0 before:-left-5 before:h-7 before:w-5 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-border",
-            "not-last:after:absolute not-last:after:top-0 not-last:after:-bottom-3 not-last:after:-left-5 not-last:after:border-l-2 not-last:after:border-border",
+            // short rail hanging from the PR card; the elbow line (y=15px) runs under the bubble tail
+            "before:absolute before:-top-3 before:-left-4.5 before:h-7 before:w-3 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-border",
+            "not-last:after:absolute not-last:after:top-0 not-last:after:-bottom-3 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-border",
           )}
         >
+          {/* bubble tail: tip at the elbow line (y=15px), same stroke as the elbow */}
+          <span className="absolute top-[9px] -left-1.5 z-10 size-3 rotate-45 border-b-2 border-l-2 border-border bg-card" />
           <ThreadCard thread={t} />
         </li>
       ))}
@@ -69,13 +71,16 @@ function ThreadCard({ thread }: { thread: Thread }) {
     })
 
   return (
-    <Card size="sm" className="gap-0 rounded-2xl py-0">
+    <Card
+      size="sm"
+      className="gap-0 rounded-2xl rounded-tl-md py-0 shadow-sm ring-foreground/10"
+    >
       <header className="flex items-center justify-between gap-2 border-b px-4 py-2">
         <a
           href={thread.comments[0]?.url}
           target="_blank"
           rel="noopener"
-          className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-foreground hover:underline"
+          className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground hover:text-foreground hover:underline"
           title={thread.path}
         >
           {thread.path}
@@ -86,6 +91,17 @@ function ThreadCard({ thread }: { thread: Thread }) {
             {t.outdated}
           </span>
         )}
+        <span className="flex shrink-0 -space-x-1.5">
+          {[...new Set(thread.comments.map((c) => c.author))].map((a) => (
+            <span
+              key={a}
+              title={a}
+              className="grid size-5 place-items-center rounded-full bg-muted text-[10px] font-medium uppercase ring-2 ring-card"
+            >
+              {a[0]}
+            </span>
+          ))}
+        </span>
       </header>
 
       {thread.hunk && <Hunk hunk={thread.hunk} />}
