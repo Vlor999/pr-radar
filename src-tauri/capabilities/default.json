@@ -37,6 +37,9 @@
         },
         {
           "url": "https://github.com/login/**"
+        },
+        {
+          "url": "https://slack.com/api/*"
         }
       ]
     },
