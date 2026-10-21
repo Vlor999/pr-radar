@@ -212,7 +212,14 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
                 />
               </div>
               {open && n.threads.length > 0 && (
-                <div className="w-full max-w-xl min-w-0">
+                <div
+                  className={cn(
+                    "w-full max-w-xl min-w-0",
+                    // rail continues past the threads down to the stacked PRs
+                    n.children.length > 0 &&
+                      "relative before:absolute before:-top-3 before:bottom-0 before:left-2.5 before:border-l-2 before:border-border",
+                  )}
+                >
                   <ThreadColumn threads={n.threads} />
                 </div>
               )}
