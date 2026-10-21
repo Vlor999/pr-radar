@@ -173,14 +173,12 @@ export function rememberLogin(id: string, login: string) {
   persist()
 }
 
-/** Déconnecte un compte, ou tous sans argument. */
-export async function logout(id?: string) {
-  for (const a of accounts.filter((a) => !id || a.id === id)) {
-    await invoke("delete_token", { account: a.id }).catch(() => {})
-    tokens.delete(a.id)
-  }
-  accounts = id ? accounts.filter((a) => a.id !== id) : []
-  kept = id ? kept.filter((a) => a.id !== id) : []
+/** Déconnecte un compte (et un seul : tout effacer passe par `forgetTokens`). */
+export async function logout(id: string) {
+  await invoke("delete_token", { account: id }).catch(() => {})
+  tokens.delete(id)
+  accounts = accounts.filter((a) => a.id !== id)
+  kept = kept.filter((a) => a.id !== id)
   persist()
   skipGh(true)
   set(accounts.length ? "signed-in" : "signed-out")
