@@ -274,10 +274,19 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .setup(|app| Ok(setup_tray(app.handle())?))
-        // fermer la fenêtre la cache : l'app reste dans la barre des menus, « Quitter » (ou ⌘Q) la ferme
+        .setup(|app| {
+            // sans barre d'icônes (ex. GNOME sans AppIndicator) l'app démarre quand même
+            if let Err(e) = setup_tray(app.handle()) {
+                eprintln!("tray unavailable: {e}");
+            }
+            Ok(())
+        })
+        // fermer la fenêtre la cache : l'app reste dans la barre des menus, « Quitter » (ou ⌘Q) la ferme.
+        // Sans icône, la fermeture quitte (sinon plus aucun moyen de rouvrir l'app).
         .on_window_event(|w, e| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = e
+                && w.app_handle().tray_by_id(TRAY).is_some()
+            {
                 api.prevent_close();
                 let _ = w.hide();
             }
