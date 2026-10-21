@@ -3,17 +3,20 @@ use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, ipc::CapabilityBuilder};
 
 const ID: &str = "io.github.vlor999.prradar";
+/// Compte d'origine (avant le multi-compte) : son entrée du trousseau garde ce nom.
+const DEFAULT_ACCOUNT: &str = "github";
 
-fn entry() -> Result<Entry, String> {
-    Entry::new(ID, "github").map_err(|e| e.to_string())
+/// Une entrée du trousseau par compte (`github`, ou `login@hôte`).
+fn entry(account: &str) -> Result<Entry, String> {
+    Entry::new(ID, account).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn get_token() -> Result<Option<String>, String> {
-    match entry()?.get_password() {
+fn get_token(account: String) -> Result<Option<String>, String> {
+    match entry(&account)?.get_password() {
         Ok(t) => Ok(Some(t)),
         Err(Error::NoEntry) => Ok(None),
         Err(e) => Err(e.to_string()),
@@ -21,16 +24,48 @@ fn get_token() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn set_token(token: String) -> Result<(), String> {
-    entry()?.set_password(&token).map_err(|e| e.to_string())
+fn set_token(account: String, token: String) -> Result<(), String> {
+    entry(&account)?
+        .set_password(&token)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn delete_token() -> Result<(), String> {
-    match entry()?.delete_credential() {
+fn delete_token(account: String) -> Result<(), String> {
+    match entry(&account)?.delete_credential() {
         Ok(()) | Err(Error::NoEntry) => Ok(()),
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// Nom d'hôte en minuscules (`ghe.example.com`, port optionnel) : rien qui élargisse le motif d'URL.
+fn valid_host(host: &str) -> bool {
+    let (name, port) = host.split_once(':').unwrap_or((host, "1"));
+    let label = |l: &str| {
+        !l.is_empty()
+            && !l.starts_with('-')
+            && !l.ends_with('-')
+            && l.bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    };
+    name.split('.').all(label)
+        && (1..=5).contains(&port.len())
+        && port.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// GitHub Enterprise : autorise le plugin HTTP à joindre `https://<hôte>/api/…`, et rien d'autre de cet hôte.
+#[tauri::command]
+fn allow_host(app: AppHandle, host: String) -> Result<(), String> {
+    if !valid_host(&host) {
+        return Err(format!("invalid host: {host}"));
+    }
+    let url = |p: &str| serde_json::json!({ "url": format!("https://{host}/api/{p}") });
+    app.add_capability(
+        CapabilityBuilder::new(format!("ghe-{host}"))
+            .window("main")
+            .permission_scoped("http:default", vec![url("*"), url("**")], vec![]),
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Jeton du CLI GitHub (`gh auth token`) s'il est installé et connecté : connexion sans aucune étape.
@@ -150,7 +185,7 @@ fn uninstall_plan(app: AppHandle) -> UninstallPlan {
 /// Supprime le jeton, lance un nettoyeur détaché qui attend la fermeture de l'app, puis quitte.
 #[tauri::command]
 fn uninstall_run(app: AppHandle) -> Result<(), String> {
-    delete_token()?;
+    delete_token(DEFAULT_ACCOUNT.into())?;
     let plan = uninstall_plan(app.clone());
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
     let bundle = plan.app_path.as_deref().map(Path::new);
@@ -299,6 +334,7 @@ pub fn run() {
             get_token,
             set_token,
             delete_token,
+            allow_host,
             gh_token,
             uninstall_plan,
             uninstall_run,
@@ -318,6 +354,28 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn host_filter() {
+        assert!(valid_host("ghe.example.com"));
+        assert!(valid_host("ghe.example.com:8443"));
+        assert!(valid_host("localhost"));
+        for bad in [
+            "",
+            "GHE.example.com",
+            "ghe.example.com/",
+            "*.example.com",
+            "user@ghe.example.com",
+            "ghe..example.com",
+            "-ghe.example.com",
+            "ghe.example.com:",
+            "ghe.example.com:123456",
+            "ghe.example.com:8443:1",
+            "ghe.example.com?x",
+        ] {
+            assert!(!valid_host(bad), "{bad}");
+        }
+    }
 
     #[test]
     fn safety_filter() {
