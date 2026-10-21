@@ -71,7 +71,7 @@ export async function reload() {
   // préchauffe la liste du panneau des repos (~1,5 Mo), au premier chargement seulement
   if (!data.fetchedAt) listRepos().catch(() => {})
   try {
-    const withPrs = await reposWithMyOpenPrs().catch(() => [] as string[])
+    const withPrs = await reposWithMyOpenPrs().catch(() => data.withPrs)
     let repos = getRepos()
     if (!repos) {
       // premier lancement : on suit d'office les repos où j'ai des PR ouvertes
