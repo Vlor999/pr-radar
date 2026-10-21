@@ -24,6 +24,7 @@ import {
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { authSource, CLIENT_ID, logout } from "@/lib/auth"
+import { useThumb } from "@/hooks/use-thumb"
 import {
   clearCache,
   reposWithMyOpenPrs,
@@ -447,12 +448,24 @@ function Segmented<T extends string | number>(props: {
   labelledBy: string
 }) {
   return (
+  const [box, thumb] = useThumb<HTMLDivElement>(
+    '[aria-checked="true"]',
+    props.value,
+  )
     <div
       role="radiogroup"
+      ref={box}
       aria-labelledby={props.labelledBy}
-      className="inline-flex flex-wrap rounded-lg border bg-muted p-0.5"
+      className="relative inline-flex flex-wrap rounded-lg border bg-muted p-0.5"
     >
       {props.options.map((o) => {
+      {thumb && (
+        <span
+          aria-hidden
+          style={thumb}
+          className="absolute rounded-md bg-background shadow-sm transition-[left,top,width,height] duration-200 ease-out motion-reduce:transition-none"
+        />
+      )}
         const active = o.value === props.value
         return (
           <button
@@ -462,9 +475,9 @@ function Segmented<T extends string | number>(props: {
             aria-checked={active}
             onClick={() => props.onChange(o.value)}
             className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/30 motion-reduce:transition-none [&_svg]:size-3.5",
+              "relative inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/30 motion-reduce:transition-none [&_svg]:size-3.5",
               active
-                ? "bg-background font-medium text-foreground shadow-sm"
+                ? "font-medium text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >

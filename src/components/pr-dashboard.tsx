@@ -33,6 +33,7 @@ import {
 import { SHORTCUTS, useKeyboardNav } from "@/hooks/use-keyboard-nav"
 import { usePrNotifications } from "@/hooks/use-pr-notifications"
 import { useSeen } from "@/hooks/use-seen"
+import { useThumb } from "@/hooks/use-thumb"
 import {
   descendants,
   filterTree,
@@ -205,6 +206,11 @@ export function PrDashboard({
   const updateState = useUpdate()
   const update = updateState.status === "available" ? updateState.version : null
   const [tab, setTab] = useState<"open" | "calendar">("open")
+  // la barre d'onglets disparaît pendant les réglages : re-mesurer à son retour
+  const [tabBox, underline] = useThumb<HTMLElement>(
+    '[aria-selected="true"]',
+    `${tab}:${showSettings}`,
+  )
   usePrNotifications(prs)
   const seen = useSeen(prs)
   useKeyboardNav()
@@ -393,10 +399,18 @@ export function PrDashboard({
         <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-6 lg:order-last">
             <nav
+              ref={tabBox}
               role="tablist"
               aria-label={t.view}
-              className="flex gap-1 border-b"
+              className="relative flex gap-1 border-b"
             >
+              {underline && (
+                <span
+                  aria-hidden
+                  style={{ left: underline.left, width: underline.width }}
+                  className="absolute -bottom-px h-0.5 bg-primary transition-[left,width] duration-200 ease-out motion-reduce:transition-none"
+                />
+              )}
               {TABS.map((tb) => (
                 <button
                   key={tb.id}
@@ -405,10 +419,10 @@ export function PrDashboard({
                   aria-selected={tab === tb.id}
                   onClick={() => setTab(tb.id)}
                   className={cn(
-                    "-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                    "-mb-px inline-flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-sm font-medium transition-colors",
                     tab === tb.id
-                      ? "border-primary text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground",
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   <tb.icon className="size-4" />

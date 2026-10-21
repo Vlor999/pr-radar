@@ -6,6 +6,7 @@ import { locale, strings, useStrings } from "@/lib/i18n"
 import type { MergedPr } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { useThumb } from "@/hooks/use-thumb"
 
 const PALETTE = [
   "bg-sky-500",
@@ -111,6 +112,10 @@ export function MergeCalendar() {
   const now = new Date()
   const todayKey = dayKey(now)
   const [view, setView] = useState<View>("month")
+  const [viewBox, thumb] = useThumb<HTMLDivElement>(
+    '[aria-pressed="true"]',
+    view,
+  )
   const [anchor, setAnchor] = useState(
     () => new Date(now.getFullYear(), now.getMonth(), now.getDate()),
   )
@@ -202,17 +207,31 @@ export function MergeCalendar() {
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <div
+          ref={viewBox}
           role="group"
           aria-label={t.viewLabel}
-          className="flex rounded-lg border p-0.5"
+          className="relative flex rounded-lg border p-0.5"
         >
+          {thumb && (
+            <span
+              aria-hidden
+              style={thumb}
+              className="absolute rounded-4xl bg-secondary transition-[left,top,width,height] duration-200 ease-out motion-reduce:transition-none"
+            />
+          )}
           {VIEWS.map((v) => (
             <Button
               key={v}
               size="sm"
-              variant={view === v ? "secondary" : "ghost"}
+              variant="ghost"
               aria-pressed={view === v}
               onClick={() => setView(v)}
+              className={cn(
+                // pas de décalage au clic : la pilule, elle, ne bouge pas
+                "relative active:not-aria-[haspopup]:translate-y-0",
+                view === v &&
+                  "text-secondary-foreground hover:bg-transparent hover:text-secondary-foreground dark:hover:bg-transparent",
+              )}
             >
               {t[v]}
             </Button>
