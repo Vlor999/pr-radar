@@ -740,7 +740,10 @@ function SlackSection() {
   useEffect(() => {
     if (!live || slackAll || convs) return
     setError("")
-    listConversations().then(setConvs, (e: unknown) => setError(message(e)))
+    // DM d'abord affichés avec l'id du destinataire, puis avec son nom
+    listConversations(setConvs).then(setConvs, (e: unknown) =>
+      setError(message(e)),
+    )
   }, [live, slackAll, convs])
 
   const connect = async () => {
@@ -1291,11 +1294,12 @@ function UninstallRow() {
   const run = async () => {
     setState("running")
     try {
+      // avant localStorage.clear() : la déconnexion réécrit les réglages ; révocation bornée à 5 s
+      await disconnectSlack() // jeton Slack révoqué et effacé du trousseau
       try {
         localStorage.clear() // réglages, repos suivis, marques « vu »
       } catch {}
       await forgetTokens() // un jeton par compte ; uninstall_run efface celui d'origine
-      await disconnectSlack() // jeton Slack révoqué et effacé du trousseau
       await invoke("uninstall_run") // jeton supprimé, nettoyage après fermeture, puis l'app quitte
     } catch (e) {
       setState("error")

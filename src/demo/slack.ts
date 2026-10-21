@@ -39,7 +39,9 @@ const CONVS: SlackConversation[] = [
   { id: "M1", name: "alice, bob", kind: "mpim" },
 ]
 
-export const listConversations = async () => CONVS
+export const listConversations = async (
+  _onNamed: (list: SlackConversation[]) => void,
+) => CONVS
 
 const ago = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
 const at = (
