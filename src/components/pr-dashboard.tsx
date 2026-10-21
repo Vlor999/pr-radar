@@ -21,6 +21,7 @@ import { SettingsPage } from "@/components/settings-page"
 import { UpdateBanner } from "@/components/update-banner"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
 import { getSettings, useSettings } from "@/lib/settings"
+import { refreshMentions, useSlack } from "@/lib/slack"
 import { RepoSection, type OpenState } from "@/components/repo-section"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -256,6 +257,13 @@ export function PrDashboard({
     isNew: seen.isNew,
     markSeen: seen.markSeen,
   }
+
+  // mentions Slack : relues avec chaque actualisation GitHub (cache 10 min par PR)
+  const slack = useSlack()
+  useEffect(
+    () => refreshMentions(prs),
+    [prs, slack, settings.slackAll, settings.slackChannels],
+  )
 
   // actualisation automatique (0 = manuelle) et au retour sur la fenêtre
   useEffect(() => {

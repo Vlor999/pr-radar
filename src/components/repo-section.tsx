@@ -3,7 +3,7 @@ import { ChevronRight, GitBranch, GitMerge, Trash2 } from "lucide-react"
 import { cn } from "cn"
 
 import { removeRepo } from "@/lib/actions"
-import { PrCard } from "@/components/pr-card"
+import { PrCard, SlackColumn } from "@/components/pr-card"
 import { ThreadColumn } from "@/components/thread-panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -189,6 +189,8 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
       {nodes.map((n) => {
         const key = `${n.repo}#${n.number}`
         const open = state.isOpen(key, false)
+        const slackOpen = state.isOpen(`${key}:slack`, false)
+        const threadsOpen = open && n.threads.length > 0
         return (
           <li
             key={n.number}
@@ -198,32 +200,63 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
               "not-last:after:absolute not-last:after:top-0 not-last:after:bottom-0 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-border",
             )}
           >
-            {/* carte dépliée : ses discussions ouvertes s'affichent dessous, même largeur que la carte */}
-            <div className="flex flex-col gap-3">
-              <div className="w-full max-w-xl">
-                <PrCard
-                  pr={n}
-                  open={open}
-                  isNew={state.isNew(n)}
-                  onOpenChange={(v) => {
-                    state.toggle(key, v)
-                    if (v) state.markSeen([n]) // déplier une carte = l'avoir vue
-                  }}
-                />
-              </div>
-              {open && n.threads.length > 0 && (
-                <div
-                  className={cn(
-                    "w-full max-w-xl min-w-0",
-                    // le rail continue sous les discussions jusqu'aux PR stackées.
-                    // Valeurs liées : left-2.5 = pl-7 - 4.5 (coudes -left-4.5 de Branches) ; -top-3 = gap-3 sous la carte.
-                    n.children.length > 0 &&
-                      "relative before:absolute before:-top-3 before:bottom-0 before:left-2.5 before:border-l-2 before:border-border",
-                  )}
-                >
-                  <ThreadColumn threads={n.threads} repo={n.repo} />
-                </div>
+            {/*
+              carte dépliée : ses discussions ouvertes s'affichent dessous, même largeur que la carte.
+              Le rail vers les PR stackées traverse tout ce bloc (messages Slack et discussions compris) ;
+              la carte, positionnée après lui, le recouvre. Valeurs liées : left-2.5 = pl-7 - 4.5 (coudes
+              -left-4.5 de Branches) ; top-6 : sous l'arrondi de la carte.
+            */}
+            <div
+              className={cn(
+                "@container relative flex flex-col gap-3",
+                n.children.length > 0 &&
+                  "before:absolute before:top-6 before:bottom-0 before:left-2.5 before:border-l-2 before:border-border",
               )}
+            >
+              {/*
+                Grille : à gauche la carte puis ses discussions, à droite les messages Slack (alignés en haut
+                sur la carte, sur la hauteur carte + discussions) quand le conteneur fait au moins 44rem
+                (carte 26 au minimum + écart 0,75 + colonne 16,25 + 1 de marge). Plus étroit : une seule
+                colonne, carte, Slack puis discussions, en retrait. Marge droite pr-4 : le panneau du repo est
+                en overflow-hidden (animation de hauteur) et couperait l'ombre d'une colonne collée à son bord.
+                Ligne 2 en 1fr : la hauteur de la colonne Slack va à cette ligne, pas entre carte et discussions.
+              */}
+              <div
+                className={cn(
+                  // --slack-w : 16,25rem, jusqu'à 22,5rem une fois la carte à sa largeur max (36rem).
+                  // Ouverture / fermeture : la colonne Slack passe de 0 à --slack-w, la carte se resserre en douceur.
+                  "grid gap-3 [--slack-w:clamp(16.25rem,calc(100cqw-37.75rem),22.5rem)] @[44rem]:grid-rows-[auto_1fr] @[44rem]:pr-4 @[44rem]:transition-[grid-template-columns] @[44rem]:duration-200 @[44rem]:ease-out motion-reduce:transition-none",
+                  slackOpen
+                    ? "@[44rem]:grid-cols-[minmax(0,36rem)_var(--slack-w)]"
+                    : "@[44rem]:grid-cols-[minmax(0,36rem)_0px]",
+                )}
+              >
+                <div className="relative w-full max-w-xl min-w-0 @[44rem]:col-start-1">
+                  <PrCard
+                    pr={n}
+                    open={open}
+                    isNew={state.isNew(n)}
+                    onOpenChange={(v) => {
+                      state.toggle(key, v)
+                      if (v) state.markSeen([n]) // déplier une carte = l'avoir vue
+                    }}
+                    slackOpen={slackOpen}
+                    onSlackToggle={() =>
+                      state.toggle(`${key}:slack`, !slackOpen)
+                    }
+                  />
+                </div>
+                <SlackColumn
+                  url={n.url}
+                  open={slackOpen}
+                  bridge={threadsOpen}
+                />
+                {threadsOpen && (
+                  <div className="w-full max-w-xl min-w-0 @[44rem]:col-start-1">
+                    <ThreadColumn threads={n.threads} repo={n.repo} />
+                  </div>
+                )}
+              </div>
             </div>
             {n.children.length > 0 && (
               <Branches nodes={n.children} state={state} />
