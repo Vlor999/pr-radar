@@ -115,7 +115,8 @@ const PRS: Pr[] = [
     deletions: 12,
     files: 14,
   }),
-  // repo public hors de listRepos() : visible dans le panneau, pas suivi d'office
+  // repo public hors de listRepos() : non suivi dans la démo (voir la graine plus bas),
+  // visible dans le panneau avec le point vert
   pr({
     repo: "globex/status-page",
     number: 23,
@@ -149,6 +150,15 @@ const MERGED: MergedPr[] = [
     mergedAt: ago(120),
   },
 ]
+
+// démo vierge : suit les repos à PR, sauf globex/status-page (même clé que src/lib/store.ts)
+try {
+  if (!localStorage.getItem("pr-radar:repos"))
+    localStorage.setItem(
+      "pr-radar:repos",
+      JSON.stringify(["acme/web", "acme/api", "globex/billing"]),
+    )
+} catch {}
 
 const has = (repos: string[]) => (r: string) =>
   repos.some((x) => x.toLowerCase() === r.toLowerCase())
