@@ -184,7 +184,7 @@ export function PrCard({
         <CollapsibleTrigger
           data-pr-card=""
           data-url={pr.url}
-          className="group flex w-full scroll-mt-16 flex-col gap-1.5 rounded-2xl px-4 py-3 text-left outline-none"
+          className="group flex w-full scroll-mt-16 flex-col gap-1.5 rounded-2xl px-4 pt-3 pb-1.5 text-left outline-none"
         >
           <div className="flex w-full items-baseline gap-2">
             <ChevronRight className="size-3.5 shrink-0 self-center text-muted-foreground transition-transform group-data-[panel-open]:rotate-90" />
@@ -216,83 +216,77 @@ export function PrCard({
               {t.files(pr.files)}
             </span>
           </div>
-          <div className="flex flex-wrap gap-1 pl-5.5">
-            {merge?.kind === "ready" && (
-              <Badge>
-                <GitMerge />
-                {t.readyToMerge}
-              </Badge>
-            )}
-            <Badge variant={STATUS[decision]}>{t.status[decision]}</Badge>
-            {pr.draft && <Badge variant="secondary">Draft</Badge>}
-            {ci && (
-              <Badge variant={ci.bad ? "destructive" : "outline"}>
-                {ci.label}
-              </Badge>
-            )}
-            {pr.conflicting && (
-              <Badge variant="destructive">{t.conflict}</Badge>
-            )}
-            {pr.comments > 0 && (
-              <Badge variant="outline">
-                <MessageSquare />
-                {pr.comments}
-              </Badge>
-            )}
-            {mentions.length > 0 && (
-              <Badge
-                variant="outline"
-                title={t.slackTitle}
-                role="button"
-                tabIndex={0}
-                aria-pressed={slackOpen}
-                // pastille dans le déclencheur de la carte : ouvre la colonne Slack, pas la carte
-                onClick={(e) => {
-                  e.stopPropagation()
-                  e.preventDefault()
-                  onSlackToggle()
-                }}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter" && e.key !== " ") return
-                  e.stopPropagation()
-                  e.preventDefault()
-                  onSlackToggle()
-                }}
-                className={cn(
-                  "cursor-pointer bg-background pl-1.5 hover:bg-muted dark:bg-muted",
-                  slackOpen && "ring-2 ring-ring/40",
-                )}
-              >
-                <SlackLogo />
-                {mentions.length}
-              </Badge>
-            )}
-            {pr.unresolved > 0 && (
-              <Badge variant="destructive">{t.unresolved(pr.unresolved)}</Badge>
-            )}
-            {merge?.kind === "blocked" && (
-              <Badge variant="secondary">
-                <GitPullRequestArrow />
-                {t.blockedBy(merge.by)}
-              </Badge>
-            )}
-            {pr.children.length > 0 && (
-              <Badge variant="secondary">
-                <GitPullRequestArrow />
-                {t.blocks(pr.children.length)}
-              </Badge>
-            )}
-            {isStale(pr, Date.now(), staleDays) && (
-              <Badge
-                variant="outline"
-                className="text-amber-700 dark:text-amber-400"
-              >
-                <Clock />
-                {t.inactive(idleDays(pr))}
-              </Badge>
-            )}
-          </div>
         </CollapsibleTrigger>
+        {/* pastilles hors du déclencheur : la pastille Slack est un vrai bouton, pas un interactif dans un
+            bouton. Un clic ailleurs sur la ligne replie / déplie la carte, comme avant. */}
+        <div
+          className="flex flex-wrap gap-1 pr-4 pb-3 pl-9.5"
+          onClick={(e) => {
+            if (!(e.target as Element).closest("button")) onOpenChange(!open)
+          }}
+        >
+          {merge?.kind === "ready" && (
+            <Badge>
+              <GitMerge />
+              {t.readyToMerge}
+            </Badge>
+          )}
+          <Badge variant={STATUS[decision]}>{t.status[decision]}</Badge>
+          {pr.draft && <Badge variant="secondary">Draft</Badge>}
+          {ci && (
+            <Badge variant={ci.bad ? "destructive" : "outline"}>
+              {ci.label}
+            </Badge>
+          )}
+          {pr.conflicting && <Badge variant="destructive">{t.conflict}</Badge>}
+          {pr.comments > 0 && (
+            <Badge variant="outline">
+              <MessageSquare />
+              {pr.comments}
+            </Badge>
+          )}
+          {mentions.length > 0 && (
+            <Badge
+              variant="outline"
+              title={t.slackTitle}
+              aria-label={`${t.slackTitle} (${mentions.length})`}
+              render={<button type="button" />}
+              aria-pressed={slackOpen}
+              onClick={onSlackToggle}
+              className={cn(
+                "cursor-pointer bg-background pl-1.5 hover:bg-muted dark:bg-muted",
+                slackOpen && "ring-2 ring-ring/40",
+              )}
+            >
+              <SlackLogo />
+              {mentions.length}
+            </Badge>
+          )}
+          {pr.unresolved > 0 && (
+            <Badge variant="destructive">{t.unresolved(pr.unresolved)}</Badge>
+          )}
+          {merge?.kind === "blocked" && (
+            <Badge variant="secondary">
+              <GitPullRequestArrow />
+              {t.blockedBy(merge.by)}
+            </Badge>
+          )}
+          {pr.children.length > 0 && (
+            <Badge variant="secondary">
+              <GitPullRequestArrow />
+              {t.blocks(pr.children.length)}
+            </Badge>
+          )}
+          {isStale(pr, Date.now(), staleDays) && (
+            <Badge
+              variant="outline"
+              className="text-amber-700 dark:text-amber-400"
+            >
+              <Clock />
+              {t.inactive(idleDays(pr))}
+            </Badge>
+          )}
+        </div>
         <CollapsibleContent>
           <div className="flex flex-col gap-3 border-t px-4 py-3 pl-10 text-sm">
             <ul className="flex flex-col gap-1">
