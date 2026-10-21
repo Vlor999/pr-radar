@@ -8,9 +8,10 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 const src = (p: string) => path.resolve(import.meta.dirname, "./src", p);
 
-// `npm run demo` : l'app dans un navigateur, Tauri et GitHub remplacés par src/demo/*
+// `npm run demo` : l'app dans un navigateur, Tauri, GitHub et Slack remplacés par src/demo/*
 const demoAlias = [
   { find: /^(\.\/|@\/lib\/)github$/, replacement: src("demo/github.ts") },
+  { find: /^@\/lib\/slack$/, replacement: src("demo/slack.ts") },
   { find: /^@tauri-apps\/(api\/(core|app)|plugin-.*)$/, replacement: src("demo/tauri.ts") },
 ];
 
