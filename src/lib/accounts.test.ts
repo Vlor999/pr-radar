@@ -11,6 +11,7 @@ import {
   newAccountId,
   normalizeHost,
   repoKey,
+  retryEmpty,
   savedAccounts,
   settle,
   sortReads,
@@ -141,4 +142,29 @@ test("tous les comptes en échec : la première erreur est levée", async () => 
     }),
     down,
   )
+})
+
+test("recherche vide à tort : relue jusqu'à obtenir des résultats", async () => {
+  const replies = [[], [], ["acme/web#1"]]
+  const res = await retryEmpty(2, async () => replies.shift()!)
+  assert.deepEqual(res, ["acme/web#1"])
+})
+
+test("recherche vraiment vide : vide après les relances, sans appel de plus", async () => {
+  let calls = 0
+  const res = await retryEmpty(2, async () => {
+    calls++
+    return []
+  })
+  assert.deepEqual(res, [])
+  assert.equal(calls, 3)
+})
+
+test("recherche non vide : un seul appel", async () => {
+  let calls = 0
+  await retryEmpty(2, async () => {
+    calls++
+    return ["acme/web#1"]
+  })
+  assert.equal(calls, 1)
 })
