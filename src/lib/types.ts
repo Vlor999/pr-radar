@@ -32,7 +32,8 @@ export type Pr = {
   deletions: number
   files: number
   reviews: { who: string; state: string }[]
-  requested: string[]
+  /** reviews demandées ; `team` : une équipe (nom affiché, pas un login) */
+  requested: { who: string; team?: boolean }[]
   updated: string
 }
 
