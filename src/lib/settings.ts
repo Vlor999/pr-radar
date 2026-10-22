@@ -2,7 +2,6 @@ import { useSyncExternalStore } from "react"
 
 import type { Lang } from "./i18n"
 import type { Who } from "./review"
-import type { Pr } from "./types"
 
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
 export type Settings = {
@@ -93,7 +92,7 @@ export const getSettings = () => current
 /** Notifier ce changement de la PR : type de changement coché, et PR non brouillon si `notifyDrafts` est décoché. */
 export const shouldNotify = (
   s: Settings,
-  pr: Pr,
+  pr: { draft: boolean },
   kind: keyof Settings["notify"],
 ) => s.notify[kind] && (s.notifyDrafts || !pr.draft)
 

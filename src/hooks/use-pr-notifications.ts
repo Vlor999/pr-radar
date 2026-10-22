@@ -113,9 +113,11 @@ export function useReviewNotifications(known: Reviews) {
   useEffect(() => {
     const before = previous.current
     previous.current = snapshot(known)
-    if (!before || !getSettings().notify.reviewRequested) return
+    if (!before) return
     const t = pick(S)
-    for (const p of newRequests(before, known.reviews))
+    for (const p of newRequests(before, known.reviews).filter((p) =>
+      shouldNotify(getSettings(), p, "reviewRequested"),
+    ))
       notify(
         t.title(
           reviewKey(p),

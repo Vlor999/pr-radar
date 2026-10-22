@@ -26,3 +26,10 @@ test("un type de changement décoché n'est pas notifié", () => {
   }
   assert.equal(shouldNotify(s, pr(false), "ciFailed"), false)
 })
+
+test("réglage brouillons décoché : une demande de review sur un brouillon n'est pas notifiée", () => {
+  assert.equal(
+    shouldNotify(noDrafts, { draft: true }, "reviewRequested"),
+    false,
+  )
+})
