@@ -99,6 +99,7 @@ function Dashboard() {
       prs={data.prs}
       trees={data.trees}
       withPrs={data.withPrs}
+      reviews={data.reviews}
       fetchedAt={data.fetchedAt || new Date().toISOString()}
       error={data.error}
     />

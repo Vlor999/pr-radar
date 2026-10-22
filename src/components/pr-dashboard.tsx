@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core"
 import {
   CalendarDays,
   CheckCheck,
+  Eye,
   GitPullRequest,
   PanelLeft,
   RefreshCw,
@@ -17,6 +18,7 @@ import { locale, pick, strings, useStrings } from "@/lib/i18n"
 import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
+import { ReviewList } from "@/components/review-list"
 import { SettingsPage } from "@/components/settings-page"
 import { UpdateBanner } from "@/components/update-banner"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
@@ -33,7 +35,10 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { SHORTCUTS, useKeyboardNav } from "@/hooks/use-keyboard-nav"
-import { usePrNotifications } from "@/hooks/use-pr-notifications"
+import {
+  usePrNotifications,
+  useReviewNotifications,
+} from "@/hooks/use-pr-notifications"
 import { useSeen } from "@/hooks/use-seen"
 import { useThumb } from "@/hooks/use-thumb"
 import {
@@ -45,11 +50,17 @@ import {
   needsAttention,
   sortTree,
 } from "@/lib/tree"
-import type { Pr, PrNode, RepoTree } from "@/lib/types"
+import { reviewCount } from "@/lib/review"
+import type { Pr, PrNode, RepoTree, ReviewPr } from "@/lib/types"
 
 const S = strings(
   {
-    tabs: { open: "PR ouvertes", calendar: "Calendrier des merges" },
+    tabs: {
+      open: "PR ouvertes",
+      review: "À reviewer",
+      calendar: "Calendrier des merges",
+    },
+    reviewCount: (n: number) => `${n} demandée${n > 1 ? "s" : ""} à toi`,
     filters: {
       all: "Toutes",
       attention: "À traiter",
@@ -96,7 +107,8 @@ const S = strings(
     },
   },
   {
-    tabs: { open: "Open PRs", calendar: "Merge calendar" },
+    tabs: { open: "Open PRs", review: "To review", calendar: "Merge calendar" },
+    reviewCount: (n: number) => `${n} requested from you`,
     filters: {
       all: "All",
       attention: "Needs action",
@@ -146,6 +158,7 @@ const S = strings(
 
 const TABS = [
   { id: "open", icon: GitPullRequest },
+  { id: "review", icon: Eye },
   { id: "calendar", icon: CalendarDays },
 ] as const
 
@@ -198,12 +211,14 @@ export function PrDashboard({
   prs,
   trees,
   withPrs,
+  reviews,
   fetchedAt,
   error,
 }: {
   prs: Pr[]
   trees: RepoTree[]
   withPrs: string[]
+  reviews: ReviewPr[]
   fetchedAt: string
   error?: string
 }) {
@@ -218,13 +233,15 @@ export function PrDashboard({
   const [showSettings, setShowSettings] = useState(false)
   const updateState = useUpdate()
   const update = updateState.status === "available" ? updateState.version : null
-  const [tab, setTab] = useState<"open" | "calendar">("open")
+  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("open")
   // la barre d'onglets disparaît pendant les réglages : re-mesurer à son retour
   const [tabBox, underline] = useThumb<HTMLElement>(
     '[aria-selected="true"]',
     `${tab}:${showSettings}`,
   )
   usePrNotifications(prs)
+  useReviewNotifications(reviews)
+  const toReview = reviewCount(reviews)
   // icône de la barre des menus : PR « À traiter » (même filtre que l'onglet)
   const attention = prs.filter(needsAttention).length
   useEffect(() => {
@@ -469,12 +486,17 @@ export function PrDashboard({
                 >
                   <tb.icon className="size-4" />
                   {t.tabs[tb.id]}
+                  {tb.id === "review" && toReview > 0 && (
+                    <Badge title={t.reviewCount(toReview)}>{toReview}</Badge>
+                  )}
                 </button>
               ))}
             </nav>
 
             {tab === "calendar" ? (
               <MergeCalendar />
+            ) : tab === "review" ? (
+              <ReviewList reviews={reviews} />
             ) : (
               <>
                 {error && (

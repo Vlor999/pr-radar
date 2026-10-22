@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 import type { Lang } from "./i18n"
+import type { Who } from "./review"
 
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
 export type Settings = {
@@ -30,6 +31,10 @@ export type Settings = {
   slackAll: boolean
   /** mentions Slack : ids des conversations cochées (ignorés si `slackAll`) */
   slackChannels: string[]
+  /** onglet « À reviewer » : chip Tout / Moi / Équipe */
+  reviewWho: Who
+  /** onglet « À reviewer » : masquer les demandes d'équipe déjà approuvées */
+  reviewHideApproved: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -49,6 +54,8 @@ export const DEFAULT_SETTINGS: Settings = {
   lang: null,
   slackAll: false,
   slackChannels: [],
+  reviewWho: "all",
+  reviewHideApproved: false,
 }
 
 const KEY = "pr-radar:settings"
@@ -65,6 +72,9 @@ function read(): Settings {
       notify: { ...DEFAULT_SETTINGS.notify, ...saved.notify },
       // valeur inconnue (édition à la main, version plus récente) : on repose la question
       lang: saved.lang === "fr" || saved.lang === "en" ? saved.lang : null,
+      reviewWho: ["all", "me", "team"].includes(saved.reviewWho ?? "")
+        ? saved.reviewWho!
+        : "all",
     }
   } catch {
     return DEFAULT_SETTINGS
