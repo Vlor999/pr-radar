@@ -1,0 +1,53 @@
+name: Cache keepalive
+
+# GitHub evicts a cache not read for 7 days: release builds then compile every
+# dependency from scratch (~11 min instead of ~6). Restoring the release caches
+# twice a week keeps them alive. No build, no save.
+on:
+  schedule:
+    - cron: '0 6 * * 1,4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # schedule and default dispatch run on the default branch (dev), which cannot
+  # read the caches of main where release.yml saves them: run again on main
+  dispatch:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run cache-keepalive.yml --repo "$GITHUB_REPOSITORY" --ref main
+
+  # same job id, toolchain and workspace as release.yml so the rust-cache key matches
+  release:
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+          - platform: windows-latest
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      # save-if false: a miss must never store an empty cache under the release key
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: './src-tauri -> target'
+          key: ${{ matrix.target }}
+          save-if: false
