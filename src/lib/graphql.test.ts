@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { gqlFailed } from "./graphql.ts"
+import { gqlFailed, gqlMessage } from "./graphql.ts"
 
 const errors = [{ message: "Resource not accessible by integration" }]
 
@@ -29,4 +29,16 @@ test("un champ racine null sans errors est gardé", () => {
 
 test("un champ racine null avec errors vide est gardé", () => {
   assert.equal(gqlFailed({ data: { x: null }, errors: [] }), false)
+})
+
+test("le message d'échec joint les erreurs de GitHub", () => {
+  assert.equal(
+    gqlMessage({ errors: [{ message: "a" }, { message: "b" }] }, "HTTP 200"),
+    "a ; b",
+  )
+})
+
+test("sans erreur, le message d'échec retombe sur le statut HTTP", () => {
+  assert.equal(gqlMessage({ errors: [] }, "HTTP 502"), "HTTP 502")
+  assert.equal(gqlMessage({}, "HTTP 502"), "HTTP 502")
 })

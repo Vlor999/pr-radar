@@ -12,3 +12,7 @@ export type GqlResponse = {
  */
 export const gqlFailed = ({ data, errors }: GqlResponse) =>
   !data || (!!errors?.length && Object.values(data).some((v) => v === null))
+
+/** Message d'échec : les erreurs de GitHub, sinon `fallback` (statut HTTP). */
+export const gqlMessage = ({ errors }: GqlResponse, fallback: string) =>
+  errors?.map((e) => e.message).join(" ; ") || fallback

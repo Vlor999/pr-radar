@@ -12,7 +12,7 @@ import {
   type AccountError,
 } from "./accounts"
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
-import { gqlFailed, type GqlResponse } from "./graphql"
+import { gqlFailed, gqlMessage, type GqlResponse } from "./graphql"
 import { pick, strings } from "./i18n"
 import { trackQuota } from "./quota"
 import type { Decision, MergedPr, Pr, Thread } from "./types"
@@ -93,10 +93,7 @@ async function gql<T>(
   if (res.status === 401) throw new AuthError(pick(S).tokenRejected, c.account)
   const json = (await res.json()) as GqlResponse
   if (gqlFailed(json))
-    throw new Error(
-      json.errors?.map((e) => e.message).join(" ; ") ||
-        pick(S).http(res.status),
-    )
+    throw new Error(gqlMessage(json, pick(S).http(res.status)))
   return json.data as T
 }
 
