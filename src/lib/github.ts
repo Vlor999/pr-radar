@@ -6,6 +6,7 @@ import {
   GITHUB,
   graphqlUrl,
   repoKey,
+  retryEmpty,
   settle,
   splitKey,
   type Account,
@@ -24,6 +25,9 @@ const REPOS_PER_QUERY = 5 // une requête de recherche GitHub est limitée en lo
 const MAX_BODY = 4000 // caractères gardés par message de discussion
 const HUNK_LINES = 8 // GitHub montre aussi la fin du hunk, qui se termine sur la ligne commentée
 const ASSIGNABLE_PAGE = 20 // assez pour un popover ; la recherche affine au-delà
+// la recherche GitHub renvoie parfois 0 résultat sans erreur (~1 appel sur 3) : un vide est relu avant d'être cru.
+// Reste ~1/27 par recherche (un lot de 5 repos), absorbé par `keepVanished` dans store.reload.
+const EMPTY_SEARCH_RETRIES = 2
 
 const S = strings(
   {
@@ -194,18 +198,26 @@ const chunk = <T>(xs: T[], n: number) =>
     xs.slice(i * n, (i + 1) * n),
   )
 
-/** Tous les résultats d'une recherche GraphQL, page par page. */
-async function searchAll<N>(c: Conn, query: string, q: string): Promise<N[]> {
-  const out: N[] = []
-  let after: string | null = null
-  do {
-    const { search }: Page<N> = await gql<Page<N>>(c, query, { q, after })
-    out.push(
-      ...search.nodes.filter((n): n is N => !!n && Object.keys(n).length > 0),
-    )
-    after = search.pageInfo.hasNextPage ? search.pageInfo.endCursor : null
-  } while (after)
-  return out
+/** Tous les résultats d'une recherche GraphQL, page par page. Résultat vide : relu `retries` fois
+ * (seule la page 1 est vérifiée : une page suivante vide à tort tronque la liste sans erreur). */
+async function searchAll<N>(
+  c: Conn,
+  query: string,
+  q: string,
+  retries = EMPTY_SEARCH_RETRIES,
+): Promise<N[]> {
+  return retryEmpty(retries, async () => {
+    const out: N[] = []
+    let after: string | null = null
+    do {
+      const { search }: Page<N> = await gql<Page<N>>(c, query, { q, after })
+      out.push(
+        ...search.nodes.filter((n): n is N => !!n && Object.keys(n).length > 0),
+      )
+      after = search.pageInfo.hasNextPage ? search.pageInfo.endCursor : null
+    } while (after)
+    return out
+  })
 }
 
 /** Login du compte connecté (sert aussi à valider un jeton avant de l'enregistrer). */
@@ -397,6 +409,7 @@ export function fetchMerged(
             nodes { ... on PullRequest { number title url mergedAt repository { nameWithOwner } } } } }`,
                 `is:pr is:merged author:@me merged:${from}..${to} ` +
                   c.map((r) => "repo:" + r).join(" "),
+                0, // aucun merge sur la période est courant : pas de relance
               ),
             ),
           )
