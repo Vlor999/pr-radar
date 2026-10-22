@@ -8,6 +8,7 @@ import {
 } from "@/lib/accounts"
 import { allAccounts } from "@/lib/auth"
 import { trackQuota } from "@/lib/quota"
+import type { Reviewer } from "@/lib/reviewers"
 import type { MergedPr, Pr, Thread } from "@/lib/types"
 
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
@@ -273,3 +274,33 @@ export const viewerProfile = async (_a: Account): Promise<Profile> => ({
   avatarUrl: "https://github.com/identicons/me.png",
   url: "#",
 })
+
+const DEMO_USERS = ["alice", "bob", "carol", "dave", "erin", "frank"]
+const user = (login: string): Reviewer => ({ login, id: `U_${login}` })
+export const fetchReviewerOptions = async (
+  repo: string,
+  number: number,
+  query: string,
+) => ({
+  prId: `${repo}#${number}`,
+  viewer: "me",
+  suggested: ["bob", "carol"].map(user),
+  assignable: ["me", ...DEMO_USERS]
+    .filter((l) => l.includes(query.toLowerCase()))
+    .map(user),
+})
+export const requestReviewer = async (
+  prId: string,
+  userId: string,
+  repo: string,
+) => {
+  // « dave » montre l'erreur d'un jeton sans droit d'écriture
+  if (userId === "U_dave")
+    throw new Error(
+      "Impossible de demander la review : il faut le droit d'écriture sur les pull requests de ce repo",
+    )
+  // la demande apparaît sur la carte au rechargement qui suit
+  const p = PRS.find((p) => `${p.repo}#${p.number}` === prId)
+  p?.requested.push({ who: userId.slice(2) })
+  console.info("[demo] request review", prId, userId, repo)
+}

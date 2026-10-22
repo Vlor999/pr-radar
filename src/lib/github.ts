@@ -14,6 +14,7 @@ import {
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
 import { pick, strings } from "./i18n"
 import { trackQuota } from "./quota"
+import type { Reviewer } from "./reviewers"
 import type { Decision, MergedPr, Pr, Thread } from "./types"
 
 const CACHE_TTL_MS = 60_000
@@ -22,6 +23,7 @@ const PAGE_SIZE = 20 // le coût GraphQL suit les bornes demandées, pas les nœ
 const REPOS_PER_QUERY = 5 // une requête de recherche GitHub est limitée en longueur et en opérateurs
 const MAX_BODY = 4000 // caractères gardés par message de discussion
 const HUNK_LINES = 8 // GitHub montre aussi la fin du hunk, qui se termine sur la ligne commentée
+const ASSIGNABLE_PAGE = 20 // assez pour un popover ; la recherche affine au-delà
 
 const S = strings(
   {
@@ -33,6 +35,8 @@ const S = strings(
     invalidName: (repo: string) =>
       `Nom invalide : « ${repo} » (attendu : owner/repo)`,
     notFound: (repo: string) => `Repo introuvable ou inaccessible : ${repo}`,
+    cannotRequest:
+      "Impossible de demander la review : il faut le droit d'écriture sur les pull requests de ce repo",
   },
   {
     notSignedIn: "Not signed in",
@@ -43,6 +47,8 @@ const S = strings(
     invalidName: (repo: string) =>
       `Invalid name: "${repo}" (expected: owner/repo)`,
     notFound: (repo: string) => `Repo not found or inaccessible: ${repo}`,
+    cannotRequest:
+      "Could not request the review: write access to this repo's pull requests is required",
   },
 )
 
@@ -478,4 +484,69 @@ export async function viewerProfile(a: Account): Promise<Profile> {
       "{ viewer { login name avatarUrl url } }",
     )
   ).viewer
+}
+
+const accountOf = (repo: string) => {
+  const a = findAccount(splitKey(repo).account)
+  if (!a) throw new AuthError(pick(S).notSignedIn)
+  return a
+}
+
+/** Reviewers possibles d'une de mes PR : suggestions GitHub, puis utilisateurs assignables filtrés par `query`. */
+export async function fetchReviewerOptions(
+  repo: string,
+  number: number,
+  query: string,
+): Promise<{
+  prId: string
+  viewer: string
+  suggested: Reviewer[]
+  assignable: Reviewer[]
+}> {
+  const [owner, name] = splitKey(repo).name.split("/")
+  const res = await gql<{
+    viewer: { login: string }
+    repository: {
+      pullRequest: {
+        id: string
+        suggestedReviewers: { reviewer: Reviewer }[]
+      }
+      assignableUsers: { nodes: Reviewer[] }
+    }
+  }>(
+    conn(accountOf(repo)),
+    `query($owner: String!, $name: String!, $number: Int!, $q: String) {
+      viewer { login }
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) { id suggestedReviewers { reviewer { login id } } }
+        assignableUsers(first: ${ASSIGNABLE_PAGE}, query: $q) { nodes { login id } }
+      }
+    }`,
+    { owner, name, number, q: query || null },
+  )
+  return {
+    prId: res.repository.pullRequest.id,
+    viewer: res.viewer.login,
+    suggested: res.repository.pullRequest.suggestedReviewers.map(
+      (s) => s.reviewer,
+    ),
+    assignable: res.repository.assignableUsers.nodes,
+  }
+}
+
+/** Demande une review à un utilisateur ; `union` garde les demandes déjà en cours. */
+export async function requestReviewer(
+  prId: string,
+  userId: string,
+  repo: string,
+) {
+  const res = await gql<{
+    requestReviews: { pullRequest: { id: string } } | null
+  }>(
+    conn(accountOf(repo)),
+    "mutation($pr: ID!, $user: ID!) { requestReviews(input: { pullRequestId: $pr, userIds: [$user], union: true }) { pullRequest { id } } }",
+    { pr: prId, user: userId },
+  )
+  // GitHub répond `data.requestReviews: null` + `errors` quand le jeton n'a pas le droit d'écriture
+  if (!res.requestReviews) throw new Error(pick(S).cannotRequest)
 }

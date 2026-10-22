@@ -10,6 +10,7 @@ import {
   fetchMerged,
   listRepos,
   replyToThread,
+  requestReviewer,
   resolveRepo,
 } from "./github"
 import { getRepos, reload, setRepos } from "./store"
@@ -117,4 +118,20 @@ export async function mergedBetween(
   } catch (e) {
     return { prs: [], error: message(e) }
   }
+}
+
+/** Demande une review sur une de mes PR, puis relit GitHub pour afficher la demande. */
+export async function addReviewer(
+  prId: string,
+  userId: string,
+  repo: string,
+): Promise<{ error?: string }> {
+  try {
+    await requestReviewer(prId, userId, repo)
+  } catch (e) {
+    return { error: message(e) }
+  }
+  clearCache()
+  await reload()
+  return {}
 }
