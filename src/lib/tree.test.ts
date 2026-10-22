@@ -85,6 +85,22 @@ test("le stack natif GitHub l'emporte sur les branches", () => {
   assert.equal(root.children[0].children[0].parent, 1)
 })
 
+test("le stack natif l'emporte sur une base qui pointe vers une autre PR", () => {
+  const stack = (position: number) => ({ number: 9, position, size: 2 })
+  const [root] = buildTree([
+    pr(1, "a", "main", { stack: stack(1) }),
+    pr(2, "b", "main"),
+    pr(3, "c", "b", { stack: stack(2) }),
+  ])
+  const n1 = root.children.find((n) => n.number === 1)!
+  const n2 = root.children.find((n) => n.number === 2)!
+  assert.deepEqual(
+    n1.children.map((c) => [c.number, c.parent]),
+    [[3, 1]],
+  )
+  assert.deepEqual(n2.children, [])
+})
+
 test("sans la PR d'en dessous du stack natif, les branches décident", () => {
   const [root] = buildTree([
     pr(1, "a", "main"),
