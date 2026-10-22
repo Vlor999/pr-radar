@@ -6,6 +6,7 @@ import {
   filterTree,
   isStacked,
   isStale,
+  keepVanished,
   mergeState,
   sortTree,
 } from "./tree.ts"
@@ -213,4 +214,25 @@ test("le tri s'applique à chaque niveau sans casser les stacks", () => {
     root.children[0].children.map((n) => n.number),
     [3, 4],
   )
+})
+
+test("repo vide d'un coup : ses PR sont gardées un cycle", () => {
+  const before = [pr(1, "a", "main"), pr(2, "b", "main", { repo: "o/s" })]
+  const res = keepVanished(before, [before[1]], new Set(), ["o/r", "o/s"])
+  assert.deepEqual(
+    res.prs.map((p) => p.number),
+    [2, 1],
+  )
+  assert.deepEqual([...res.held], ["o/r"])
+})
+
+test("repo vide deux fois de suite : ses PR disparaissent", () => {
+  const res = keepVanished([pr(1, "a", "main")], [], new Set(["o/r"]), ["o/r"])
+  assert.deepEqual(res.prs, [])
+  assert.equal(res.held.size, 0)
+})
+
+test("repo plus suivi : ses PR ne sont pas gardées", () => {
+  const res = keepVanished([pr(1, "a", "main")], [], new Set(), [])
+  assert.deepEqual(res.prs, [])
 })
