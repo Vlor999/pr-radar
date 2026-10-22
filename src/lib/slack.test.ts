@@ -7,7 +7,9 @@ import {
   isAuthError,
   matchesState,
   mentionsUrl,
+  mergeQueue,
   needsRefresh,
+  nextReadAt,
   pkceChallenge,
   rateLimitWait,
   sameState,
@@ -204,4 +206,31 @@ test("un retour OAuth avec un autre state est ignoré", () => {
   assert.ok(matchesState("code=1.2&state=abc", "abc"))
   assert.ok(!matchesState("code=1.2&state=forged", "abc"))
   assert.ok(!matchesState("code=1.2", "abc"))
+})
+
+const PR13 = "https://github.com/acme/web/pull/13"
+const PR14 = "https://github.com/acme/web/pull/14"
+
+test("une actualisation pendant la lecture ajoute les PR à la suite de la file, sans doublon", () => {
+  assert.deepEqual(mergeQueue([URL, PR13], [PR13, PR14, PR14], null), [
+    URL,
+    PR13,
+    PR14,
+  ])
+})
+
+test("la PR en cours de lecture n'est pas remise dans la file", () => {
+  assert.deepEqual(mergeQueue([PR13], [URL, PR14], URL), [PR13, PR14])
+})
+
+test("prochaine relecture : plus ancienne lecture des PR affichées + 10 min", () => {
+  const cache = new Map([
+    [URL, { at: 2_000 }],
+    [PR13, { at: 1_000 }], // PR fermée, plus affichée
+  ])
+  assert.equal(nextReadAt([URL, PR14], cache), 2_000 + 10 * 60_000)
+})
+
+test("aucune PR affichée encore lue : pas de prochaine relecture", () => {
+  assert.equal(nextReadAt([PR14], new Map([[URL, { at: 1_000 }]])), null)
 })

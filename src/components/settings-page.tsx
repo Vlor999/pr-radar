@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core"
 import { cn } from "cn"
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   ExternalLink,
   Loader2,
@@ -45,8 +46,10 @@ import { getRepos, reload, setRepos } from "@/lib/store"
 import {
   connectSlack,
   disconnectSlack,
+  forceRefreshMentions,
   listConversations,
   useSlack,
+  useSlackProgress,
 } from "@/lib/slack"
 import type { SlackConversation } from "@/lib/types"
 
@@ -106,6 +109,13 @@ const S = strings(
       expired: "Session expirée",
       timeout: "Délai dépassé, recommence la connexion.",
       disconnect: "Déconnecter",
+      mentions: "Mentions",
+      refresh: "Actualiser",
+      progress: (done: number, total: number) => `${done}/${total} PR`,
+      refreshed: "Mentions relues",
+      none: "Aucune PR lue pour l'instant.",
+      next: (time: string) =>
+        `Relecture auto : dès ${time}, à la prochaine actualisation GitHub.`,
       privacy:
         "Lecture seule, jetons dans le trousseau du système, messages lus uniquement sur ta machine. Ton admin Slack peut devoir approuver l'app : Slack propose alors de demander l'installation.",
       all: "Toutes les conversations (actuelles et futures)",
@@ -283,6 +293,14 @@ const S = strings(
       expired: "Session expired",
       timeout: "Timed out, start the sign-in again.",
       disconnect: "Disconnect",
+      mentions: "Mentions",
+      refresh: "Refresh",
+      progress: (done: number, total: number) =>
+        `${done}/${total} PR${total > 1 ? "s" : ""}`,
+      refreshed: "Mentions re-read",
+      none: "No PR read yet.",
+      next: (time: string) =>
+        `Auto re-read: from ${time}, on the next GitHub refresh.`,
       privacy:
         "Read-only, tokens in the system keychain, messages read on your machine only. Your Slack admin may have to approve the app: Slack then offers to request the install.",
       all: "All conversations (current and future)",
@@ -417,6 +435,8 @@ const S = strings(
   },
 )
 
+/** durée de la coche après une relecture forcée des mentions */
+const CHECK_MS = 1_500
 const DOWNLOAD_URL = "https://vlor999.github.io/pr-radar/"
 const REPO_URL = "https://github.com/Vlor999/pr-radar"
 
@@ -732,6 +752,7 @@ function SlackSection() {
   const t = useStrings(S)
   const { team, expired, error: searchError } = useSlack()
   const { slackAll, slackChannels } = useSettings()
+  const progress = useSlackProgress()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [convs, setConvs] = useState<SlackConversation[] | null>(null)
@@ -826,6 +847,27 @@ function SlackSection() {
         )}
         {live && (
           <Row
+            label={t.slack.mentions}
+            description={
+              progress.nextAt
+                ? t.slack.next(
+                    new Date(progress.nextAt).toLocaleTimeString(locale(), {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }),
+                  )
+                : t.slack.none
+            }
+          >
+            <SlackRefreshButton
+              label={t.slack.refresh}
+              progress={t.slack.progress}
+              refreshed={t.slack.refreshed}
+            />
+          </Row>
+        )}
+        {live && (
+          <Row
             label={t.slack.all}
             labelId="slack-all-label"
             description={t.slack.allDescription}
@@ -883,6 +925,68 @@ function SlackSection() {
         )}
       </>
     </Section>
+  )
+}
+
+/** Relecture des mentions : le bouton se remplit (n/total), puis une coche s'affiche 1,5 s après une lecture complète. */
+function SlackRefreshButton(props: {
+  label: string
+  progress: (done: number, total: number) => string
+  refreshed: string
+}) {
+  const { running, done, total, known, completedAt } = useSlackProgress()
+  const [checked, setChecked] = useState(false)
+  useEffect(() => {
+    const wait = (completedAt ?? 0) + CHECK_MS - Date.now()
+    if (wait <= 0) return
+    setChecked(true)
+    const id = window.setTimeout(() => setChecked(false), wait)
+    return () => window.clearTimeout(id)
+  }, [completedAt])
+
+  // une nouvelle lecture efface la coche
+  const finished = checked && !running
+  const shown = running || finished
+  const text = props.progress(done, total)
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!known || shown}
+        aria-busy={running}
+        onClick={forceRefreshMentions}
+        className={cn(
+          "relative overflow-hidden tabular-nums",
+          shown && "disabled:opacity-100",
+        )}
+      >
+        {shown && (
+          <span
+            className="absolute inset-y-0 left-0 bg-primary/20 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+            style={{ width: `${total ? (done / total) * 100 : 0}%` }}
+          />
+        )}
+        {finished ? (
+          <Check
+            data-icon="inline-start"
+            className="relative text-green-600 animate-in zoom-in-50 fade-in duration-300 motion-reduce:animate-none dark:text-green-400"
+          />
+        ) : (
+          <RefreshCw
+            data-icon="inline-start"
+            className={cn(
+              "relative",
+              running && "animate-spin motion-reduce:animate-none",
+            )}
+          />
+        )}
+        <span className="relative">{shown ? text : props.label}</span>
+      </Button>
+      <span className="sr-only" aria-live="polite">
+        {running ? text : finished ? props.refreshed : ""}
+      </span>
+    </>
   )
 }
 

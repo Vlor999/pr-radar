@@ -37,6 +37,9 @@ const REPOS = [
   "me/blog",
 ]
 
+/** URL github.com fictive : affiche les avatars, clés de liste distinctes */
+const COMMENT_URL = "https://github.com/acme/web/pull/1#discussion_"
+
 const thread = (id: string, path: string, body: string): Thread => ({
   id,
   path,
@@ -44,8 +47,13 @@ const thread = (id: string, path: string, body: string): Thread => ({
   outdated: false,
   hunk: "@@ -38,6 +38,8 @@\n   const user = await getUser(id)\n-  return user\n+  if (!user) throw new NotFound()\n+  return user",
   comments: [
-    { author: "alice", body, url: "#", at: ago(5) },
-    { author: "me", body: "Bonne idée, je corrige.", url: "#", at: ago(3) },
+    { author: "alice", body, url: `${COMMENT_URL}${id}-1`, at: ago(5) },
+    {
+      author: "me",
+      body: "Bonne idée, je corrige.",
+      url: `${COMMENT_URL}${id}-2`,
+      at: ago(3),
+    },
   ],
 })
 
@@ -64,7 +72,7 @@ const pr = (p: Partial<Pr> & Pick<Pr, "repo" | "number" | "title">): Pr => ({
   deletions: 30,
   files: 6,
   reviews: [],
-  requested: ["alice"],
+  requested: [{ who: "alice" }],
   updated: ago(2),
   ...p,
 })
