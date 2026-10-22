@@ -274,9 +274,13 @@ function toPr(p: RawPr, login: string, account: string): Pr {
     reviews: p.latestOpinionatedReviews.nodes
       .filter((r) => r.author)
       .map((r) => ({ who: r.author!.login, state: r.state })),
-    requested: p.reviewRequests.nodes
-      .map((r) => r.requestedReviewer?.login ?? r.requestedReviewer?.name)
-      .filter((x): x is string => !!x),
+    requested: p.reviewRequests.nodes.flatMap(({ requestedReviewer: r }) =>
+      r?.login
+        ? [{ who: r.login }]
+        : r?.name
+          ? [{ who: r.name, team: true }]
+          : [],
+    ),
     updated: p.updatedAt,
   }
 }

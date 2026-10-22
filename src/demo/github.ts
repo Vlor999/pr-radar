@@ -72,7 +72,7 @@ const pr = (p: Partial<Pr> & Pick<Pr, "repo" | "number" | "title">): Pr => ({
   deletions: 30,
   files: 6,
   reviews: [],
-  requested: ["alice"],
+  requested: [{ who: "alice" }],
   updated: ago(2),
   ...p,
 })

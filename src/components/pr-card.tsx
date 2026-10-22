@@ -298,9 +298,10 @@ export function PrCard({
                   </Badge>
                 </li>
               ))}
-              {pr.requested.map((who) => (
+              {pr.requested.map(({ who, team }) => (
                 <li key={who} className="flex items-center gap-2">
-                  <Avatar login={who} url={pr.url} />
+                  {/* équipe : pas d'avatar par login, l'initiale */}
+                  <Avatar login={who} url={team ? undefined : pr.url} />
                   <span className="min-w-0 flex-1 truncate font-medium">
                     {who}
                   </span>
