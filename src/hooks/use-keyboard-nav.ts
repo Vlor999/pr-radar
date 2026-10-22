@@ -78,7 +78,8 @@ export function useKeyboardNav(): void {
           if (onCard && active!.dataset.url) openExternal(active!.dataset.url)
           break
         case "e":
-          if (onCard) active!.click()
+          // ligne de l'onglet « À reviewer » : un lien, rien à déplier
+          if (onCard && !active!.matches("a")) active!.click()
           break
       }
     }
