@@ -12,8 +12,21 @@ permissions:
   contents: read
 
 jobs:
+  # schedule and default dispatch run on the default branch (dev), which cannot
+  # read the caches of main where release.yml saves them: run again on main
+  dispatch:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run cache-keepalive.yml --repo "$GITHUB_REPOSITORY" --ref main
+
   # same job id, toolchain and workspace as release.yml so the rust-cache key matches
   release:
+    if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
