@@ -13,7 +13,7 @@ import {
 } from "./accounts"
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
 import { pick, strings } from "./i18n"
-import { queryFor } from "./pr-query"
+import { isStackFieldError, queryFor } from "./pr-query"
 import { trackQuota } from "./quota"
 import type { Decision, MergedPr, Pr, Thread } from "./types"
 
@@ -314,6 +314,9 @@ const perFollowed = <T>(
   )
 }
 
+// comptes dont GitHub a refusé `stackEntry` : la session continue sans les stacks natifs
+const withoutStack = new Set<string>()
+
 /** Mes PR ouvertes ; `errors` : comptes en échec, les autres sont gardés. */
 export function fetchPrs(
   repos: string[],
@@ -322,13 +325,18 @@ export function fetchPrs(
     perFollowed(repos, async (a, names) => {
       const login = await me(a)
       const parts = await Promise.all(
-        chunk(names, REPOS_PER_QUERY).map((c) =>
-          searchAll<RawPr>(
-            conn(a),
-            queryFor(a.host),
-            "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" "),
-          ),
-        ),
+        chunk(names, REPOS_PER_QUERY).map((c) => {
+          const q =
+            "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" ")
+          const skip = withoutStack.has(a.id)
+          return searchAll<RawPr>(conn(a), queryFor(a.host, skip), q).catch(
+            (e) => {
+              if (skip || !isStackFieldError(e)) throw e
+              withoutStack.add(a.id)
+              return searchAll<RawPr>(conn(a), queryFor(a.host, true), q)
+            },
+          )
+        }),
       )
       return parts.flat().map((p) => toPr(p, login, a.id))
     }),

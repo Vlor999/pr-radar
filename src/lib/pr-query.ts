@@ -23,5 +23,9 @@ query($q: String!, $after: String) {
 }`
 // stacks natifs (preview GitHub.com, juillet 2026) : champ absent du schéma GHES, la requête y échouerait
 const STACK = "stackEntry { position stack { number size } }"
-export const queryFor = (host: string) =>
-  QUERY.replace("STACK", host === GITHUB ? STACK : "")
+/** `withoutStack` : GitHub a déjà refusé le champ pour ce compte. */
+export const queryFor = (host: string, withoutStack = false) =>
+  QUERY.replace("STACK", host === GITHUB && !withoutStack ? STACK : "")
+/** Erreur de validation GraphQL sur le champ des stacks natifs (preview retirée, compte sans accès). */
+export const isStackFieldError = (e: unknown) =>
+  e instanceof Error && e.message.includes("stackEntry")
