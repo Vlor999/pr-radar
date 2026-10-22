@@ -11,7 +11,7 @@ import {
 } from "./github"
 import { mergeReviews, type Reviews } from "./review"
 import { getSettings } from "./settings"
-import { buildTree } from "./tree"
+import { buildTree, keepVanished } from "./tree"
 import type { MergedPr, Pr, RepoTree } from "./types"
 
 /* ---------- Repos suivis : gardés dans la fenêtre de l'app (localStorage) ---------- */
@@ -62,6 +62,7 @@ let data: Data = {
 }
 const listeners = new Set<() => void>()
 let seq = 0
+let held = new Set<string>() // repos dont les PR sont gardées malgré une recherche vide
 
 function set(next: Data) {
   data = next
@@ -90,13 +91,13 @@ export async function reload() {
     if (!repos) {
       // premier lancement : on suit d'office les repos où j'ai des PR ouvertes
       repos = withPrs
-      setRepos(repos)
+      if (repos.length) setRepos(repos) // vide peut-être à tort : relu au prochain chargement
     }
     // repos d'un compte déconnecté : gardés dans la liste, pas affichés
     repos = repos.filter((r) => findAccount(splitKey(r).account))
     const now = new Date()
     const queried = allAccounts()
-    const [{ data: prs, errors }, recent, found] = await Promise.all([
+    const [{ data: fetched, errors }, recent, found] = await Promise.all([
       fetchPrs(repos),
       fetchMerged(
         repos,
@@ -119,6 +120,10 @@ export async function reload() {
     ]
     // compte en échec (les autres ont répondu) : ses repos sont masqués, l'erreur le nomme
     const failed = new Set(errors.map((e) => e.account.id))
+    const live = repos.filter((r) => !failed.has(splitKey(r).account))
+    const kept = keepVanished(data.prs, fetched, held, live)
+    held = kept.held
+    const prs = kept.prs
     set({
       prs,
       withPrs,
@@ -129,13 +134,11 @@ export async function reload() {
         found.errors.map((e) => e.account.id),
       ),
       error: shown.length ? describeErrors(shown).slice(0, 300) : undefined,
-      trees: repos
-        .filter((r) => !failed.has(splitKey(r).account))
-        .map((repo) => ({
-          repo,
-          roots: buildTree(prs.filter((p) => p.repo === repo)),
-          merged: recent.filter((p) => p.repo === repo),
-        })),
+      trees: live.map((repo) => ({
+        repo,
+        roots: buildTree(prs.filter((p) => p.repo === repo)),
+        merged: recent.filter((p) => p.repo === repo),
+      })),
       fetchedAt: now.toISOString(),
       loading: false,
     })
