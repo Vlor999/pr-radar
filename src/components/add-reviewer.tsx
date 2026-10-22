@@ -41,6 +41,11 @@ export function AddReviewer({ pr }: { pr: Pr }) {
   } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string>()
+  // clé stable : le tableau change d'identité à chaque rechargement
+  const requested = pr.requested
+    .filter((r) => !r.team)
+    .map((r) => r.who)
+    .join(",")
 
   useEffect(() => {
     if (!open) return
@@ -54,7 +59,7 @@ export function AddReviewer({ pr }: { pr: Pr }) {
               prId: o.prId,
               users: reviewerCandidates(o.suggested, o.assignable, [
                 o.viewer,
-                ...pr.requested.filter((r) => !r.team).map((r) => r.who),
+                ...requested.split(","),
               ]),
             })
             setError(undefined)
@@ -68,7 +73,7 @@ export function AddReviewer({ pr }: { pr: Pr }) {
       live = false
       clearTimeout(id)
     }
-  }, [open, query, pr.repo, pr.number, pr.requested])
+  }, [open, query, pr.repo, pr.number, requested])
 
   async function pick(u: Reviewer) {
     if (!options || busy) return
