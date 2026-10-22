@@ -67,6 +67,22 @@ export const dueUrls = (
   now: number,
 ) => urls.filter((u) => (cache.get(u)?.at ?? 0) < now - CACHE_TTL_MS)
 
+/** File de lecture complétée par de nouvelles PR : sans doublon, sans la PR en cours de lecture. */
+export const mergeQueue = (
+  queue: string[],
+  urls: string[],
+  reading: string | null,
+) => [...new Set([...queue, ...urls])].filter((u) => u !== reading)
+
+/** Première relecture automatique des PR affichées : leur plus ancienne lecture + 10 min (aucune lue : `null`). */
+export const nextReadAt = (
+  urls: string[],
+  cache: Map<string, { at: number }>,
+) => {
+  const ats = urls.flatMap((u) => cache.get(u)?.at ?? [])
+  return ats.length ? Math.min(...ats) + CACHE_TTL_MS : null
+}
+
 /** Retour du lien profond `prradar://oauth?…` attendu par cette tentative de connexion. */
 export const matchesState = (query: string, expected: string) =>
   new URLSearchParams(query).get("state") === expected
@@ -402,7 +418,7 @@ export async function connectSlack() {
   })
   tokens = t
   mentions.clear()
-  setProgress(0)
+  setProgress()
   setState({ team, expired: false })
 }
 
@@ -429,7 +445,7 @@ export async function disconnectSlack() {
   tokens = null
   unsaved = false
   mentions.clear()
-  setProgress(0)
+  setProgress()
   userNames.clear()
   updateSettings({ slackAll: false, slackChannels: [] })
   setState({ team: null, expired: false })
@@ -544,25 +560,47 @@ const NONE: SlackMention[] = []
 const mentions = new Map<string, { at: number; list: SlackMention[] }>()
 let queue: string[] = []
 let draining = false
+/** PR en cours de recherche (hors de la file) */
+let reading: string | null = null
+/** PR ajoutées à la file depuis le début de la lecture en cours */
+let total = 0
+/** fin de la dernière lecture arrivée au bout de sa file */
+let completedAt: number | null = null
+/** PR affichées par le tableau de bord (dernier appel à `refreshMentions`) */
+let shown: string[] = []
 /** change à chaque connexion / déconnexion : les résultats d'une recherche lancée avant sont jetés */
 let generation = 0
 
 export type SlackProgress = {
-  /** PR encore à lire dans la file en cours (0 : au repos) */
-  left: number
-  /** PR déjà lues : ce que relit une actualisation forcée */
+  /** lecture des mentions en cours (automatique ou forcée) */
+  running: boolean
+  /** PR lues / PR à lire dans la lecture en cours (ou la dernière) */
+  done: number
+  total: number
+  /** PR affichées : ce que relit une actualisation forcée */
   known: number
   /** première relecture automatique possible (plus ancienne lecture + 10 min) */
   nextAt: number | null
+  /** fin de la dernière lecture complète (pas arrêtée : limite, session expirée, déconnexion) */
+  completedAt: number | null
 }
-let progress: SlackProgress = { left: 0, known: 0, nextAt: null }
+let progress: SlackProgress = {
+  running: false,
+  done: 0,
+  total: 0,
+  known: 0,
+  nextAt: null,
+  completedAt: null,
+}
 
-function setProgress(left: number) {
-  const ats = [...mentions.values()].map((m) => m.at)
+function setProgress() {
   progress = {
-    left,
-    known: mentions.size,
-    nextAt: ats.length ? Math.min(...ats) + CACHE_TTL_MS : null,
+    running: draining,
+    done: total - queue.length - (reading ? 1 : 0),
+    total,
+    known: shown.length,
+    nextAt: nextReadAt(shown, mentions),
+    completedAt,
   }
   emit()
 }
@@ -579,10 +617,12 @@ const active = () => {
 
 async function drain() {
   draining = true
+  let stopped = false
   while (queue.length && active()) {
     const url = queue.shift()!
+    reading = url
     const gen = generation
-    setProgress(queue.length + 1)
+    setProgress()
     try {
       const t = await token()
       const r = await call<{ messages: { matches: Match[] } }>(
@@ -592,48 +632,63 @@ async function drain() {
       )
       const matches = r.messages.matches.filter((m) => mentionsUrl(m.text, url))
       for (const id of userIds(matches)) await userName(id, t).catch(() => {})
-      if (gen !== generation) break
+      if (gen !== generation) {
+        stopped = true
+        break
+      }
       mentions.set(url, {
         at: Date.now(),
         list: toMentions(matches, url, userNames),
       })
-      setProgress(queue.length)
       setState({ ...state, error: undefined })
     } catch (e) {
-      if (gen !== generation || state.expired) break
+      if (gen !== generation || state.expired) {
+        stopped = true
+        break
+      }
       // échec : même délai qu'un succès avant la prochaine recherche de cette PR (anciennes mentions gardées)
       mentions.set(url, {
         at: Date.now(),
         list: mentions.get(url)?.list ?? NONE,
       })
-      setProgress(queue.length)
       setState({ ...state, error: e instanceof Error ? e.message : String(e) })
       // limite toujours atteinte après 3 essais : arrêt jusqu'à la prochaine actualisation
-      if (e instanceof SlackError && e.code === "ratelimited") queue = []
+      if (e instanceof SlackError && e.code === "ratelimited") {
+        queue = []
+        stopped = true
+      }
     }
+    reading = null
+    setProgress()
     await sleep(THROTTLE_MS)
   }
+  reading = null
   draining = false
-  setProgress(0)
+  if (!stopped && active()) completedAt = Date.now()
+  setProgress()
+}
+
+/** Ajoute des PR à la file (lecture en cours : à la suite) et lance la lecture si besoin. */
+function enqueue(urls: string[]) {
+  const next = mergeQueue(queue, urls, reading)
+  if (next.length === queue.length) return
+  total = draining ? total + next.length - queue.length : next.length
+  queue = next
+  if (!draining) void drain()
 }
 
 /** Relit les mentions des PR pas vues depuis 10 min (appelé à chaque actualisation GitHub). */
 export function refreshMentions(prs: Pr[]) {
-  if (!active()) return
-  queue = dueUrls(
-    prs.map((p) => p.url),
-    mentions,
-    Date.now(),
-  )
-  if (queue.length && !draining) void drain()
+  shown = prs.map((p) => p.url)
+  if (active()) enqueue(dueUrls(shown, mentions, Date.now()))
+  setProgress()
 }
 
-/** Relit tout de suite les mentions de toutes les PR déjà vues, sans attendre les 10 min (bouton des réglages). */
+/** Relit tout de suite les mentions des PR affichées, sans attendre les 10 min (bouton des réglages). */
 export function forceRefreshMentions() {
   if (!active()) return
-  queue = [...mentions.keys()]
-  setProgress(queue.length)
-  if (queue.length && !draining) void drain()
+  enqueue(shown)
+  setProgress()
 }
 
 /** Mentions d'une PR dans les conversations choisies. */

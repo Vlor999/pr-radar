@@ -112,6 +112,7 @@ const S = strings(
       mentions: "Mentions",
       refresh: "Actualiser",
       progress: (done: number, total: number) => `${done}/${total} PR`,
+      refreshed: "Mentions relues",
       none: "Aucune PR lue pour l'instant.",
       next: (time: string) =>
         `Relecture auto : dès ${time}, à la prochaine actualisation GitHub.`,
@@ -296,6 +297,7 @@ const S = strings(
       refresh: "Refresh",
       progress: (done: number, total: number) =>
         `${done}/${total} PR${total > 1 ? "s" : ""}`,
+      refreshed: "Mentions re-read",
       none: "No PR read yet.",
       next: (time: string) =>
         `Auto re-read: from ${time}, on the next GitHub refresh.`,
@@ -433,6 +435,8 @@ const S = strings(
   },
 )
 
+/** durée de la coche après une relecture forcée des mentions */
+const CHECK_MS = 1_500
 const DOWNLOAD_URL = "https://vlor999.github.io/pr-radar/"
 const REPO_URL = "https://github.com/Vlor999/pr-radar"
 
@@ -858,6 +862,7 @@ function SlackSection() {
             <SlackRefreshButton
               label={t.slack.refresh}
               progress={t.slack.progress}
+              refreshed={t.slack.refreshed}
             />
           </Row>
         )}
@@ -923,57 +928,65 @@ function SlackSection() {
   )
 }
 
-/** Relecture forcée des mentions : le bouton se remplit (n/total), puis une coche s'affiche 1,5 s. */
+/** Relecture des mentions : le bouton se remplit (n/total), puis une coche s'affiche 1,5 s après une lecture complète. */
 function SlackRefreshButton(props: {
   label: string
   progress: (done: number, total: number) => string
+  refreshed: string
 }) {
-  const { left, known } = useSlackProgress()
-  const [finished, setFinished] = useState(false)
-  const prevLeft = useRef(left)
+  const { running, done, total, known, completedAt } = useSlackProgress()
+  const [checked, setChecked] = useState(false)
   useEffect(() => {
-    const wasBusy = prevLeft.current > 0
-    prevLeft.current = left
-    if (!wasBusy || left > 0) return
-    setFinished(true)
-    const id = window.setTimeout(() => setFinished(false), 1500)
+    const wait = (completedAt ?? 0) + CHECK_MS - Date.now()
+    if (wait <= 0) return
+    setChecked(true)
+    const id = window.setTimeout(() => setChecked(false), wait)
     return () => window.clearTimeout(id)
-  }, [left])
+  }, [completedAt])
 
-  const busy = left > 0
-  const done = finished ? known : known - left
+  // une nouvelle lecture efface la coche
+  const finished = checked && !running
+  const shown = running || finished
+  const text = props.progress(done, total)
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={!known || busy || finished}
-      onClick={forceRefreshMentions}
-      className="relative overflow-hidden tabular-nums disabled:opacity-100"
-    >
-      {(busy || finished) && (
-        <span
-          className="absolute inset-y-0 left-0 bg-primary/20 transition-[width] duration-500 ease-out motion-reduce:transition-none"
-          style={{ width: `${known ? (done / known) * 100 : 0}%` }}
-        />
-      )}
-      {finished ? (
-        <Check
-          data-icon="inline-start"
-          className="relative text-green-600 animate-in zoom-in-50 fade-in duration-300 motion-reduce:animate-none dark:text-green-400"
-        />
-      ) : (
-        <RefreshCw
-          data-icon="inline-start"
-          className={cn(
-            "relative",
-            busy && "animate-spin motion-reduce:animate-none",
-          )}
-        />
-      )}
-      <span className="relative">
-        {busy || finished ? props.progress(done, known) : props.label}
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!known || shown}
+        aria-busy={running}
+        onClick={forceRefreshMentions}
+        className={cn(
+          "relative overflow-hidden tabular-nums",
+          shown && "disabled:opacity-100",
+        )}
+      >
+        {shown && (
+          <span
+            className="absolute inset-y-0 left-0 bg-primary/20 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+            style={{ width: `${total ? (done / total) * 100 : 0}%` }}
+          />
+        )}
+        {finished ? (
+          <Check
+            data-icon="inline-start"
+            className="relative text-green-600 animate-in zoom-in-50 fade-in duration-300 motion-reduce:animate-none dark:text-green-400"
+          />
+        ) : (
+          <RefreshCw
+            data-icon="inline-start"
+            className={cn(
+              "relative",
+              running && "animate-spin motion-reduce:animate-none",
+            )}
+          />
+        )}
+        <span className="relative">{shown ? text : props.label}</span>
+      </Button>
+      <span className="sr-only" aria-live="polite">
+        {running ? text : finished ? props.refreshed : ""}
       </span>
-    </Button>
+    </>
   )
 }
 
