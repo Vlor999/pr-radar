@@ -45,15 +45,21 @@ const byPriority = (a: Pr, b: Pr) =>
  */
 export function buildTree(prs: Pr[]): Root[] {
   const byHead = new Map(prs.map((p) => [p.head, p]))
-  const below = (p: Pr) => {
+  const nativeBelow = (p: Pr) => {
     const s = p.stack
-    const up =
-      (s &&
-        prs.find(
+    return s
+      ? prs.find(
           (q) =>
             q.stack?.number === s.number && q.stack.position === s.position - 1,
-        )) ||
-      byHead.get(p.base)
+        )
+      : undefined
+  }
+  const below = (p: Pr) => {
+    const branch = byHead.get(p.base)
+    // une base qui pointe vers la PR au-dessus dans le stack natif ferait un cycle : ignorée
+    const up =
+      nativeBelow(p) ??
+      (branch && nativeBelow(branch) !== p ? branch : undefined)
     return up !== p ? up : undefined
   }
   const kids = new Map<string, Pr[]>() // head d'une PR, ou "base:<branche>"

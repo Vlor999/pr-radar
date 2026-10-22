@@ -101,6 +101,19 @@ test("le stack natif l'emporte sur une base qui pointe vers une autre PR", () =>
   assert.deepEqual(n2.children, [])
 })
 
+test("une base qui pointe vers la PR au-dessus dans le stack natif ne fait pas de cycle", () => {
+  const stack = (position: number) => ({ number: 9, position, size: 2 })
+  const [root] = buildTree([
+    pr(1, "q", "p", { stack: stack(1) }),
+    pr(2, "p", "main", { stack: stack(2) }),
+  ])
+  assert.equal(root.branch, "p")
+  assert.deepEqual(
+    root.children.map((n) => [n.number, n.children.map((c) => c.number)]),
+    [[1, [2]]],
+  )
+})
+
 test("sans la PR d'en dessous du stack natif, les branches décident", () => {
   const [root] = buildTree([
     pr(1, "a", "main"),
