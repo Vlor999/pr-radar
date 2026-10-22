@@ -2,9 +2,9 @@ import { invoke } from "@tauri-apps/api/core"
 import { useEffect, useRef, useSyncExternalStore } from "react"
 
 import { pick, strings } from "@/lib/i18n"
-import { newRequests, reviewKey } from "@/lib/review"
+import { newRequests, reviewKey, snapshot, type Reviews } from "@/lib/review"
 import { getSettings, type Settings } from "@/lib/settings"
-import type { Pr, ReviewPr } from "@/lib/types"
+import type { Pr } from "@/lib/types"
 
 const S = strings(
   {
@@ -105,15 +105,15 @@ export function usePrNotifications(prs: Pr[]) {
 }
 
 /** Notification d'une nouvelle demande de review nominative (ou re-request), entre deux rafraîchissements. */
-export function useReviewNotifications(reviews: ReviewPr[]) {
-  const previous = useRef<Set<string> | null>(null)
+export function useReviewNotifications(known: Reviews) {
+  const previous = useRef<ReturnType<typeof snapshot> | null>(null)
 
   useEffect(() => {
     const before = previous.current
-    previous.current = new Set(reviews.map(reviewKey))
+    previous.current = snapshot(known)
     if (!before || !getSettings().notify.reviewRequested) return
     const t = pick(S)
-    for (const p of newRequests(before, reviews))
+    for (const p of newRequests(before, known.reviews))
       notify(
         t.title(
           reviewKey(p),
@@ -121,7 +121,7 @@ export function useReviewNotifications(reviews: ReviewPr[]) {
         ),
         p.title,
       ).catch(() => {})
-  }, [reviews])
+  }, [known])
 }
 
 /** Bouton « Envoyer une notification de test » des réglages. */

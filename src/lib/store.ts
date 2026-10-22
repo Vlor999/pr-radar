@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 import { describeErrors, splitKey } from "./accounts"
-import { findAccount } from "./auth"
+import { allAccounts, findAccount } from "./auth"
 import {
   fetchMerged,
   fetchPrs,
@@ -9,9 +9,10 @@ import {
   listRepos,
   reposWithMyOpenPrs,
 } from "./github"
+import { mergeReviews, type Reviews } from "./review"
 import { getSettings } from "./settings"
 import { buildTree } from "./tree"
-import type { MergedPr, Pr, RepoTree, ReviewPr } from "./types"
+import type { MergedPr, Pr, RepoTree } from "./types"
 
 /* ---------- Repos suivis : gardés dans la fenêtre de l'app (localStorage) ---------- */
 
@@ -40,8 +41,8 @@ export type Data = {
   prs: Pr[]
   trees: RepoTree[]
   withPrs: string[]
-  /** PR des autres qui attendent ma review, tous repos confondus */
-  reviews: ReviewPr[]
+  /** PR des autres qui attendent ma review, tous repos confondus, et comptes lus */
+  reviews: Reviews
   fetchedAt: string
   loading: boolean
   error?: string
@@ -55,7 +56,7 @@ let data: Data = {
   prs: [],
   trees: [],
   withPrs: [],
-  reviews: [],
+  reviews: { accounts: [], reviews: [] },
   fetchedAt: "",
   loading: true,
 }
@@ -94,27 +95,40 @@ export async function reload() {
     // repos d'un compte déconnecté : gardés dans la liste, pas affichés
     repos = repos.filter((r) => findAccount(splitKey(r).account))
     const now = new Date()
-    const [{ data: prs, errors }, recent, reviews] = await Promise.all([
+    const queried = allAccounts()
+    const [{ data: prs, errors }, recent, found] = await Promise.all([
       fetchPrs(repos),
       fetchMerged(
         repos,
         day(new Date(now.getTime() - getSettings().mergedDays * 86_400_000)),
         day(now),
       ).catch(() => [] as MergedPr[]),
-      // en échec : on garde la dernière liste (l'erreur d'un compte s'affiche déjà via fetchPrs)
-      fetchReviews().then(
-        (r) => r.data,
-        () => data.reviews,
-      ),
+      // tous les comptes en échec : même traitement qu'un échec partiel
+      fetchReviews().catch((error: unknown) => ({
+        data: [],
+        errors: queried.map((account) => ({ account, error })),
+      })),
     ])
     if (id !== seq) return
+    // compte dont seule la recherche des reviews échoue : nommé lui aussi dans le bandeau
+    const shown = [
+      ...errors,
+      ...found.errors.filter(
+        (r) => !errors.some((e) => e.account.id === r.account.id),
+      ),
+    ]
     // compte en échec (les autres ont répondu) : ses repos sont masqués, l'erreur le nomme
     const failed = new Set(errors.map((e) => e.account.id))
     set({
       prs,
       withPrs,
-      reviews,
-      error: errors.length ? describeErrors(errors).slice(0, 300) : undefined,
+      reviews: mergeReviews(
+        data.reviews,
+        found.data,
+        queried.map((a) => a.id),
+        found.errors.map((e) => e.account.id),
+      ),
+      error: shown.length ? describeErrors(shown).slice(0, 300) : undefined,
       trees: repos
         .filter((r) => !failed.has(splitKey(r).account))
         .map((repo) => ({

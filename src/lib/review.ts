@@ -1,5 +1,5 @@
 /** Onglet « À reviewer » : PR des autres qui attendent ma review. Logique pure, sans réseau. */
-import { repoKey } from "./accounts.ts"
+import { repoKey, splitKey } from "./accounts.ts"
 import type { Decision, ReviewPr } from "./types"
 
 type Reviewer = { login?: string; name?: string } | null
@@ -79,6 +79,48 @@ export function groupByRepo(prs: ReviewPr[]): [string, ReviewPr[]][] {
 
 export const reviewKey = (p: ReviewPr) => `${p.repo}#${p.number}`
 
-/** Demandes nominatives apparues depuis le chargement précédent (une re-request réapparaît après ma review). */
-export const newRequests = (before: Set<string>, now: ReviewPr[]) =>
-  now.filter((p) => p.direct && !before.has(reviewKey(p)))
+/** Demandes connues : comptes dont la liste est à jour (ou gardée), et PR de ces comptes. */
+export type Reviews = { accounts: string[]; reviews: ReviewPr[] }
+
+const accountOf = (p: ReviewPr) => splitKey(p.repo).account
+
+/**
+ * Nouveau chargement : les comptes en échec gardent leurs PR précédentes (pas de re-notification à leur
+ * retour) ; un compte jamais lu avec succès reste inconnu.
+ */
+export function mergeReviews(
+  prev: Reviews,
+  data: ReviewPr[],
+  queried: string[],
+  failed: string[],
+): Reviews {
+  const kept = prev.accounts.filter((a) => failed.includes(a))
+  return {
+    accounts: [...queried.filter((a) => !failed.includes(a)), ...kept],
+    reviews: [
+      ...data,
+      ...prev.reviews.filter((p) => kept.includes(accountOf(p))),
+    ],
+  }
+}
+
+/** Ce qui sert à comparer deux chargements : une PR passée d'équipe à moi devient une demande nouvelle. */
+export const snapshot = ({ accounts, reviews }: Reviews) => ({
+  accounts,
+  direct: new Set(reviews.filter((p) => p.direct).map(reviewKey)),
+})
+
+/**
+ * Demandes nominatives apparues depuis le chargement précédent (une re-request réapparaît après ma review).
+ * Compte absent du chargement précédent (ajouté, jamais lu) : son arriéré n'est pas signalé.
+ */
+export const newRequests = (
+  before: ReturnType<typeof snapshot>,
+  now: ReviewPr[],
+) =>
+  now.filter(
+    (p) =>
+      p.direct &&
+      before.accounts.includes(accountOf(p)) &&
+      !before.direct.has(reviewKey(p)),
+  )

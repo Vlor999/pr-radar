@@ -50,8 +50,8 @@ import {
   needsAttention,
   sortTree,
 } from "@/lib/tree"
-import { reviewCount } from "@/lib/review"
-import type { Pr, PrNode, RepoTree, ReviewPr } from "@/lib/types"
+import { reviewCount, type Reviews } from "@/lib/review"
+import type { Pr, PrNode, RepoTree } from "@/lib/types"
 
 const S = strings(
   {
@@ -218,7 +218,7 @@ export function PrDashboard({
   prs: Pr[]
   trees: RepoTree[]
   withPrs: string[]
-  reviews: ReviewPr[]
+  reviews: Reviews
   fetchedAt: string
   error?: string
 }) {
@@ -241,7 +241,7 @@ export function PrDashboard({
   )
   usePrNotifications(prs)
   useReviewNotifications(reviews)
-  const toReview = reviewCount(reviews)
+  const toReview = reviewCount(reviews.reviews)
   // icône de la barre des menus : PR « À traiter » (même filtre que l'onglet)
   const attention = prs.filter(needsAttention).length
   useEffect(() => {
@@ -493,18 +493,17 @@ export function PrDashboard({
               ))}
             </nav>
 
+            {tab !== "calendar" && error && (
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {t.fetchFailed(error)}
+              </p>
+            )}
             {tab === "calendar" ? (
               <MergeCalendar />
             ) : tab === "review" ? (
-              <ReviewList reviews={reviews} />
+              <ReviewList reviews={reviews.reviews} />
             ) : (
               <>
-                {error && (
-                  <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    {t.fetchFailed(error)}
-                  </p>
-                )}
-
                 <section className="flex flex-col gap-3">
                   <div className="flex flex-wrap items-start gap-2">
                     <div className="relative w-full max-w-sm">

@@ -4,8 +4,10 @@ import { test } from "node:test"
 import {
   filterReviews,
   groupByRepo,
+  mergeReviews,
   newRequests,
   reviewCount,
+  snapshot,
   toReview,
   type RawReview,
 } from "./review.ts"
@@ -160,13 +162,65 @@ test("les groupes par repo commencent par la demande la plus ancienne", () => {
 })
 
 test("seules les nouvelles demandes nominatives sont signalées", () => {
+  const before = snapshot({
+    accounts: ["github"],
+    reviews: [rv({ number: 1 })],
+  })
   const prs = [
     rv({ number: 1 }),
     rv({ number: 2 }),
     rv({ number: 3, direct: false }),
   ]
   assert.deepEqual(
-    newRequests(new Set(["o/r#1"]), prs).map((p) => p.number),
+    newRequests(before, prs).map((p) => p.number),
     [2],
   )
+})
+
+test("une PR passée d'une demande d'équipe à une demande nominative est signalée", () => {
+  const before = snapshot({
+    accounts: ["github"],
+    reviews: [rv({ direct: false })],
+  })
+  assert.equal(newRequests(before, [rv()]).length, 1)
+})
+
+test("l'arriéré d'un compte absent du chargement précédent n'est pas signalé", () => {
+  const before = snapshot({ accounts: ["github"], reviews: [] })
+  const prs = [rv({ repo: "work@ghe.example.com:o/r" })]
+  assert.deepEqual(newRequests(before, prs), [])
+})
+
+test("un compte en échec garde ses PR précédentes", () => {
+  const prev = {
+    accounts: ["github", "w@ghe"],
+    reviews: [rv({ number: 1 }), rv({ repo: "w@ghe:o/r", number: 2 })],
+  }
+  const next = mergeReviews(
+    prev,
+    [rv({ number: 3 })],
+    ["github", "w@ghe"],
+    ["w@ghe"],
+  )
+  assert.deepEqual(next.accounts, ["github", "w@ghe"])
+  assert.deepEqual(
+    next.reviews.map((p) => p.number),
+    [3, 2],
+  )
+})
+
+test("un compte en échec garde ses PR sans re-notification à son retour", () => {
+  const prev = { accounts: ["w@ghe"], reviews: [rv({ repo: "w@ghe:o/r" })] }
+  const kept = mergeReviews(prev, [], ["w@ghe"], ["w@ghe"])
+  assert.deepEqual(newRequests(snapshot(kept), [rv({ repo: "w@ghe:o/r" })]), [])
+})
+
+test("un compte jamais lu avec succès reste inconnu", () => {
+  const next = mergeReviews(
+    { accounts: [], reviews: [] },
+    [],
+    ["w@ghe"],
+    ["w@ghe"],
+  )
+  assert.deepEqual(next.accounts, [])
 })
