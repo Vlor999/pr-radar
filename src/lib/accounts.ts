@@ -111,6 +111,15 @@ export async function settle<T>(
   }
 }
 
+/** Relance `run` jusqu'à `retries` fois tant qu'il renvoie une liste vide. */
+export async function retryEmpty<T>(
+  retries: number,
+  run: () => Promise<T[]>,
+): Promise<T[]> {
+  const out = await run()
+  return out.length || retries <= 0 ? out : retryEmpty(retries - 1, run)
+}
+
 /** Message des comptes en échec, chacun nommé : `me (ghe.example.com) : HTTP 502`. */
 export const describeErrors = (errors: AccountError[]) =>
   errors
