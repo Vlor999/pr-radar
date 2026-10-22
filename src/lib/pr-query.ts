@@ -29,3 +29,19 @@ export const queryFor = (host: string, withoutStack = false) =>
 /** Erreur de validation GraphQL sur le champ des stacks natifs (preview retirée, compte sans accès). */
 export const isStackFieldError = (e: unknown) =>
   e instanceof Error && e.message.includes("stackEntry")
+
+/**
+ * Lance `run` avec les stacks natifs, sauf si `skip` ; si GitHub refuse `stackEntry`,
+ * appelle `onRefused` et relance une fois sans le champ.
+ */
+export const withStackFallback = <T>(
+  host: string,
+  skip: boolean,
+  run: (query: string) => Promise<T>,
+  onRefused: () => void,
+): Promise<T> =>
+  run(queryFor(host, skip)).catch((e: unknown) => {
+    if (skip || !isStackFieldError(e)) throw e
+    onRefused()
+    return run(queryFor(host, true))
+  })

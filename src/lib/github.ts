@@ -13,7 +13,7 @@ import {
 } from "./accounts"
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
 import { pick, strings } from "./i18n"
-import { isStackFieldError, queryFor } from "./pr-query"
+import { withStackFallback } from "./pr-query"
 import { trackQuota } from "./quota"
 import type { Decision, MergedPr, Pr, Thread } from "./types"
 
@@ -328,13 +328,12 @@ export function fetchPrs(
         chunk(names, REPOS_PER_QUERY).map((c) => {
           const q =
             "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" ")
-          const skip = withoutStack.has(a.id)
-          return searchAll<RawPr>(conn(a), queryFor(a.host, skip), q).catch(
-            (e) => {
-              if (skip || !isStackFieldError(e)) throw e
-              withoutStack.add(a.id)
-              return searchAll<RawPr>(conn(a), queryFor(a.host, true), q)
-            },
+          // ponytail: au premier chargement, chaque requête parallèle peut relancer une fois (accepté)
+          return withStackFallback(
+            a.host,
+            withoutStack.has(a.id),
+            (query) => searchAll<RawPr>(conn(a), query, q),
+            () => withoutStack.add(a.id),
           )
         }),
       )
