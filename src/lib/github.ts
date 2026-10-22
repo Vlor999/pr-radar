@@ -14,7 +14,8 @@ import {
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
 import { pick, strings } from "./i18n"
 import { trackQuota } from "./quota"
-import type { Decision, MergedPr, Pr, Thread } from "./types"
+import { toReview, type RawReview } from "./review"
+import type { Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
 
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
@@ -478,4 +479,40 @@ export async function viewerProfile(a: Account): Promise<Profile> {
       "{ viewer { login name avatarUrl url } }",
     )
   ).viewer
+}
+
+// coût GraphQL d'une page : 1 + 50 × 2 sous-connexions ≈ 1 point (bornes demandées, pas nœuds renvoyés)
+const REVIEW_QUERY = `
+query($q: String!, $after: String) {
+  search(query: $q, type: ISSUE, first: 50, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ... on PullRequest {
+      number title url isDraft createdAt reviewDecision
+      author { login }
+      repository { nameWithOwner }
+      viewerLatestReview { state }
+      reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
+      timelineItems(last: 20, itemTypes: [REVIEW_REQUESTED_EVENT]) { nodes { ... on ReviewRequestedEvent {
+        createdAt requestedReviewer { ... on User { login } ... on Team { name } } } } }
+    } }
+  }
+}`
+
+/** PR qui attendent ma review (moi ou une de mes équipes), sur tous les repos accessibles. */
+export function fetchReviews(): Promise<{
+  data: ReviewPr[]
+  errors: AccountError[]
+}> {
+  return cached("reviews", CACHE_TTL_MS, () =>
+    settle(allAccounts(), async (a) => {
+      const login = await me(a)
+      return (
+        await searchAll<RawReview>(
+          conn(a),
+          REVIEW_QUERY,
+          "is:pr is:open archived:false review-requested:@me",
+        )
+      ).map((p) => toReview(p, login, a.id))
+    }),
+  )
 }
