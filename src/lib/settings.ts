@@ -75,6 +75,7 @@ function read(): Settings {
       reviewWho: ["all", "me", "team"].includes(saved.reviewWho ?? "")
         ? saved.reviewWho!
         : "all",
+      reviewHideApproved: saved.reviewHideApproved === true,
     }
   } catch {
     return DEFAULT_SETTINGS
