@@ -64,8 +64,11 @@ export function AddReviewer({ pr }: { pr: Pr }) {
             })
             setError(undefined)
           },
-          (e: unknown) =>
-            live && setError(e instanceof Error ? e.message : String(e)),
+          (e: unknown) => {
+            if (!live) return
+            setOptions(null) // pas d'anciens résultats sous l'erreur d'une nouvelle recherche
+            setError(e instanceof Error ? e.message : String(e))
+          },
         ),
       query ? SEARCH_DEBOUNCE_MS : 0,
     )
