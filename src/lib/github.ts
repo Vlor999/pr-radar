@@ -510,9 +510,9 @@ export async function fetchReviewerOptions(
       pullRequest: {
         id: string
         suggestedReviewers: { reviewer: Reviewer }[]
-      }
-      assignableUsers: { nodes: Reviewer[] }
-    }
+      } | null
+      assignableUsers: { nodes: Reviewer[] } | null
+    } | null
   }>(
     conn(accountOf(repo)),
     `query($owner: String!, $name: String!, $number: Int!, $q: String) {
@@ -524,13 +524,15 @@ export async function fetchReviewerOptions(
     }`,
     { owner, name, number, q: query || null },
   )
+  // données partielles (SSO, accès restreint) : repo ou PR absents
+  const pr = res.repository?.pullRequest
+  const users = res.repository?.assignableUsers
+  if (!pr || !users) throw new Error(pick(S).notFound(repo))
   return {
-    prId: res.repository.pullRequest.id,
+    prId: pr.id,
     viewer: res.viewer.login,
-    suggested: res.repository.pullRequest.suggestedReviewers.map(
-      (s) => s.reviewer,
-    ),
-    assignable: res.repository.assignableUsers.nodes,
+    suggested: pr.suggestedReviewers.map((s) => s.reviewer),
+    assignable: users.nodes,
   }
 }
 
