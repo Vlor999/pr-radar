@@ -132,6 +132,46 @@ const MENTIONS: Record<string, SlackMention[]> = {
 
 export function refreshMentions(_prs: Pr[]) {}
 
+export type SlackProgress = {
+  running: boolean
+  done: number
+  total: number
+  known: number
+  nextAt: number | null
+  completedAt: number | null
+}
+const KNOWN = Object.keys(MENTIONS).length
+let progress: SlackProgress = {
+  running: false,
+  done: 0,
+  total: 0,
+  known: KNOWN,
+  nextAt: Date.now() + 7 * 60_000,
+  completedAt: null,
+}
+export const useSlackProgress = () =>
+  useSyncExternalStore(subscribe, () => progress)
+
+/** File simulée : une PR toutes les 3 s, comme dans l'app. */
+export function forceRefreshMentions() {
+  const tick = (done: number) => {
+    const running = done < KNOWN
+    progress = {
+      ...progress,
+      running,
+      done,
+      total: KNOWN,
+      ...(!running && {
+        nextAt: Date.now() + 10 * 60_000,
+        completedAt: Date.now(),
+      }),
+    }
+    listeners.forEach((l) => l())
+    if (running) setTimeout(() => tick(done + 1), 3000)
+  }
+  if (!progress.running) tick(0)
+}
+
 const NONE: SlackMention[] = []
 
 export function useMentions(url: string): SlackMention[] {
