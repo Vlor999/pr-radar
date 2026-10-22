@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 import type { Lang } from "./i18n"
+import type { Pr } from "./types"
 
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
 export type Settings = {
@@ -14,6 +15,8 @@ export type Settings = {
     comments: boolean
     ciFailed: boolean
   }
+  /** notifier aussi pour les PR brouillon */
+  notifyDrafts: boolean
   /** tri par défaut de l'arbre : "priority" | "oldest" | "recent" */
   defaultSort: "priority" | "oldest" | "recent"
   /** jours sans activité avant le badge « inactive » */
@@ -39,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
     comments: true,
     ciFailed: true,
   },
+  notifyDrafts: true,
   defaultSort: "priority",
   staleDays: 5,
   mergedDays: 7,
@@ -71,6 +75,13 @@ function read(): Settings {
 let current = read()
 
 export const getSettings = () => current
+
+/** Notifier ce changement de la PR : type de changement coché, et PR non brouillon si `notifyDrafts` est décoché. */
+export const shouldNotify = (
+  s: Settings,
+  pr: Pr,
+  kind: keyof Settings["notify"],
+) => s.notify[kind] && (s.notifyDrafts || !pr.draft)
 
 export type SettingsPatch = Partial<Omit<Settings, "notify">> & {
   notify?: Partial<Settings["notify"]>
