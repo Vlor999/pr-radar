@@ -94,7 +94,7 @@ async function gql<T>(
   const json = (await res.json()) as GqlResponse
   if (gqlFailed(json))
     throw new Error(
-      json.errors?.map((e) => e.message).join(" ; ") ??
+      json.errors?.map((e) => e.message).join(" ; ") ||
         pick(S).http(res.status),
     )
   return json.data as T

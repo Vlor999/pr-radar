@@ -22,3 +22,11 @@ test("une recherche partielle (champ racine présent + errors) est gardée", () 
 test("sans data, c'est un échec", () => {
   assert.equal(gqlFailed({ errors }), true)
 })
+
+test("un champ racine null sans errors est gardé", () => {
+  assert.equal(gqlFailed({ data: { x: null } }), false)
+})
+
+test("un champ racine null avec errors vide est gardé", () => {
+  assert.equal(gqlFailed({ data: { x: null }, errors: [] }), false)
+})
