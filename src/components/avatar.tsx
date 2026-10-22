@@ -15,12 +15,14 @@ export function Avatar({
   url?: string
   className?: string
 }) {
-  const [failed, setFailed] = useState(false)
+  // échec mémorisé pour cette image : un autre login retente le chargement
+  const src = `https://avatars.githubusercontent.com/${encodeURIComponent(login)}?s=64`
+  const [failedSrc, setFailedSrc] = useState("")
   const base = cn(
     "size-5 shrink-0 rounded-full bg-muted ring-2 ring-card",
     className,
   )
-  if (failed || !url?.startsWith("https://github.com/"))
+  if (failedSrc === src || !url?.startsWith("https://github.com/"))
     return (
       <span
         aria-hidden
@@ -33,11 +35,6 @@ export function Avatar({
       </span>
     )
   return (
-    <img
-      src={`https://avatars.githubusercontent.com/${encodeURIComponent(login)}?s=64`}
-      alt=""
-      onError={() => setFailed(true)}
-      className={base}
-    />
+    <img src={src} alt="" onError={() => setFailedSrc(src)} className={base} />
   )
 }
