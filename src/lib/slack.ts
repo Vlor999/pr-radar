@@ -402,6 +402,7 @@ export async function connectSlack() {
   })
   tokens = t
   mentions.clear()
+  setProgress(0)
   setState({ team, expired: false })
 }
 
@@ -428,6 +429,7 @@ export async function disconnectSlack() {
   tokens = null
   unsaved = false
   mentions.clear()
+  setProgress(0)
   userNames.clear()
   updateSettings({ slackAll: false, slackChannels: [] })
   setState({ team: null, expired: false })
@@ -545,6 +547,29 @@ let draining = false
 /** change à chaque connexion / déconnexion : les résultats d'une recherche lancée avant sont jetés */
 let generation = 0
 
+export type SlackProgress = {
+  /** PR encore à lire dans la file en cours (0 : au repos) */
+  left: number
+  /** PR déjà lues : ce que relit une actualisation forcée */
+  known: number
+  /** première relecture automatique possible (plus ancienne lecture + 10 min) */
+  nextAt: number | null
+}
+let progress: SlackProgress = { left: 0, known: 0, nextAt: null }
+
+function setProgress(left: number) {
+  const ats = [...mentions.values()].map((m) => m.at)
+  progress = {
+    left,
+    known: mentions.size,
+    nextAt: ats.length ? Math.min(...ats) + CACHE_TTL_MS : null,
+  }
+  emit()
+}
+
+export const useSlackProgress = () =>
+  useSyncExternalStore(subscribe, () => progress)
+
 const active = () => {
   const s = getSettings()
   return (
@@ -557,6 +582,7 @@ async function drain() {
   while (queue.length && active()) {
     const url = queue.shift()!
     const gen = generation
+    setProgress(queue.length + 1)
     try {
       const t = await token()
       const r = await call<{ messages: { matches: Match[] } }>(
@@ -571,7 +597,7 @@ async function drain() {
         at: Date.now(),
         list: toMentions(matches, url, userNames),
       })
-      emit()
+      setProgress(queue.length)
       setState({ ...state, error: undefined })
     } catch (e) {
       if (gen !== generation || state.expired) break
@@ -580,6 +606,7 @@ async function drain() {
         at: Date.now(),
         list: mentions.get(url)?.list ?? NONE,
       })
+      setProgress(queue.length)
       setState({ ...state, error: e instanceof Error ? e.message : String(e) })
       // limite toujours atteinte après 3 essais : arrêt jusqu'à la prochaine actualisation
       if (e instanceof SlackError && e.code === "ratelimited") queue = []
@@ -587,6 +614,7 @@ async function drain() {
     await sleep(THROTTLE_MS)
   }
   draining = false
+  setProgress(0)
 }
 
 /** Relit les mentions des PR pas vues depuis 10 min (appelé à chaque actualisation GitHub). */
@@ -597,6 +625,14 @@ export function refreshMentions(prs: Pr[]) {
     mentions,
     Date.now(),
   )
+  if (queue.length && !draining) void drain()
+}
+
+/** Relit tout de suite les mentions de toutes les PR déjà vues, sans attendre les 10 min (bouton des réglages). */
+export function forceRefreshMentions() {
+  if (!active()) return
+  queue = [...mentions.keys()]
+  setProgress(queue.length)
   if (queue.length && !draining) void drain()
 }
 

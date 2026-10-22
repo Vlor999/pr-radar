@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core"
 import { cn } from "cn"
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   ExternalLink,
   Loader2,
@@ -45,8 +46,10 @@ import { getRepos, reload, setRepos } from "@/lib/store"
 import {
   connectSlack,
   disconnectSlack,
+  forceRefreshMentions,
   listConversations,
   useSlack,
+  useSlackProgress,
 } from "@/lib/slack"
 import type { SlackConversation } from "@/lib/types"
 
@@ -106,6 +109,12 @@ const S = strings(
       expired: "Session expirée",
       timeout: "Délai dépassé, recommence la connexion.",
       disconnect: "Déconnecter",
+      mentions: "Mentions",
+      refresh: "Actualiser",
+      progress: (done: number, total: number) => `${done}/${total} PR`,
+      none: "Aucune PR lue pour l'instant.",
+      next: (time: string) =>
+        `Relecture auto : dès ${time}, à la prochaine actualisation GitHub.`,
       privacy:
         "Lecture seule, jetons dans le trousseau du système, messages lus uniquement sur ta machine. Ton admin Slack peut devoir approuver l'app : Slack propose alors de demander l'installation.",
       all: "Toutes les conversations (actuelles et futures)",
@@ -283,6 +292,13 @@ const S = strings(
       expired: "Session expired",
       timeout: "Timed out, start the sign-in again.",
       disconnect: "Disconnect",
+      mentions: "Mentions",
+      refresh: "Refresh",
+      progress: (done: number, total: number) =>
+        `${done}/${total} PR${total > 1 ? "s" : ""}`,
+      none: "No PR read yet.",
+      next: (time: string) =>
+        `Auto re-read: from ${time}, on the next GitHub refresh.`,
       privacy:
         "Read-only, tokens in the system keychain, messages read on your machine only. Your Slack admin may have to approve the app: Slack then offers to request the install.",
       all: "All conversations (current and future)",
@@ -732,6 +748,7 @@ function SlackSection() {
   const t = useStrings(S)
   const { team, expired, error: searchError } = useSlack()
   const { slackAll, slackChannels } = useSettings()
+  const progress = useSlackProgress()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [convs, setConvs] = useState<SlackConversation[] | null>(null)
@@ -826,6 +843,26 @@ function SlackSection() {
         )}
         {live && (
           <Row
+            label={t.slack.mentions}
+            description={
+              progress.nextAt
+                ? t.slack.next(
+                    new Date(progress.nextAt).toLocaleTimeString(locale(), {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }),
+                  )
+                : t.slack.none
+            }
+          >
+            <SlackRefreshButton
+              label={t.slack.refresh}
+              progress={t.slack.progress}
+            />
+          </Row>
+        )}
+        {live && (
+          <Row
             label={t.slack.all}
             labelId="slack-all-label"
             description={t.slack.allDescription}
@@ -883,6 +920,60 @@ function SlackSection() {
         )}
       </>
     </Section>
+  )
+}
+
+/** Relecture forcée des mentions : le bouton se remplit (n/total), puis une coche s'affiche 1,5 s. */
+function SlackRefreshButton(props: {
+  label: string
+  progress: (done: number, total: number) => string
+}) {
+  const { left, known } = useSlackProgress()
+  const [finished, setFinished] = useState(false)
+  const prevLeft = useRef(left)
+  useEffect(() => {
+    const wasBusy = prevLeft.current > 0
+    prevLeft.current = left
+    if (!wasBusy || left > 0) return
+    setFinished(true)
+    const id = window.setTimeout(() => setFinished(false), 1500)
+    return () => window.clearTimeout(id)
+  }, [left])
+
+  const busy = left > 0
+  const done = finished ? known : known - left
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={!known || busy || finished}
+      onClick={forceRefreshMentions}
+      className="relative overflow-hidden tabular-nums disabled:opacity-100"
+    >
+      {(busy || finished) && (
+        <span
+          className="absolute inset-y-0 left-0 bg-primary/20 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+          style={{ width: `${known ? (done / known) * 100 : 0}%` }}
+        />
+      )}
+      {finished ? (
+        <Check
+          data-icon="inline-start"
+          className="relative text-green-600 animate-in zoom-in-50 fade-in duration-300 motion-reduce:animate-none dark:text-green-400"
+        />
+      ) : (
+        <RefreshCw
+          data-icon="inline-start"
+          className={cn(
+            "relative",
+            busy && "animate-spin motion-reduce:animate-none",
+          )}
+        />
+      )}
+      <span className="relative">
+        {busy || finished ? props.progress(done, known) : props.label}
+      </span>
+    </Button>
   )
 }
 
