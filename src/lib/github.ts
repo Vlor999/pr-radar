@@ -40,8 +40,6 @@ const S = strings(
     invalidName: (repo: string) =>
       `Nom invalide : « ${repo} » (attendu : owner/repo)`,
     notFound: (repo: string) => `Repo introuvable ou inaccessible : ${repo}`,
-    cannotRequest:
-      "Impossible de demander la review : il faut le droit d'écriture sur les pull requests de ce repo",
   },
   {
     notSignedIn: "Not signed in",
@@ -52,8 +50,6 @@ const S = strings(
     invalidName: (repo: string) =>
       `Invalid name: "${repo}" (expected: owner/repo)`,
     notFound: (repo: string) => `Repo not found or inaccessible: ${repo}`,
-    cannotRequest:
-      "Could not request the review: write access to this repo's pull requests is required",
   },
 )
 
@@ -531,7 +527,7 @@ export async function fetchReviewerOptions(
     }`,
     { owner, name, number, q: query || null },
   )
-  // données partielles (SSO, accès restreint) : repo ou PR absents
+  // `repository` null + errors : `gql` lève déjà ; ici, PR absente (champ imbriqué) ou repo null sans erreur
   const pr = res.repository?.pullRequest
   const users = res.repository?.assignableUsers
   if (!pr || !users) throw new Error(pick(S).notFound(repo))
@@ -549,13 +545,10 @@ export async function requestReviewer(
   userId: string,
   repo: string,
 ) {
-  const res = await gql<{
-    requestReviews: { pullRequest: { id: string } } | null
-  }>(
+  // refus (pas de droit d'écriture) : `gql` lève le message de GitHub
+  await gql(
     conn(accountOf(repo)),
     "mutation($pr: ID!, $user: ID!) { requestReviews(input: { pullRequestId: $pr, userIds: [$user], union: true }) { pullRequest { id } } }",
     { pr: prId, user: userId },
   )
-  // GitHub répond `data.requestReviews: null` + `errors` quand le jeton n'a pas le droit d'écriture
-  if (!res.requestReviews) throw new Error(pick(S).cannotRequest)
 }

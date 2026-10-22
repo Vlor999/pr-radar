@@ -294,10 +294,10 @@ export const requestReviewer = async (
   userId: string,
   repo: string,
 ) => {
-  // « dave » montre l'erreur d'un jeton sans droit d'écriture
+  // « dave » montre le message brut de GitHub pour un jeton sans droit d'écriture
   if (userId === "U_dave")
     throw new Error(
-      "Impossible de demander la review : il faut le droit d'écriture sur les pull requests de ce repo",
+      "me does not have the correct permissions to execute `RequestReviews`",
     )
   // la demande apparaît sur la carte au rechargement qui suit
   const p = PRS.find((p) => `${p.repo}#${p.number}` === prId)
