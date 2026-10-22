@@ -102,3 +102,20 @@ export function sortTree(
     [...ns].sort(cmp).map((n) => ({ ...n, children: sort(n.children) }))
   return roots.map((r) => ({ ...r, children: sort(r.children) }))
 }
+
+/** Repos passés de N PR à 0 : la recherche GitHub renvoie parfois un vide à tort. Leurs PR sont gardées
+ * un cycle ; vides deux fois de suite, ils le sont vraiment. `held` : repos gardés au cycle précédent. */
+export function keepVanished(
+  prev: Pr[],
+  next: Pr[],
+  held: Set<string>,
+  repos: string[],
+) {
+  const present = new Set(next.map((p) => p.repo))
+  const gone = new Set(
+    prev
+      .map((p) => p.repo)
+      .filter((r) => !present.has(r) && !held.has(r) && repos.includes(r)),
+  )
+  return { prs: [...next, ...prev.filter((p) => gone.has(p.repo))], held: gone }
+}
