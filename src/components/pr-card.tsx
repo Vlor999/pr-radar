@@ -4,6 +4,7 @@ import {
   ExternalLink,
   GitMerge,
   GitPullRequestArrow,
+  Layers,
   MessageSquare,
 } from "lucide-react"
 import { cn } from "cn"
@@ -50,6 +51,7 @@ const S = strings(
     conflict: "Conflit",
     unresolved: (n: number) => plural(n, "non résolu"),
     blockedBy: (n: number) => `bloquée par #${n}`,
+    nativeStack: "Stack GitHub natif",
     blocks: (n: number) => `bloque ${plural(n, "PR")}`,
     inactive: (d: number) => `inactive depuis ${d} j`,
     requested: "En attente",
@@ -85,6 +87,7 @@ const S = strings(
     conflict: "Conflict",
     unresolved: (n: number) => `${n} unresolved`,
     blockedBy: (n: number) => `blocked by #${n}`,
+    nativeStack: "Native GitHub stack",
     blocks: (n: number) => `blocks ${plural(n, "PR")}`,
     inactive: (d: number) => `stale for ${d}d`,
     requested: "Pending",
@@ -261,6 +264,12 @@ export function PrCard({
           )}
           {pr.unresolved > 0 && (
             <Badge variant="destructive">{t.unresolved(pr.unresolved)}</Badge>
+          )}
+          {pr.stack && (
+            <Badge variant="secondary" title={t.nativeStack}>
+              <Layers />
+              {pr.stack.position}/{pr.stack.size}
+            </Badge>
           )}
           {merge?.kind === "blocked" && (
             <Badge variant="secondary">
