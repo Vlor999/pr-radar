@@ -9,6 +9,7 @@ import {
 import { cn } from "cn"
 import { useEffect, useState } from "react"
 
+import { Avatar } from "@/components/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import {
@@ -32,10 +33,10 @@ const S = strings(
       NONE: "Pas de review",
     } as Record<string, string>,
     review: {
-      APPROVED: "approuvée",
-      CHANGES_REQUESTED: "changements demandés",
-      COMMENTED: "commentée",
-      DISMISSED: "rejetée",
+      APPROVED: "Approuvée",
+      CHANGES_REQUESTED: "Changements demandés",
+      COMMENTED: "Commentée",
+      DISMISSED: "Rejetée",
     } as Record<string, string>,
     agoNow: "à l'instant",
     agoH: (h: number) => `il y a ${h} h`,
@@ -51,9 +52,7 @@ const S = strings(
     blockedBy: (n: number) => `bloquée par #${n}`,
     blocks: (n: number) => `bloque ${plural(n, "PR")}`,
     inactive: (d: number) => `inactive depuis ${d} j`,
-    reviewOf: "Review",
-    sep: " : ",
-    requested: "Review attendue :",
+    requested: "En attente",
     noReviewer: "Aucun reviewer",
     othersComments: (n: number) => `${plural(n, "commentaire")} des autres`,
     lastActivity: (ago: string) => `Dernière activité ${ago}`,
@@ -70,10 +69,10 @@ const S = strings(
       NONE: "No review",
     },
     review: {
-      APPROVED: "approved",
-      CHANGES_REQUESTED: "changes requested",
-      COMMENTED: "commented",
-      DISMISSED: "dismissed",
+      APPROVED: "Approved",
+      CHANGES_REQUESTED: "Changes requested",
+      COMMENTED: "Commented",
+      DISMISSED: "Dismissed",
     },
     agoNow: "just now",
     agoH: (h: number) => `${h}h ago`,
@@ -88,9 +87,7 @@ const S = strings(
     blockedBy: (n: number) => `blocked by #${n}`,
     blocks: (n: number) => `blocks ${plural(n, "PR")}`,
     inactive: (d: number) => `stale for ${d}d`,
-    reviewOf: "Review by",
-    sep: ": ",
-    requested: "Review requested:",
+    requested: "Pending",
     noReviewer: "No reviewer",
     othersComments: (n: number) => `${plural(n, "comment")} from others`,
     lastActivity: (ago: string) => `Last activity ${ago}`,
@@ -289,47 +286,55 @@ export function PrCard({
         </div>
         <CollapsibleContent>
           <div className="flex flex-col gap-3 border-t px-4 py-3 pl-10 text-sm">
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-2">
               {pr.reviews.map((r) => (
-                <li key={r.who}>
-                  {t.reviewOf}{" "}
-                  <span
-                    className={cn(
-                      "font-medium",
-                      r.state === "APPROVED" && "text-primary",
-                      r.state === "CHANGES_REQUESTED" && "text-destructive",
-                    )}
-                  >
+                <li key={r.who} className="flex items-center gap-2">
+                  <Avatar login={r.who} url={pr.url} />
+                  <span className="min-w-0 flex-1 truncate font-medium">
                     {r.who}
                   </span>
-                  {t.sep}
-                  {t.review[r.state] ?? r.state.toLowerCase()}
+                  <Badge variant={STATUS[r.state] ?? "outline"}>
+                    {t.review[r.state] ?? r.state.toLowerCase()}
+                  </Badge>
                 </li>
               ))}
               {pr.requested.map((who) => (
-                <li key={who}>
-                  <span className="text-muted-foreground">{t.requested}</span>{" "}
-                  {who}
+                <li key={who} className="flex items-center gap-2">
+                  <Avatar login={who} url={pr.url} />
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {who}
+                  </span>
+                  <Badge variant="outline" className="text-muted-foreground">
+                    <Clock />
+                    {t.requested}
+                  </Badge>
                 </li>
               ))}
               {pr.reviews.length + pr.requested.length === 0 && (
                 <li className="text-muted-foreground">{t.noReviewer}</li>
               )}
-              <li>{t.othersComments(pr.comments)}</li>
-              <li className="text-muted-foreground">
-                {t.lastActivity(ago(pr.updated, t))}
-              </li>
-              <li>
-                <a
-                  href={pr.url}
-                  target="_blank"
-                  rel="noopener"
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                >
-                  {t.openOnGithub} <ExternalLink className="size-3.5" />
-                </a>
-              </li>
             </ul>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <MessageSquare className="size-3.5" />
+                {t.othersComments(pr.comments)}
+              </span>
+              <span
+                className="inline-flex items-center gap-1"
+                title={new Date(pr.updated).toLocaleString(locale())}
+              >
+                <Clock className="size-3.5" />
+                {t.lastActivity(ago(pr.updated, t))}
+              </span>
+              <a
+                href={pr.url}
+                target="_blank"
+                rel="noopener"
+                className="ml-auto inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                {t.openOnGithub} <ExternalLink className="size-3.5" />
+              </a>
+            </div>
           </div>
         </CollapsibleContent>
       </Collapsible>
