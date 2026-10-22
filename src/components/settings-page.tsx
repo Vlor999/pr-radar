@@ -171,6 +171,7 @@ const S = strings(
       changesRequested: "Changements demandés",
       comments: "Nouveaux commentaires",
       ciFailed: "CI en échec",
+      reviewRequested: "Review demandée",
       drafts: "PR brouillon",
       draftsDescription: "Notifier aussi les changements des PR en brouillon.",
     },
@@ -357,6 +358,7 @@ const S = strings(
       changesRequested: "Changes requested",
       comments: "New comments",
       ciFailed: "CI failed",
+      reviewRequested: "Review requested",
       drafts: "Draft PRs",
       draftsDescription: "Also notify about changes on draft PRs.",
     },
@@ -1133,7 +1135,13 @@ function RefreshSection() {
   )
 }
 
-const NOTIFY = ["approved", "changesRequested", "comments", "ciFailed"] as const
+const NOTIFY = [
+  "approved",
+  "changesRequested",
+  "comments",
+  "ciFailed",
+  "reviewRequested",
+] as const
 
 // sur ordinateur, c'est le système qui autorise ou bloque : on renvoie vers ses réglages
 const SYSTEM_NOTIFICATION_SETTINGS = navigator.userAgent.includes("Mac")

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 import type { Lang } from "./i18n"
-import type { Pr } from "./types"
+import type { Who } from "./review"
 
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
 export type Settings = {
@@ -14,6 +14,8 @@ export type Settings = {
     changesRequested: boolean
     comments: boolean
     ciFailed: boolean
+    /** nouvelle demande de review à moi (ou re-request) */
+    reviewRequested: boolean
   }
   /** notifier aussi pour les PR brouillon */
   notifyDrafts: boolean
@@ -31,6 +33,10 @@ export type Settings = {
   slackAll: boolean
   /** mentions Slack : ids des conversations cochées (ignorés si `slackAll`) */
   slackChannels: string[]
+  /** onglet « À reviewer » : chip Tout / Moi / Équipe */
+  reviewWho: Who
+  /** onglet « À reviewer » : masquer les demandes d'équipe déjà approuvées */
+  reviewHideApproved: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
     changesRequested: true,
     comments: true,
     ciFailed: true,
+    reviewRequested: true,
   },
   notifyDrafts: true,
   defaultSort: "priority",
@@ -50,6 +57,8 @@ export const DEFAULT_SETTINGS: Settings = {
   lang: null,
   slackAll: false,
   slackChannels: [],
+  reviewWho: "all",
+  reviewHideApproved: false,
 }
 
 const KEY = "pr-radar:settings"
@@ -66,6 +75,10 @@ function read(): Settings {
       notify: { ...DEFAULT_SETTINGS.notify, ...saved.notify },
       // valeur inconnue (édition à la main, version plus récente) : on repose la question
       lang: saved.lang === "fr" || saved.lang === "en" ? saved.lang : null,
+      reviewWho: ["all", "me", "team"].includes(saved.reviewWho ?? "")
+        ? saved.reviewWho!
+        : "all",
+      reviewHideApproved: saved.reviewHideApproved === true,
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -79,7 +92,7 @@ export const getSettings = () => current
 /** Notifier ce changement de la PR : type de changement coché, et PR non brouillon si `notifyDrafts` est décoché. */
 export const shouldNotify = (
   s: Settings,
-  pr: Pr,
+  pr: { draft: boolean },
   kind: keyof Settings["notify"],
 ) => s.notify[kind] && (s.notifyDrafts || !pr.draft)
 

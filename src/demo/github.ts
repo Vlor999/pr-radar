@@ -9,7 +9,7 @@ import {
 import { allAccounts } from "@/lib/auth"
 import { trackQuota } from "@/lib/quota"
 import type { Reviewer } from "@/lib/reviewers"
-import type { MergedPr, Pr, Thread } from "@/lib/types"
+import type { MergedPr, Pr, ReviewPr, Thread } from "@/lib/types"
 
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
@@ -276,6 +276,70 @@ export const viewerProfile = async (_a: Account): Promise<Profile> => ({
   name: "Démo",
   avatarUrl: "https://github.com/identicons/me.png",
   url: "#",
+})
+
+// onglet « À reviewer » : nominative, équipe, draft, re-request, équipe déjà approuvée
+const review = (
+  p: Partial<ReviewPr> & Pick<ReviewPr, "repo" | "number" | "title">,
+): ReviewPr => ({
+  url: `https://github.com/${p.repo}/pull/${p.number}`,
+  author: "alice",
+  draft: false,
+  decision: "REVIEW_REQUIRED",
+  direct: true,
+  teams: [],
+  rerequest: false,
+  since: ago(4),
+  ...p,
+})
+
+const REVIEWS: ReviewPr[] = [
+  review({
+    repo: "acme/web",
+    number: 421,
+    title: "Mode sombre du tableau de bord",
+    since: ago(52),
+  }),
+  review({
+    repo: "acme/web",
+    number: 423,
+    title: "Cache des images produit",
+    author: "bob",
+    rerequest: true,
+    since: ago(3),
+  }),
+  review({
+    repo: "acme/api",
+    number: 94,
+    title: "Webhooks : signature HMAC",
+    author: "carol",
+    direct: false,
+    teams: ["backend"],
+    since: ago(26),
+  }),
+  review({
+    repo: "acme/api",
+    number: 96,
+    title: "Index sur orders.created_at",
+    author: "dave",
+    direct: false,
+    teams: ["backend"],
+    decision: "APPROVED",
+    since: ago(8),
+  }),
+  review({
+    repo: "globex/search",
+    number: 12,
+    title: "Synonymes dans la recherche",
+    author: "erin",
+    draft: true,
+    since: ago(100),
+  }),
+]
+
+export const fetchReviews = async () => ({
+  data: REVIEWS,
+  errors: [] as AccountError[],
 })
 
 const DEMO_USERS = ["alice", "bob", "carol", "dave", "erin", "frank"]
