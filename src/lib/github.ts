@@ -12,6 +12,7 @@ import {
   type AccountError,
 } from "./accounts"
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
+import { gqlFailed, type GqlResponse } from "./graphql"
 import { pick, strings } from "./i18n"
 import { trackQuota } from "./quota"
 import type { Decision, MergedPr, Pr, Thread } from "./types"
@@ -90,17 +91,13 @@ async function gql<T>(
   })
   trackQuota(res.headers)
   if (res.status === 401) throw new AuthError(pick(S).tokenRejected, c.account)
-  const json = (await res.json()) as {
-    data?: T
-    errors?: { message: string }[]
-  }
-  // GitHub renvoie des données partielles quand un repo d'org est inaccessible (SSO, restriction) : on les garde
-  if (!json.data)
+  const json = (await res.json()) as GqlResponse
+  if (gqlFailed(json))
     throw new Error(
       json.errors?.map((e) => e.message).join(" ; ") ??
         pick(S).http(res.status),
     )
-  return json.data
+  return json.data as T
 }
 
 /** GET REST, toutes les pages (en-tête Link). */
