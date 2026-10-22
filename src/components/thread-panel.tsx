@@ -2,6 +2,7 @@ import { useState, useTransition } from "react"
 import { ExternalLink, Loader2, Send } from "lucide-react"
 import { cn } from "cn"
 
+import { Avatar } from "@/components/avatar"
 import { reply } from "@/lib/actions"
 import { strings, useStrings } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
@@ -86,8 +87,7 @@ function ThreadCard({ thread, repo }: { thread: Thread; repo: string }) {
 
   const authors = [...new Set(thread.comments.map((c) => c.author))]
   const extra = authors.length - MAX_INITIALS
-  const chip =
-    "grid size-5 place-items-center rounded-full bg-muted text-[10px] font-medium uppercase ring-2 ring-card"
+  const url = thread.comments[0]?.url
 
   return (
     <Card
@@ -113,14 +113,12 @@ function ThreadCard({ thread, repo }: { thread: Thread; repo: string }) {
         {/* participants : décoratif, les auteurs sont lus dans la liste des commentaires */}
         <span aria-hidden className="flex shrink-0 -space-x-1.5">
           {authors.slice(0, MAX_INITIALS).map((a) => (
-            <span key={a} title={a} className={chip}>
-              {a[0]}
-            </span>
+            <Avatar key={a} login={a} url={url} />
           ))}
           {extra > 0 && (
             <span
               title={authors.slice(MAX_INITIALS).join(", ")}
-              className={chip}
+              className="grid size-5 place-items-center rounded-full bg-muted text-[10px] font-medium ring-2 ring-card"
             >
               +{extra}
             </span>
@@ -130,21 +128,24 @@ function ThreadCard({ thread, repo }: { thread: Thread; repo: string }) {
 
       {thread.hunk && <Hunk hunk={thread.hunk} />}
 
-      <ol className="flex flex-col gap-3 px-4 py-3 text-sm">
+      <ol className="flex flex-col text-sm">
         {thread.comments.map((c) => (
-          <li key={c.url} className="flex flex-col gap-0.5">
-            <div className="flex items-baseline gap-2">
-              <span className="font-medium">{c.author}</span>
-              <a
-                href={c.url}
-                target="_blank"
-                rel="noopener"
-                className="text-xs text-muted-foreground hover:underline"
-              >
-                {ago(c.at, t)}
-              </a>
+          <li key={c.url} className="flex gap-2.5 px-4 py-3 even:bg-muted/50">
+            <Avatar login={c.author} url={c.url} className="size-7" />
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="flex items-baseline gap-2">
+                <span className="font-medium">{c.author}</span>
+                <a
+                  href={c.url}
+                  target="_blank"
+                  rel="noopener"
+                  className="text-xs text-muted-foreground hover:underline"
+                >
+                  {ago(c.at, t)}
+                </a>
+              </div>
+              <p className="break-words whitespace-pre-line">{c.body}</p>
             </div>
-            <p className="break-words whitespace-pre-line">{c.body}</p>
           </li>
         ))}
       </ol>
