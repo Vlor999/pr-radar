@@ -5,7 +5,7 @@ export const STALE_DAYS = 5 // par défaut ; réglable dans l'app
 
 export const needsAttention = (p: Pr) =>
   p.decision === "CHANGES_REQUESTED" || p.unresolved > 0
-export const isStacked = (p: Pr) => !TRUNKS.includes(p.base)
+export const isStacked = (p: Pr) => !!p.stack || !TRUNKS.includes(p.base)
 export const idleDays = (p: Pr, now = Date.now()) =>
   Math.floor((now - Date.parse(p.updated)) / 86_400_000)
 export const isStale = (p: Pr, now = Date.now(), days = STALE_DAYS) =>
@@ -36,19 +36,32 @@ const byPriority = (a: Pr, b: Pr) =>
   b.unresolved - a.unresolved ||
   b.number - a.number
 
-/** Rattache chaque PR à la PR dont la branche est sa base (stack), sinon à sa branche de base. */
+/**
+ * Rattache chaque PR à celle d'en dessous dans son stack natif GitHub, sinon à la PR dont
+ * la branche est sa base (stack déduit), sinon à sa branche de base.
+ */
 export function buildTree(prs: Pr[]): Root[] {
   const byHead = new Map(prs.map((p) => [p.head, p]))
+  const below = (p: Pr) => {
+    const s = p.stack
+    const up =
+      (s &&
+        prs.find(
+          (q) =>
+            q.stack?.number === s.number && q.stack.position === s.position - 1,
+        )) ||
+      byHead.get(p.base)
+    return up !== p ? up : undefined
+  }
   const kids = new Map<string, Pr[]>() // head d'une PR, ou "base:<branche>"
   for (const p of prs) {
-    const key =
-      byHead.has(p.base) && p.base !== p.head ? p.base : "base:" + p.base
+    const key = below(p)?.head ?? "base:" + p.base
     kids.set(key, [...(kids.get(key) ?? []), p])
   }
 
   const node = (p: Pr, seen: Set<string>): PrNode => ({
     ...p,
-    parent: byHead.get(p.base)?.number ?? null,
+    parent: below(p)?.number ?? null,
     children: seen.has(p.head) // garde-fou anti-cycle
       ? []
       : (kids.get(p.head) ?? [])
