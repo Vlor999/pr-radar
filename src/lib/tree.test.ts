@@ -4,6 +4,7 @@ import { test } from "node:test"
 import {
   buildTree,
   filterTree,
+  isStacked,
   isStale,
   keepVanished,
   mergeState,
@@ -70,6 +71,67 @@ test("une base sans PR à moi devient sa propre racine, après main", () => {
       ["feat/x", false],
     ],
   )
+})
+
+test("le stack natif GitHub l'emporte sur les branches", () => {
+  const stack = (position: number) => ({ number: 9, position, size: 2 })
+  const [root] = buildTree([
+    pr(1, "a", "main", { stack: stack(1) }),
+    pr(2, "b", "main", { stack: stack(2) }),
+  ])
+  assert.deepEqual(
+    root.children.map((n) => [n.number, n.children.map((c) => c.number)]),
+    [[1, [2]]],
+  )
+  assert.equal(root.children[0].children[0].parent, 1)
+})
+
+test("le stack natif l'emporte sur une base qui pointe vers une autre PR", () => {
+  const stack = (position: number) => ({ number: 9, position, size: 2 })
+  const [root] = buildTree([
+    pr(1, "a", "main", { stack: stack(1) }),
+    pr(2, "b", "main"),
+    pr(3, "c", "b", { stack: stack(2) }),
+  ])
+  const n1 = root.children.find((n) => n.number === 1)!
+  const n2 = root.children.find((n) => n.number === 2)!
+  assert.deepEqual(
+    n1.children.map((c) => [c.number, c.parent]),
+    [[3, 1]],
+  )
+  assert.deepEqual(n2.children, [])
+})
+
+test("une base qui pointe vers la PR au-dessus dans le stack natif ne fait pas de cycle", () => {
+  const stack = (position: number) => ({ number: 9, position, size: 2 })
+  const [root] = buildTree([
+    pr(1, "q", "p", { stack: stack(1) }),
+    pr(2, "p", "main", { stack: stack(2) }),
+  ])
+  assert.equal(root.branch, "p")
+  assert.deepEqual(
+    root.children.map((n) => [n.number, n.children.map((c) => c.number)]),
+    [[1, [2]]],
+  )
+})
+
+test("sans la PR d'en dessous du stack natif, les branches décident", () => {
+  const [root] = buildTree([
+    pr(1, "a", "main"),
+    pr(2, "b", "a", { stack: { number: 9, position: 3, size: 3 } }),
+  ])
+  assert.equal(root.children[0].children[0].number, 2)
+})
+
+test("le bas d'un stack natif sur main compte comme stackée", () => {
+  const stack = { number: 9, position: 1, size: 2 }
+  assert.equal(isStacked(pr(1, "a", "main", { stack })), true)
+  assert.equal(isStacked(pr(2, "b", "main")), false)
+})
+
+test("un stack natif d'une seule PR ne compte pas comme stackée", () => {
+  const stack = { number: 9, position: 1, size: 1 }
+  assert.equal(isStacked(pr(1, "a", "main", { stack })), false)
 })
 
 test("un cycle de branches ne boucle pas", () => {

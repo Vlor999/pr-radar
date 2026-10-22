@@ -35,6 +35,8 @@ export type Pr = {
   /** reviews demandées ; `team` : une équipe (nom affiché, pas un login) */
   requested: { who: string; team?: boolean }[]
   updated: string
+  /** stack natif GitHub (`stackEntry`) ; absent : stack déduit des branches */
+  stack?: { number: number; position: number; size: number }
 }
 
 /** Une PR dans l'arbre : ses enfants sont les PR stackées sur sa branche. */

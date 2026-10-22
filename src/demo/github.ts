@@ -83,6 +83,7 @@ const PRS: Pr[] = [
     number: 412,
     title: "Refonte de la page de paiement",
     head: "feat/checkout",
+    stack: { number: 5, position: 1, size: 3 }, // stack natif GitHub (le globex/ledger des autres comptes reste déduit)
     decision: "APPROVED",
     reviews: [{ who: "alice", state: "APPROVED" }],
     requested: [],
@@ -93,6 +94,7 @@ const PRS: Pr[] = [
     title: "Checkout : validation des adresses",
     head: "feat/checkout-address",
     base: "feat/checkout",
+    stack: { number: 5, position: 2, size: 3 },
     unresolved: 1,
     comments: 2,
     threads: [
@@ -109,6 +111,7 @@ const PRS: Pr[] = [
     title: "Checkout : tests e2e",
     head: "feat/checkout-e2e",
     base: "feat/checkout-address",
+    stack: { number: 5, position: 3, size: 3 },
     draft: true,
     ci: "PENDING",
   }),

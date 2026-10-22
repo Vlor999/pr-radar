@@ -14,12 +14,12 @@ import {
 } from "./accounts"
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
 import { pick, strings } from "./i18n"
+import { withStackFallback } from "./pr-query"
 import { trackQuota } from "./quota"
 import type { Decision, MergedPr, Pr, Thread } from "./types"
 
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
-const PAGE_SIZE = 20 // le coût GraphQL suit les bornes demandées, pas les nœuds renvoyés : 20 × 50 fils × 20 messages ≈ 21 points (103 avec 50 × 100 × 50)
 const REPOS_PER_QUERY = 5 // une requête de recherche GitHub est limitée en longueur et en opérateurs
 const MAX_BODY = 4000 // caractères gardés par message de discussion
 const HUNK_LINES = 8 // GitHub montre aussi la fin du hunk, qui se termine sur la ligne commentée
@@ -125,24 +125,6 @@ async function restAll<T>(c: Conn, path: string): Promise<T[]> {
   return out
 }
 
-const QUERY = `
-query($q: String!, $after: String) {
-  search(query: $q, type: ISSUE, first: ${PAGE_SIZE}, after: $after) {
-    pageInfo { hasNextPage endCursor }
-    nodes { ... on PullRequest {
-      number title url isDraft updatedAt mergeable reviewDecision headRefName baseRefName additions deletions changedFiles
-      repository { nameWithOwner }
-      comments(first: 100) { nodes { author { login } } }
-      reviewThreads(first: 50) { nodes { id isResolved isOutdated path line
-        hunk: comments(first: 1) { nodes { diffHunk } }
-        comments(first: 20) { nodes { author { login } bodyText url createdAt } } } }
-      latestOpinionatedReviews(first: 20) { nodes { author { login } state } }
-      reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
-      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-    } }
-  }
-}`
-
 type Login = { author: { login: string } | null }
 type RawComment = Login & { bodyText: string; url: string; createdAt: string }
 type RawPr = {
@@ -178,6 +160,10 @@ type RawPr = {
   commits: {
     nodes: { commit: { statusCheckRollup: { state: string } | null } }[]
   }
+  stackEntry?: {
+    position: number
+    stack: { number: number; size: number }
+  } | null
 }
 type Page<N> = {
   search: {
@@ -294,6 +280,9 @@ function toPr(p: RawPr, login: string, account: string): Pr {
           : [],
     ),
     updated: p.updatedAt,
+    ...(p.stackEntry && {
+      stack: { ...p.stackEntry.stack, position: p.stackEntry.position },
+    }),
   }
 }
 
@@ -337,6 +326,9 @@ const perFollowed = <T>(
   )
 }
 
+// comptes dont GitHub a refusé `stackEntry` : la session continue sans les stacks natifs
+const withoutStack = new Set<string>()
+
 /** Mes PR ouvertes ; `errors` : comptes en échec, les autres sont gardés. */
 export function fetchPrs(
   repos: string[],
@@ -345,13 +337,17 @@ export function fetchPrs(
     perFollowed(repos, async (a, names) => {
       const login = await me(a)
       const parts = await Promise.all(
-        chunk(names, REPOS_PER_QUERY).map((c) =>
-          searchAll<RawPr>(
-            conn(a),
-            QUERY,
-            "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" "),
-          ),
-        ),
+        chunk(names, REPOS_PER_QUERY).map((c) => {
+          const q =
+            "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" ")
+          // ponytail: au premier chargement, chaque requête parallèle peut relancer une fois (accepté)
+          return withStackFallback(
+            a.host,
+            withoutStack.has(a.id),
+            (query) => searchAll<RawPr>(conn(a), query, q),
+            () => withoutStack.add(a.id),
+          )
+        }),
       )
       return parts.flat().map((p) => toPr(p, login, a.id))
     }),
