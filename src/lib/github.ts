@@ -135,9 +135,14 @@ query($q: String!, $after: String) {
       latestOpinionatedReviews(first: 20) { nodes { author { login } state } }
       reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+      STACK
     } }
   }
 }`
+// stacks natifs (preview GitHub.com, juillet 2026) : champ absent du schéma GHES, la requête y échouerait
+const STACK = "stackEntry { position stack { number size } }"
+const queryFor = (host: string) =>
+  QUERY.replace("STACK", host === GITHUB ? STACK : "")
 
 type Login = { author: { login: string } | null }
 type RawComment = Login & { bodyText: string; url: string; createdAt: string }
@@ -174,6 +179,10 @@ type RawPr = {
   commits: {
     nodes: { commit: { statusCheckRollup: { state: string } | null } }[]
   }
+  stackEntry?: {
+    position: number
+    stack: { number: number; size: number }
+  } | null
 }
 type Page<N> = {
   search: {
@@ -282,6 +291,9 @@ function toPr(p: RawPr, login: string, account: string): Pr {
           : [],
     ),
     updated: p.updatedAt,
+    ...(p.stackEntry && {
+      stack: { ...p.stackEntry.stack, position: p.stackEntry.position },
+    }),
   }
 }
 
@@ -336,7 +348,7 @@ export function fetchPrs(
         chunk(names, REPOS_PER_QUERY).map((c) =>
           searchAll<RawPr>(
             conn(a),
-            QUERY,
+            queryFor(a.host),
             "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" "),
           ),
         ),
