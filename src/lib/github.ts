@@ -17,6 +17,7 @@ import { gqlFailed, gqlMessage, type GqlResponse } from "./graphql"
 import { pick, strings } from "./i18n"
 import { withStackFallback } from "./pr-query"
 import { trackQuota } from "./quota"
+import type { Reviewer } from "./reviewers"
 import type { Decision, MergedPr, Pr, Thread } from "./types"
 
 const CACHE_TTL_MS = 60_000
@@ -24,6 +25,7 @@ const REPO_LIST_TTL_MS = 10 * 60_000
 const REPOS_PER_QUERY = 5 // une requête de recherche GitHub est limitée en longueur et en opérateurs
 const MAX_BODY = 4000 // caractères gardés par message de discussion
 const HUNK_LINES = 8 // GitHub montre aussi la fin du hunk, qui se termine sur la ligne commentée
+const ASSIGNABLE_PAGE = 20 // assez pour un popover ; la recherche affine au-delà
 // la recherche GitHub renvoie parfois 0 résultat sans erreur (~1 appel sur 3) : un vide est relu avant d'être cru.
 // Reste ~1/27 par recherche (un lot de 5 repos), absorbé par `keepVanished` dans store.reload.
 const EMPTY_SEARCH_RETRIES = 2
@@ -481,4 +483,68 @@ export async function viewerProfile(a: Account): Promise<Profile> {
       "{ viewer { login name avatarUrl url } }",
     )
   ).viewer
+}
+
+const accountOf = (repo: string) => {
+  const a = findAccount(splitKey(repo).account)
+  if (!a) throw new AuthError(pick(S).notSignedIn)
+  return a
+}
+
+/** Reviewers possibles d'une de mes PR : suggestions GitHub, puis utilisateurs assignables filtrés par `query`. */
+export async function fetchReviewerOptions(
+  repo: string,
+  number: number,
+  query: string,
+): Promise<{
+  prId: string
+  viewer: string
+  suggested: Reviewer[]
+  assignable: Reviewer[]
+}> {
+  const [owner, name] = splitKey(repo).name.split("/")
+  const res = await gql<{
+    viewer: { login: string }
+    repository: {
+      pullRequest: {
+        id: string
+        suggestedReviewers: { reviewer: Reviewer }[]
+      } | null
+      assignableUsers: { nodes: Reviewer[] } | null
+    } | null
+  }>(
+    conn(accountOf(repo)),
+    `query($owner: String!, $name: String!, $number: Int!, $q: String) {
+      viewer { login }
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) { id suggestedReviewers { reviewer { login id } } }
+        assignableUsers(first: ${ASSIGNABLE_PAGE}, query: $q) { nodes { login id } }
+      }
+    }`,
+    { owner, name, number, q: query || null },
+  )
+  // `repository` null + errors : `gql` lève déjà ; ici, PR absente (champ imbriqué) ou repo null sans erreur
+  const pr = res.repository?.pullRequest
+  const users = res.repository?.assignableUsers
+  if (!pr || !users) throw new Error(pick(S).notFound(repo))
+  return {
+    prId: pr.id,
+    viewer: res.viewer.login,
+    suggested: pr.suggestedReviewers.map((s) => s.reviewer),
+    assignable: users.nodes,
+  }
+}
+
+/** Demande une review à un utilisateur ; `union` garde les demandes déjà en cours. */
+export async function requestReviewer(
+  prId: string,
+  userId: string,
+  repo: string,
+) {
+  // refus (pas de droit d'écriture) : `gql` lève le message de GitHub
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($pr: ID!, $user: ID!) { requestReviews(input: { pullRequestId: $pr, userIds: [$user], union: true }) { pullRequest { id } } }",
+    { pr: prId, user: userId },
+  )
 }
