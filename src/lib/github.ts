@@ -524,6 +524,7 @@ export function fetchReviews(): Promise<{
           conn(a),
           REVIEW_QUERY,
           "is:pr is:open archived:false review-requested:@me",
+          0, // aucune review en attente est courant : pas de relance, la liste vide est gardée un chargement (store)
         )
       ).map((p) => toReview(p, login, a.id))
     }),

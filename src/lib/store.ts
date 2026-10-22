@@ -63,6 +63,7 @@ let data: Data = {
 const listeners = new Set<() => void>()
 let seq = 0
 let held = new Set<string>() // repos dont les PR sont gardées malgré une recherche vide
+let heldReviews = new Set<string>() // comptes dont les reviews sont gardées malgré une recherche vide
 
 function set(next: Data) {
   data = next
@@ -124,15 +125,18 @@ export async function reload() {
     const kept = keepVanished(data.prs, fetched, held, live)
     held = kept.held
     const prs = kept.prs
+    const reviews = mergeReviews(
+      data.reviews,
+      found.data,
+      queried.map((a) => a.id),
+      found.errors.map((e) => e.account.id),
+      heldReviews,
+    )
+    heldReviews = reviews.held
     set({
       prs,
       withPrs,
-      reviews: mergeReviews(
-        data.reviews,
-        found.data,
-        queried.map((a) => a.id),
-        found.errors.map((e) => e.account.id),
-      ),
+      reviews: reviews.known,
       error: shown.length ? describeErrors(shown).slice(0, 300) : undefined,
       trees: live.map((repo) => ({
         repo,

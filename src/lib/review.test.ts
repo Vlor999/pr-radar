@@ -201,7 +201,8 @@ test("un compte en échec garde ses PR précédentes", () => {
     [rv({ number: 3 })],
     ["github", "w@ghe"],
     ["w@ghe"],
-  )
+    new Set(),
+  ).known
   assert.deepEqual(next.accounts, ["github", "w@ghe"])
   assert.deepEqual(
     next.reviews.map((p) => p.number),
@@ -211,7 +212,7 @@ test("un compte en échec garde ses PR précédentes", () => {
 
 test("un compte en échec garde ses PR sans re-notification à son retour", () => {
   const prev = { accounts: ["w@ghe"], reviews: [rv({ repo: "w@ghe:o/r" })] }
-  const kept = mergeReviews(prev, [], ["w@ghe"], ["w@ghe"])
+  const kept = mergeReviews(prev, [], ["w@ghe"], ["w@ghe"], new Set()).known
   assert.deepEqual(newRequests(snapshot(kept), [rv({ repo: "w@ghe:o/r" })]), [])
 })
 
@@ -221,6 +222,27 @@ test("un compte jamais lu avec succès reste inconnu", () => {
     [],
     ["w@ghe"],
     ["w@ghe"],
-  )
+    new Set(),
+  ).known
   assert.deepEqual(next.accounts, [])
+})
+
+test("un compte qui revient vide sans erreur garde ses PR un chargement", () => {
+  const prev = { accounts: ["github"], reviews: [rv()] }
+  const next = mergeReviews(prev, [], ["github"], [], new Set())
+  assert.deepEqual(next.known.reviews, [rv()])
+  assert.deepEqual([...next.held], ["github"])
+})
+
+test("un compte vide deux fois de suite n'a plus de PR", () => {
+  const prev = { accounts: ["github"], reviews: [rv()] }
+  const next = mergeReviews(prev, [], ["github"], [], new Set(["github"]))
+  assert.deepEqual(next.known.reviews, [])
+  assert.equal(next.held.size, 0)
+})
+
+test("une liste revenue après un chargement gardé n'est pas re-notifiée", () => {
+  const prev = { accounts: ["github"], reviews: [rv()] }
+  const kept = mergeReviews(prev, [], ["github"], [], new Set())
+  assert.deepEqual(newRequests(snapshot(kept.known), [rv()]), [])
 })

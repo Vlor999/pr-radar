@@ -86,21 +86,31 @@ const accountOf = (p: ReviewPr) => splitKey(p.repo).account
 
 /**
  * Nouveau chargement : les comptes en échec gardent leurs PR précédentes (pas de re-notification à leur
- * retour) ; un compte jamais lu avec succès reste inconnu.
+ * retour) ; un compte jamais lu avec succès reste inconnu. Un compte qui avait des PR et revient vide sans
+ * erreur (recherche GitHub vide à tort) les garde un chargement (`held`) ; vide deux fois de suite : vide.
  */
 export function mergeReviews(
   prev: Reviews,
   data: ReviewPr[],
   queried: string[],
   failed: string[],
-): Reviews {
-  const kept = prev.accounts.filter((a) => failed.includes(a))
+  held: Set<string>,
+): { known: Reviews; held: Set<string> } {
+  const answered = queried.filter((a) => !failed.includes(a))
+  const had = (a: string) => prev.reviews.some((p) => accountOf(p) === a)
+  const emptied = answered.filter(
+    (a) => !held.has(a) && had(a) && !data.some((p) => accountOf(p) === a),
+  )
+  const kept = [...prev.accounts.filter((a) => failed.includes(a)), ...emptied]
   return {
-    accounts: [...queried.filter((a) => !failed.includes(a)), ...kept],
-    reviews: [
-      ...data,
-      ...prev.reviews.filter((p) => kept.includes(accountOf(p))),
-    ],
+    known: {
+      accounts: [...answered, ...kept.filter((a) => !answered.includes(a))],
+      reviews: [
+        ...data,
+        ...prev.reviews.filter((p) => kept.includes(accountOf(p))),
+      ],
+    },
+    held: new Set(emptied),
   }
 }
 
