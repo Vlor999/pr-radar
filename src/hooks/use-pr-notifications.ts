@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core"
 import { useEffect, useRef, useSyncExternalStore } from "react"
 
 import { pick, strings } from "@/lib/i18n"
-import { getSettings, type Settings } from "@/lib/settings"
+import { getSettings, shouldNotify, type Settings } from "@/lib/settings"
 import type { Pr } from "@/lib/types"
 
 const S = strings(
@@ -92,7 +92,9 @@ export function usePrNotifications(prs: Pr[]) {
     const changes = [...current].flatMap(([key, now]) => {
       const was = before.get(key)
       const what = was && change(was, now)
-      return what && getSettings().notify[what.kind] ? [{ key, now, what }] : []
+      return what && shouldNotify(getSettings(), now, what.kind)
+        ? [{ key, now, what }]
+        : []
     })
     for (const { key, now, what } of changes)
       notify(pick(S).title(key, what.text), now.title).catch(() => {})

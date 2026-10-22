@@ -171,6 +171,8 @@ const S = strings(
       changesRequested: "Changements demandés",
       comments: "Nouveaux commentaires",
       ciFailed: "CI en échec",
+      drafts: "PR brouillon",
+      draftsDescription: "Notifier aussi les changements des PR en brouillon.",
     },
     display: {
       description: "Tri et repères de la vue des PR.",
@@ -355,6 +357,8 @@ const S = strings(
       changesRequested: "Changes requested",
       comments: "New comments",
       ciFailed: "CI failed",
+      drafts: "Draft PRs",
+      draftsDescription: "Also notify about changes on draft PRs.",
     },
     display: {
       description: "Sorting and cues for the PR view.",
@@ -1208,6 +1212,17 @@ function NotificationsSection() {
           />
         </Row>
       ))}
+      <Row
+        label={t.notifications.drafts}
+        description={t.notifications.draftsDescription}
+        labelId="notify-drafts"
+      >
+        <Toggle
+          labelledBy="notify-drafts"
+          checked={s.notifyDrafts}
+          onChange={(v) => updateSettings({ notifyDrafts: v })}
+        />
+      </Row>
     </Section>
   )
 }
