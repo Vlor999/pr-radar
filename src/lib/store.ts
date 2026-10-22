@@ -81,7 +81,7 @@ export async function reload() {
     if (!repos) {
       // premier lancement : on suit d'office les repos où j'ai des PR ouvertes
       repos = withPrs
-      setRepos(repos)
+      if (repos.length) setRepos(repos) // vide peut-être à tort : relu au prochain chargement
     }
     // repos d'un compte déconnecté : gardés dans la liste, pas affichés
     repos = repos.filter((r) => findAccount(splitKey(r).account))
