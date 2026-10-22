@@ -6,22 +6,30 @@ import {
   GITHUB,
   graphqlUrl,
   repoKey,
+  retryEmpty,
   settle,
   splitKey,
   type Account,
   type AccountError,
 } from "./accounts"
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
+import { gqlFailed, gqlMessage, type GqlResponse } from "./graphql"
 import { pick, strings } from "./i18n"
+import { withStackFallback } from "./pr-query"
 import { trackQuota } from "./quota"
-import type { Decision, MergedPr, Pr, Thread } from "./types"
+import { toReview, type RawReview } from "./review"
+import type { Reviewer } from "./reviewers"
+import type { Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
 
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
-const PAGE_SIZE = 20 // le coût GraphQL suit les bornes demandées, pas les nœuds renvoyés : 20 × 50 fils × 20 messages ≈ 21 points (103 avec 50 × 100 × 50)
 const REPOS_PER_QUERY = 5 // une requête de recherche GitHub est limitée en longueur et en opérateurs
 const MAX_BODY = 4000 // caractères gardés par message de discussion
 const HUNK_LINES = 8 // GitHub montre aussi la fin du hunk, qui se termine sur la ligne commentée
+const ASSIGNABLE_PAGE = 20 // assez pour un popover ; la recherche affine au-delà
+// la recherche GitHub renvoie parfois 0 résultat sans erreur (~1 appel sur 3) : un vide est relu avant d'être cru.
+// Reste ~1/27 par recherche (un lot de 5 repos), absorbé par `keepVanished` dans store.reload.
+const EMPTY_SEARCH_RETRIES = 2
 
 const S = strings(
   {
@@ -90,17 +98,10 @@ async function gql<T>(
   })
   trackQuota(res.headers)
   if (res.status === 401) throw new AuthError(pick(S).tokenRejected, c.account)
-  const json = (await res.json()) as {
-    data?: T
-    errors?: { message: string }[]
-  }
-  // GitHub renvoie des données partielles quand un repo d'org est inaccessible (SSO, restriction) : on les garde
-  if (!json.data)
-    throw new Error(
-      json.errors?.map((e) => e.message).join(" ; ") ??
-        pick(S).http(res.status),
-    )
-  return json.data
+  const json = (await res.json()) as GqlResponse
+  if (gqlFailed(json))
+    throw new Error(gqlMessage(json, pick(S).http(res.status)))
+  return json.data as T
 }
 
 /** GET REST, toutes les pages (en-tête Link). */
@@ -120,24 +121,6 @@ async function restAll<T>(c: Conn, path: string): Promise<T[]> {
   }
   return out
 }
-
-const QUERY = `
-query($q: String!, $after: String) {
-  search(query: $q, type: ISSUE, first: ${PAGE_SIZE}, after: $after) {
-    pageInfo { hasNextPage endCursor }
-    nodes { ... on PullRequest {
-      number title url isDraft updatedAt mergeable reviewDecision headRefName baseRefName additions deletions changedFiles
-      repository { nameWithOwner }
-      comments(first: 100) { nodes { author { login } } }
-      reviewThreads(first: 50) { nodes { id isResolved isOutdated path line
-        hunk: comments(first: 1) { nodes { diffHunk } }
-        comments(first: 20) { nodes { author { login } bodyText url createdAt } } } }
-      latestOpinionatedReviews(first: 20) { nodes { author { login } state } }
-      reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
-      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-    } }
-  }
-}`
 
 type Login = { author: { login: string } | null }
 type RawComment = Login & { bodyText: string; url: string; createdAt: string }
@@ -174,6 +157,10 @@ type RawPr = {
   commits: {
     nodes: { commit: { statusCheckRollup: { state: string } | null } }[]
   }
+  stackEntry?: {
+    position: number
+    stack: { number: number; size: number }
+  } | null
 }
 type Page<N> = {
   search: {
@@ -188,18 +175,26 @@ const chunk = <T>(xs: T[], n: number) =>
     xs.slice(i * n, (i + 1) * n),
   )
 
-/** Tous les résultats d'une recherche GraphQL, page par page. */
-async function searchAll<N>(c: Conn, query: string, q: string): Promise<N[]> {
-  const out: N[] = []
-  let after: string | null = null
-  do {
-    const { search }: Page<N> = await gql<Page<N>>(c, query, { q, after })
-    out.push(
-      ...search.nodes.filter((n): n is N => !!n && Object.keys(n).length > 0),
-    )
-    after = search.pageInfo.hasNextPage ? search.pageInfo.endCursor : null
-  } while (after)
-  return out
+/** Tous les résultats d'une recherche GraphQL, page par page. Résultat vide : relu `retries` fois
+ * (seule la page 1 est vérifiée : une page suivante vide à tort tronque la liste sans erreur). */
+async function searchAll<N>(
+  c: Conn,
+  query: string,
+  q: string,
+  retries = EMPTY_SEARCH_RETRIES,
+): Promise<N[]> {
+  return retryEmpty(retries, async () => {
+    const out: N[] = []
+    let after: string | null = null
+    do {
+      const { search }: Page<N> = await gql<Page<N>>(c, query, { q, after })
+      out.push(
+        ...search.nodes.filter((n): n is N => !!n && Object.keys(n).length > 0),
+      )
+      after = search.pageInfo.hasNextPage ? search.pageInfo.endCursor : null
+    } while (after)
+    return out
+  })
 }
 
 /** Login du compte connecté (sert aussi à valider un jeton avant de l'enregistrer). */
@@ -282,6 +277,9 @@ function toPr(p: RawPr, login: string, account: string): Pr {
           : [],
     ),
     updated: p.updatedAt,
+    ...(p.stackEntry && {
+      stack: { ...p.stackEntry.stack, position: p.stackEntry.position },
+    }),
   }
 }
 
@@ -325,6 +323,9 @@ const perFollowed = <T>(
   )
 }
 
+// comptes dont GitHub a refusé `stackEntry` : la session continue sans les stacks natifs
+const withoutStack = new Set<string>()
+
 /** Mes PR ouvertes ; `errors` : comptes en échec, les autres sont gardés. */
 export function fetchPrs(
   repos: string[],
@@ -333,13 +334,17 @@ export function fetchPrs(
     perFollowed(repos, async (a, names) => {
       const login = await me(a)
       const parts = await Promise.all(
-        chunk(names, REPOS_PER_QUERY).map((c) =>
-          searchAll<RawPr>(
-            conn(a),
-            QUERY,
-            "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" "),
-          ),
-        ),
+        chunk(names, REPOS_PER_QUERY).map((c) => {
+          const q =
+            "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" ")
+          // ponytail: au premier chargement, chaque requête parallèle peut relancer une fois (accepté)
+          return withStackFallback(
+            a.host,
+            withoutStack.has(a.id),
+            (query) => searchAll<RawPr>(conn(a), query, q),
+            () => withoutStack.add(a.id),
+          )
+        }),
       )
       return parts.flat().map((p) => toPr(p, login, a.id))
     }),
@@ -391,6 +396,7 @@ export function fetchMerged(
             nodes { ... on PullRequest { number title url mergedAt repository { nameWithOwner } } } } }`,
                 `is:pr is:merged author:@me merged:${from}..${to} ` +
                   c.map((r) => "repo:" + r).join(" "),
+                0, // aucun merge sur la période est courant : pas de relance
               ),
             ),
           )
@@ -478,4 +484,105 @@ export async function viewerProfile(a: Account): Promise<Profile> {
       "{ viewer { login name avatarUrl url } }",
     )
   ).viewer
+}
+
+// coût GraphQL d'une page : 1 + 50 × 2 sous-connexions ≈ 1 point (bornes demandées, pas nœuds renvoyés)
+const REVIEW_QUERY = `
+query($q: String!, $after: String) {
+  search(query: $q, type: ISSUE, first: 50, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ... on PullRequest {
+      number title url isDraft createdAt reviewDecision
+      author { login }
+      repository { nameWithOwner }
+      viewerLatestReview { state }
+      reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
+      timelineItems(last: 20, itemTypes: [REVIEW_REQUESTED_EVENT]) { nodes { ... on ReviewRequestedEvent {
+        createdAt requestedReviewer { ... on User { login } ... on Team { name } } } } }
+    } }
+  }
+}`
+
+/** PR qui attendent ma review (moi ou une de mes équipes), sur tous les repos accessibles. */
+export function fetchReviews(): Promise<{
+  data: ReviewPr[]
+  errors: AccountError[]
+}> {
+  return cached("reviews", CACHE_TTL_MS, () =>
+    settle(allAccounts(), async (a) => {
+      const login = await me(a)
+      return (
+        await searchAll<RawReview>(
+          conn(a),
+          REVIEW_QUERY,
+          "is:pr is:open archived:false review-requested:@me",
+          0, // aucune review en attente est courant : pas de relance, la liste vide est gardée un chargement (store)
+        )
+      ).map((p) => toReview(p, login, a.id))
+    }),
+  )
+}
+
+const accountOf = (repo: string) => {
+  const a = findAccount(splitKey(repo).account)
+  if (!a) throw new AuthError(pick(S).notSignedIn)
+  return a
+}
+
+/** Reviewers possibles d'une de mes PR : suggestions GitHub, puis utilisateurs assignables filtrés par `query`. */
+export async function fetchReviewerOptions(
+  repo: string,
+  number: number,
+  query: string,
+): Promise<{
+  prId: string
+  viewer: string
+  suggested: Reviewer[]
+  assignable: Reviewer[]
+}> {
+  const [owner, name] = splitKey(repo).name.split("/")
+  const res = await gql<{
+    viewer: { login: string }
+    repository: {
+      pullRequest: {
+        id: string
+        suggestedReviewers: { reviewer: Reviewer }[]
+      } | null
+      assignableUsers: { nodes: Reviewer[] } | null
+    } | null
+  }>(
+    conn(accountOf(repo)),
+    `query($owner: String!, $name: String!, $number: Int!, $q: String) {
+      viewer { login }
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) { id suggestedReviewers { reviewer { login id } } }
+        assignableUsers(first: ${ASSIGNABLE_PAGE}, query: $q) { nodes { login id } }
+      }
+    }`,
+    { owner, name, number, q: query || null },
+  )
+  // `repository` null + errors : `gql` lève déjà ; ici, PR absente (champ imbriqué) ou repo null sans erreur
+  const pr = res.repository?.pullRequest
+  const users = res.repository?.assignableUsers
+  if (!pr || !users) throw new Error(pick(S).notFound(repo))
+  return {
+    prId: pr.id,
+    viewer: res.viewer.login,
+    suggested: pr.suggestedReviewers.map((s) => s.reviewer),
+    assignable: users.nodes,
+  }
+}
+
+/** Demande une review à un utilisateur ; `union` garde les demandes déjà en cours. */
+export async function requestReviewer(
+  prId: string,
+  userId: string,
+  repo: string,
+) {
+  // refus (pas de droit d'écriture) : `gql` lève le message de GitHub
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($pr: ID!, $user: ID!) { requestReviews(input: { pullRequestId: $pr, userIds: [$user], union: true }) { pullRequest { id } } }",
+    { pr: prId, user: userId },
+  )
 }

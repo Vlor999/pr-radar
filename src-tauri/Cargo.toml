@@ -1,6 +1,6 @@
 [package]
 name = "pr-radar"
-version = "0.5.0"
+version = "0.6.0"
 description = "PR Radar: your open GitHub PRs, as a tree"
 authors = ["Vlor999"]
 edition = "2024"
@@ -34,8 +34,8 @@ tauri-plugin-deep-link = "2"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
-codegen-units = 1
-lto = true
+# thin LTO and parallel codegen: much shorter CI builds, binary slightly bigger
+lto = "thin"
 opt-level = 3
 panic = "abort"
 strip = true

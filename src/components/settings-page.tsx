@@ -171,6 +171,9 @@ const S = strings(
       changesRequested: "Changements demandés",
       comments: "Nouveaux commentaires",
       ciFailed: "CI en échec",
+      reviewRequested: "Review demandée",
+      drafts: "PR brouillon",
+      draftsDescription: "Notifier aussi les changements des PR en brouillon.",
     },
     display: {
       description: "Tri et repères de la vue des PR.",
@@ -355,6 +358,9 @@ const S = strings(
       changesRequested: "Changes requested",
       comments: "New comments",
       ciFailed: "CI failed",
+      reviewRequested: "Review requested",
+      drafts: "Draft PRs",
+      draftsDescription: "Also notify about changes on draft PRs.",
     },
     display: {
       description: "Sorting and cues for the PR view.",
@@ -1129,7 +1135,13 @@ function RefreshSection() {
   )
 }
 
-const NOTIFY = ["approved", "changesRequested", "comments", "ciFailed"] as const
+const NOTIFY = [
+  "approved",
+  "changesRequested",
+  "comments",
+  "ciFailed",
+  "reviewRequested",
+] as const
 
 // sur ordinateur, c'est le système qui autorise ou bloque : on renvoie vers ses réglages
 const SYSTEM_NOTIFICATION_SETTINGS = navigator.userAgent.includes("Mac")
@@ -1208,6 +1220,17 @@ function NotificationsSection() {
           />
         </Row>
       ))}
+      <Row
+        label={t.notifications.drafts}
+        description={t.notifications.draftsDescription}
+        labelId="notify-drafts"
+      >
+        <Toggle
+          labelledBy="notify-drafts"
+          checked={s.notifyDrafts}
+          onChange={(v) => updateSettings({ notifyDrafts: v })}
+        />
+      </Row>
     </Section>
   )
 }

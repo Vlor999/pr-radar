@@ -8,7 +8,8 @@ import {
 } from "@/lib/accounts"
 import { allAccounts } from "@/lib/auth"
 import { trackQuota } from "@/lib/quota"
-import type { MergedPr, Pr, Thread } from "@/lib/types"
+import type { Reviewer } from "@/lib/reviewers"
+import type { MergedPr, Pr, ReviewPr, Thread } from "@/lib/types"
 
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
@@ -83,6 +84,7 @@ const PRS: Pr[] = [
     number: 412,
     title: "Refonte de la page de paiement",
     head: "feat/checkout",
+    stack: { number: 5, position: 1, size: 3 }, // stack natif GitHub (le globex/ledger des autres comptes reste déduit)
     decision: "APPROVED",
     reviews: [{ who: "alice", state: "APPROVED" }],
     requested: [],
@@ -93,6 +95,7 @@ const PRS: Pr[] = [
     title: "Checkout : validation des adresses",
     head: "feat/checkout-address",
     base: "feat/checkout",
+    stack: { number: 5, position: 2, size: 3 },
     unresolved: 1,
     comments: 2,
     threads: [
@@ -109,6 +112,7 @@ const PRS: Pr[] = [
     title: "Checkout : tests e2e",
     head: "feat/checkout-e2e",
     base: "feat/checkout-address",
+    stack: { number: 5, position: 3, size: 3 },
     draft: true,
     ci: "PENDING",
   }),
@@ -273,3 +277,97 @@ export const viewerProfile = async (_a: Account): Promise<Profile> => ({
   avatarUrl: "https://github.com/identicons/me.png",
   url: "#",
 })
+
+// onglet « À reviewer » : nominative, équipe, draft, re-request, équipe déjà approuvée
+const review = (
+  p: Partial<ReviewPr> & Pick<ReviewPr, "repo" | "number" | "title">,
+): ReviewPr => ({
+  url: `https://github.com/${p.repo}/pull/${p.number}`,
+  author: "alice",
+  draft: false,
+  decision: "REVIEW_REQUIRED",
+  direct: true,
+  teams: [],
+  rerequest: false,
+  since: ago(4),
+  ...p,
+})
+
+const REVIEWS: ReviewPr[] = [
+  review({
+    repo: "acme/web",
+    number: 421,
+    title: "Mode sombre du tableau de bord",
+    since: ago(52),
+  }),
+  review({
+    repo: "acme/web",
+    number: 423,
+    title: "Cache des images produit",
+    author: "bob",
+    rerequest: true,
+    since: ago(3),
+  }),
+  review({
+    repo: "acme/api",
+    number: 94,
+    title: "Webhooks : signature HMAC",
+    author: "carol",
+    direct: false,
+    teams: ["backend"],
+    since: ago(26),
+  }),
+  review({
+    repo: "acme/api",
+    number: 96,
+    title: "Index sur orders.created_at",
+    author: "dave",
+    direct: false,
+    teams: ["backend"],
+    decision: "APPROVED",
+    since: ago(8),
+  }),
+  review({
+    repo: "globex/search",
+    number: 12,
+    title: "Synonymes dans la recherche",
+    author: "erin",
+    draft: true,
+    since: ago(100),
+  }),
+]
+
+export const fetchReviews = async () => ({
+  data: REVIEWS,
+  errors: [] as AccountError[],
+})
+
+const DEMO_USERS = ["alice", "bob", "carol", "dave", "erin", "frank"]
+const user = (login: string): Reviewer => ({ login, id: `U_${login}` })
+export const fetchReviewerOptions = async (
+  repo: string,
+  number: number,
+  query: string,
+) => ({
+  prId: `${repo}#${number}`,
+  viewer: "me",
+  suggested: ["bob", "carol"].map(user),
+  assignable: ["me", ...DEMO_USERS]
+    .filter((l) => l.includes(query.toLowerCase()))
+    .map(user),
+})
+export const requestReviewer = async (
+  prId: string,
+  userId: string,
+  repo: string,
+) => {
+  // « dave » montre le message brut de GitHub pour un jeton sans droit d'écriture
+  if (userId === "U_dave")
+    throw new Error(
+      "me does not have the correct permissions to execute `RequestReviews`",
+    )
+  // la demande apparaît sur la carte au rechargement qui suit
+  const p = PRS.find((p) => `${p.repo}#${p.number}` === prId)
+  p?.requested.push({ who: userId.slice(2) })
+  console.info("[demo] request review", prId, userId, repo)
+}

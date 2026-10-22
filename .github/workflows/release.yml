@@ -33,9 +33,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # target: own rust-cache key per macOS target (both run on the same runner type)
           - platform: macos-latest
+            target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
           - platform: macos-latest
+            target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
           - platform: ubuntu-22.04
             args: ''
@@ -60,6 +63,7 @@ jobs:
       - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: './src-tauri -> target'
+          key: ${{ matrix.target }}
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'

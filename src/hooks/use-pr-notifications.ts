@@ -2,7 +2,8 @@ import { invoke } from "@tauri-apps/api/core"
 import { useEffect, useRef, useSyncExternalStore } from "react"
 
 import { pick, strings } from "@/lib/i18n"
-import { getSettings, type Settings } from "@/lib/settings"
+import { newRequests, reviewKey, snapshot, type Reviews } from "@/lib/review"
+import { getSettings, shouldNotify, type Settings } from "@/lib/settings"
 import type { Pr } from "@/lib/types"
 
 const S = strings(
@@ -14,6 +15,8 @@ const S = strings(
     ciFailed: "CI en échec",
     testBody: "Les notifications fonctionnent.",
     title: (key: string, text: string) => `${key} : ${text}`,
+    reviewRequested: (who: string) => `${who} demande ta review`,
+    rerequested: (who: string) => `${who} redemande ta review`,
   },
   {
     approved: "approved",
@@ -22,6 +25,8 @@ const S = strings(
     ciFailed: "CI failed",
     testBody: "Notifications are working.",
     title: (key: string, text: string) => `${key}: ${text}`,
+    reviewRequested: (who: string) => `${who} requests your review`,
+    rerequested: (who: string) => `${who} re-requests your review`,
   },
 )
 
@@ -92,11 +97,35 @@ export function usePrNotifications(prs: Pr[]) {
     const changes = [...current].flatMap(([key, now]) => {
       const was = before.get(key)
       const what = was && change(was, now)
-      return what && getSettings().notify[what.kind] ? [{ key, now, what }] : []
+      return what && shouldNotify(getSettings(), now, what.kind)
+        ? [{ key, now, what }]
+        : []
     })
     for (const { key, now, what } of changes)
       notify(pick(S).title(key, what.text), now.title).catch(() => {})
   }, [prs])
+}
+
+/** Notification d'une nouvelle demande de review nominative (ou re-request), entre deux rafraîchissements. */
+export function useReviewNotifications(known: Reviews) {
+  const previous = useRef<ReturnType<typeof snapshot> | null>(null)
+
+  useEffect(() => {
+    const before = previous.current
+    previous.current = snapshot(known)
+    if (!before) return
+    const t = pick(S)
+    for (const p of newRequests(before, known.reviews).filter((p) =>
+      shouldNotify(getSettings(), p, "reviewRequested"),
+    ))
+      notify(
+        t.title(
+          reviewKey(p),
+          (p.rerequest ? t.rerequested : t.reviewRequested)(p.author),
+        ),
+        p.title,
+      ).catch(() => {})
+  }, [known])
 }
 
 /** Bouton « Envoyer une notification de test » des réglages. */

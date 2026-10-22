@@ -35,6 +35,8 @@ export type Pr = {
   /** reviews demandées ; `team` : une équipe (nom affiché, pas un login) */
   requested: { who: string; team?: boolean }[]
   updated: string
+  /** stack natif GitHub (`stackEntry`) ; absent : stack déduit des branches */
+  stack?: { number: number; position: number; size: number }
 }
 
 /** Une PR dans l'arbre : ses enfants sont les PR stackées sur sa branche. */
@@ -70,4 +72,23 @@ export type SlackConversation = {
   id: string
   name: string
   kind: "public" | "private" | "im" | "mpim"
+}
+
+/** PR d'un autre qui attend ma review (onglet « À reviewer »). */
+export type ReviewPr = {
+  repo: string
+  number: number
+  title: string
+  url: string
+  author: string
+  draft: boolean
+  decision: Decision
+  /** demandée à moi nommément ; sinon seulement à une de mes équipes */
+  direct: boolean
+  /** équipes demandées (noms affichés) */
+  teams: string[]
+  /** j'ai déjà reviewé : la demande est une re-request */
+  rerequest: boolean
+  /** date de la dernière demande qui me vise (moi ou une équipe demandée) */
+  since: string
 }
