@@ -71,7 +71,7 @@ export function AddReviewer({ pr }: { pr: Pr }) {
   }, [open, query, pr.repo, pr.number, pr.requested])
 
   async function pick(u: Reviewer) {
-    if (!options) return
+    if (!options || busy) return
     setBusy(u.id)
     const { error } = await addReviewer(options.prId, u.id, pr.repo)
     setBusy(null)
@@ -102,7 +102,7 @@ export function AddReviewer({ pr }: { pr: Pr }) {
       >
         <Plus />
       </PopoverTrigger>
-      <PopoverContent align="start" className="gap-2 p-2">
+      <PopoverContent align="start" aria-label={t.add} className="gap-2 p-2">
         <Input
           autoFocus
           value={query}
@@ -110,7 +110,11 @@ export function AddReviewer({ pr }: { pr: Pr }) {
           placeholder={t.search}
           aria-label={t.search}
         />
-        {error && <p className="px-2 text-xs text-destructive">{error}</p>}
+        {error && (
+          <p role="alert" className="px-2 text-xs text-destructive">
+            {error}
+          </p>
+        )}
         {!options ? (
           !error && (
             <Loader2 className="mx-auto my-2 size-4 animate-spin text-muted-foreground" />
@@ -121,9 +125,10 @@ export function AddReviewer({ pr }: { pr: Pr }) {
               <li key={u.id}>
                 <button
                   type="button"
-                  disabled={!!busy}
+                  // aria-disabled, pas disabled : le focus reste sur le bouton pendant la requête
+                  aria-disabled={!!busy}
                   onClick={() => pick(u)}
-                  className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-50"
+                  className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none aria-disabled:opacity-50"
                 >
                   <Avatar login={u.login} url={pr.url} />
                   <span className="min-w-0 flex-1 truncate">{u.login}</span>
