@@ -9,6 +9,7 @@ import {
 import { cn } from "cn"
 import { useEffect, useState } from "react"
 
+import { AddReviewer } from "@/components/add-reviewer"
 import { Avatar } from "@/components/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -311,9 +312,10 @@ export function PrCard({
                   </Badge>
                 </li>
               ))}
-              {pr.reviews.length + pr.requested.length === 0 && (
-                <li className="text-muted-foreground">{t.noReviewer}</li>
-              )}
+              <li className="flex items-center gap-2 text-muted-foreground">
+                <AddReviewer pr={pr} />
+                {pr.reviews.length + pr.requested.length === 0 && t.noReviewer}
+              </li>
             </ul>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
