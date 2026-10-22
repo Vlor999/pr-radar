@@ -2,8 +2,9 @@ import { invoke } from "@tauri-apps/api/core"
 import { useEffect, useRef, useSyncExternalStore } from "react"
 
 import { pick, strings } from "@/lib/i18n"
+import { newRequests, reviewKey } from "@/lib/review"
 import { getSettings, type Settings } from "@/lib/settings"
-import type { Pr } from "@/lib/types"
+import type { Pr, ReviewPr } from "@/lib/types"
 
 const S = strings(
   {
@@ -14,6 +15,8 @@ const S = strings(
     ciFailed: "CI en échec",
     testBody: "Les notifications fonctionnent.",
     title: (key: string, text: string) => `${key} : ${text}`,
+    reviewRequested: (who: string) => `${who} demande ta review`,
+    rerequested: (who: string) => `${who} redemande ta review`,
   },
   {
     approved: "approved",
@@ -22,6 +25,8 @@ const S = strings(
     ciFailed: "CI failed",
     testBody: "Notifications are working.",
     title: (key: string, text: string) => `${key}: ${text}`,
+    reviewRequested: (who: string) => `${who} requests your review`,
+    rerequested: (who: string) => `${who} re-requests your review`,
   },
 )
 
@@ -97,6 +102,26 @@ export function usePrNotifications(prs: Pr[]) {
     for (const { key, now, what } of changes)
       notify(pick(S).title(key, what.text), now.title).catch(() => {})
   }, [prs])
+}
+
+/** Notification d'une nouvelle demande de review nominative (ou re-request), entre deux rafraîchissements. */
+export function useReviewNotifications(reviews: ReviewPr[]) {
+  const previous = useRef<Set<string> | null>(null)
+
+  useEffect(() => {
+    const before = previous.current
+    previous.current = new Set(reviews.map(reviewKey))
+    if (!before || !getSettings().notify.reviewRequested) return
+    const t = pick(S)
+    for (const p of newRequests(before, reviews))
+      notify(
+        t.title(
+          reviewKey(p),
+          (p.rerequest ? t.rerequested : t.reviewRequested)(p.author),
+        ),
+        p.title,
+      ).catch(() => {})
+  }, [reviews])
 }
 
 /** Bouton « Envoyer une notification de test » des réglages. */

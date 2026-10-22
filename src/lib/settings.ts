@@ -13,6 +13,8 @@ export type Settings = {
     changesRequested: boolean
     comments: boolean
     ciFailed: boolean
+    /** nouvelle demande de review à moi (ou re-request) */
+    reviewRequested: boolean
   }
   /** tri par défaut de l'arbre : "priority" | "oldest" | "recent" */
   defaultSort: "priority" | "oldest" | "recent"
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
     changesRequested: true,
     comments: true,
     ciFailed: true,
+    reviewRequested: true,
   },
   defaultSort: "priority",
   staleDays: 5,
