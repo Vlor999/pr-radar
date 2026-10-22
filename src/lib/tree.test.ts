@@ -99,6 +99,11 @@ test("le bas d'un stack natif sur main compte comme stackée", () => {
   assert.equal(isStacked(pr(2, "b", "main")), false)
 })
 
+test("un stack natif d'une seule PR ne compte pas comme stackée", () => {
+  const stack = { number: 9, position: 1, size: 1 }
+  assert.equal(isStacked(pr(1, "a", "main", { stack })), false)
+})
+
 test("un cycle de branches ne boucle pas", () => {
   const roots = buildTree([pr(1, "a", "b"), pr(2, "b", "a")])
   assert.deepEqual(roots, [])

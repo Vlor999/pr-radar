@@ -5,7 +5,10 @@ export const STALE_DAYS = 5 // par défaut ; réglable dans l'app
 
 export const needsAttention = (p: Pr) =>
   p.decision === "CHANGES_REQUESTED" || p.unresolved > 0
-export const isStacked = (p: Pr) => !!p.stack || !TRUNKS.includes(p.base)
+/** Stack natif GitHub, s'il a au moins deux PR. */
+export const nativeStack = (p: Pr) =>
+  p.stack && p.stack.size > 1 ? p.stack : null
+export const isStacked = (p: Pr) => !!nativeStack(p) || !TRUNKS.includes(p.base)
 export const idleDays = (p: Pr, now = Date.now()) =>
   Math.floor((now - Date.parse(p.updated)) / 86_400_000)
 export const isStale = (p: Pr, now = Date.now(), days = STALE_DAYS) =>

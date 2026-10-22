@@ -22,7 +22,13 @@ import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
 import { useSettings } from "@/lib/settings"
 import { useMentions } from "@/lib/slack"
 import { slackParts, spoofedHost } from "@/lib/slack-text"
-import { idleDays, isStale, mergeState, needsAttention } from "@/lib/tree"
+import {
+  idleDays,
+  isStale,
+  mergeState,
+  nativeStack,
+  needsAttention,
+} from "@/lib/tree"
 import type { PrNode } from "@/lib/types"
 
 const S = strings(
@@ -166,6 +172,7 @@ export function PrCard({
   const decision = pr.decision && pr.decision in STATUS ? pr.decision : "NONE"
   const ci = pr.ci ? CI[pr.ci] : undefined
   const merge = mergeState(pr)
+  const stack = nativeStack(pr)
   const { staleDays } = useSettings()
   const mentions = useMentions(pr.url)
 
@@ -265,10 +272,10 @@ export function PrCard({
           {pr.unresolved > 0 && (
             <Badge variant="destructive">{t.unresolved(pr.unresolved)}</Badge>
           )}
-          {pr.stack && (
+          {stack && (
             <Badge variant="secondary" title={t.nativeStack}>
               <Layers />
-              {pr.stack.position}/{pr.stack.size}
+              {stack.position}/{stack.size}
             </Badge>
           )}
           {merge?.kind === "blocked" && (
