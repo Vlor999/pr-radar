@@ -4,11 +4,13 @@ import {
   ExternalLink,
   GitMerge,
   GitPullRequestArrow,
+  Layers,
   MessageSquare,
 } from "lucide-react"
 import { cn } from "cn"
 import { useEffect, useState } from "react"
 
+import { AddReviewer } from "@/components/add-reviewer"
 import { Avatar } from "@/components/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -21,7 +23,13 @@ import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
 import { useSettings } from "@/lib/settings"
 import { useMentions } from "@/lib/slack"
 import { slackParts, spoofedHost } from "@/lib/slack-text"
-import { idleDays, isStale, mergeState, needsAttention } from "@/lib/tree"
+import {
+  idleDays,
+  isStale,
+  mergeState,
+  nativeStack,
+  needsAttention,
+} from "@/lib/tree"
 import type { PrNode } from "@/lib/types"
 
 const S = strings(
@@ -50,6 +58,7 @@ const S = strings(
     conflict: "Conflit",
     unresolved: (n: number) => plural(n, "non résolu"),
     blockedBy: (n: number) => `bloquée par #${n}`,
+    nativeStack: "Stack GitHub natif",
     blocks: (n: number) => `bloque ${plural(n, "PR")}`,
     inactive: (d: number) => `inactive depuis ${d} j`,
     requested: "En attente",
@@ -85,6 +94,7 @@ const S = strings(
     conflict: "Conflict",
     unresolved: (n: number) => `${n} unresolved`,
     blockedBy: (n: number) => `blocked by #${n}`,
+    nativeStack: "Native GitHub stack",
     blocks: (n: number) => `blocks ${plural(n, "PR")}`,
     inactive: (d: number) => `stale for ${d}d`,
     requested: "Pending",
@@ -163,6 +173,7 @@ export function PrCard({
   const decision = pr.decision && pr.decision in STATUS ? pr.decision : "NONE"
   const ci = pr.ci ? CI[pr.ci] : undefined
   const merge = mergeState(pr)
+  const stack = nativeStack(pr)
   const { staleDays } = useSettings()
   const mentions = useMentions(pr.url)
 
@@ -262,6 +273,12 @@ export function PrCard({
           {pr.unresolved > 0 && (
             <Badge variant="destructive">{t.unresolved(pr.unresolved)}</Badge>
           )}
+          {stack && (
+            <Badge variant="secondary" title={t.nativeStack}>
+              <Layers />
+              {stack.position}/{stack.size}
+            </Badge>
+          )}
           {merge?.kind === "blocked" && (
             <Badge variant="secondary">
               <GitPullRequestArrow />
@@ -311,9 +328,10 @@ export function PrCard({
                   </Badge>
                 </li>
               ))}
-              {pr.reviews.length + pr.requested.length === 0 && (
-                <li className="text-muted-foreground">{t.noReviewer}</li>
-              )}
+              <li className="flex items-center gap-2 text-muted-foreground">
+                <AddReviewer pr={pr} />
+                {pr.reviews.length + pr.requested.length === 0 && t.noReviewer}
+              </li>
             </ul>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
