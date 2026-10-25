@@ -13,7 +13,13 @@ import {
   type AccountError,
 } from "./accounts"
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
-import { gqlFailed, gqlMessage, type GqlResponse } from "./graphql"
+import {
+  gqlFailed,
+  gqlMessage,
+  restRepos,
+  type GqlResponse,
+  type RepoNode,
+} from "./graphql"
 import { pick, strings } from "./i18n"
 import { withStackFallback } from "./pr-query"
 import { trackQuota } from "./quota"
@@ -401,17 +407,19 @@ export function fetchMerged(
 // `ownerAffiliations` vaut [OWNER, COLLABORATOR] par défaut : sans ORGANIZATION_MEMBER, les repos d'org disparaissent
 const REPOS_QUERY = `query($after: String) {
   viewer {
+    login
     repositories(first: 100, after: $after, affiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], orderBy: { field: PUSHED_AT, direction: DESC }) {
       pageInfo { hasNextPage endCursor }
-      nodes { nameWithOwner }
+      nodes { nameWithOwner isFork owner { login __typename } }
     }
   }
 }`
 type RepoPage = {
   viewer: {
+    login: string
     repositories: {
       pageInfo: { hasNextPage: boolean; endCursor: string }
-      nodes: { nameWithOwner: string }[]
+      nodes: (RepoNode | null)[]
     }
   }
 }
@@ -423,10 +431,10 @@ export function listRepos(): Promise<string[]> {
       const out: string[] = []
       let after: string | null = null
       do {
-        const { repositories: r }: RepoPage["viewer"] = (
+        const { login, repositories: r }: RepoPage["viewer"] = (
           await gql<RepoPage>(conn(a), REPOS_QUERY, { after })
         ).viewer
-        out.push(...r.nodes.map((n) => repoKey(a.id, n.nameWithOwner)))
+        out.push(...restRepos(r.nodes, login).map((n) => repoKey(a.id, n)))
         after = r.pageInfo.hasNextPage ? r.pageInfo.endCursor : null
       } while (after)
       return out
