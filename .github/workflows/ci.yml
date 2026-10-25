@@ -37,3 +37,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Third-party notices up to date
+        run: |
+          npm run notices
+          git diff --exit-code THIRD_PARTY_NOTICES.md || { echo "Run npm run notices and commit THIRD_PARTY_NOTICES.md"; exit 1; }
