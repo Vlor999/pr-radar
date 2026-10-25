@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/lib/*.test.ts"
+    "test": "node --test src/lib/*.test.ts",
+    "notices": "node scripts/notices.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
