@@ -1,4 +1,10 @@
-import { useEffect, useState, useSyncExternalStore, useTransition } from "react"
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} from "react"
 import { invoke } from "@tauri-apps/api/core"
 import {
   CalendarDays,
@@ -268,12 +274,16 @@ export function PrDashboard({
 
   // l'état déplié/replié survit aux rafraîchissements (le composant n'est pas remonté)
   const [open, setOpen] = useState<Record<string, boolean>>({})
-  const state: OpenState = {
-    isOpen: (k, fallback) => open[k] ?? fallback,
-    toggle: (k, v) => setOpen((o) => ({ ...o, [k]: v })),
-    isNew: seen.isNew,
-    markSeen: seen.markSeen,
-  }
+  // objet stable : les RepoSection (memo) ne se re-rendent que si leur repo ou cet état change
+  const state = useMemo<OpenState>(
+    () => ({
+      isOpen: (k, fallback) => open[k] ?? fallback,
+      toggle: (k, v) => setOpen((o) => ({ ...o, [k]: v })),
+      isNew: seen.isNew,
+      markSeen: seen.markSeen,
+    }),
+    [open, seen.isNew, seen.markSeen],
+  )
 
   // mentions Slack : relues avec chaque actualisation GitHub (cache 10 min par PR). Dépendances : seulement
   // ce qui change la recherche, pas l'état Slack entier (une erreur affichée ne doit pas relancer la file).
@@ -325,45 +335,52 @@ export function PrDashboard({
   }, [])
 
   const cmp = SORTS.find((s) => s.id === sort)?.cmp
-  const sorted = (roots: RepoTree["roots"]) =>
-    cmp ? sortTree(roots, cmp) : roots
-  const nodes = trees.flatMap((t) => t.roots.flatMap(descendants))
+  const nodes = useMemo(
+    () => trees.flatMap((t) => t.roots.flatMap(descendants)),
+    [trees],
+  )
 
   const q = query.trim().toLowerCase()
-  const status = FILTERS.find((f) => f.id === filter)!.match
-  const visible = trees
-    .map((t) => {
-      const repoMatches = t.repo.toLowerCase().includes(q)
-      const match = (p: PrNode) =>
-        status(p) &&
-        (!q ||
-          repoMatches ||
-          [p.title, p.head, `#${p.number}`].some((s) =>
-            s.toLowerCase().includes(q),
-          ))
-      const merged =
-        filter !== "all"
-          ? []
-          : t.merged.filter(
-              (p) =>
-                !q ||
-                repoMatches ||
-                [p.title, `#${p.number}`].some((s) =>
-                  s.toLowerCase().includes(q),
-                ),
-            )
-      return {
-        tree: { ...t, roots: sorted(filterTree(t.roots, match)), merged },
-        total: prs.filter((p) => p.repo === t.repo).length,
-        repoMatches,
-      }
-    })
-    .filter(
-      (v) =>
-        v.tree.roots.length ||
-        v.tree.merged.length ||
-        (filter === "all" && (!q || v.repoMatches)),
-    )
+  // staleDays : lu par le filtre « Inactives » (Date.now() relu à chaque nouvel arbre)
+  const { staleDays } = settings
+  const visible = useMemo(() => {
+    const status = FILTERS.find((f) => f.id === filter)!.match
+    const sorted = (roots: RepoTree["roots"]) =>
+      cmp ? sortTree(roots, cmp) : roots
+    return trees
+      .map((t) => {
+        const repoMatches = t.repo.toLowerCase().includes(q)
+        const match = (p: PrNode) =>
+          status(p) &&
+          (!q ||
+            repoMatches ||
+            [p.title, p.head, `#${p.number}`].some((s) =>
+              s.toLowerCase().includes(q),
+            ))
+        const merged =
+          filter !== "all"
+            ? []
+            : t.merged.filter(
+                (p) =>
+                  !q ||
+                  repoMatches ||
+                  [p.title, `#${p.number}`].some((s) =>
+                    s.toLowerCase().includes(q),
+                  ),
+              )
+        return {
+          tree: { ...t, roots: sorted(filterTree(t.roots, match)), merged },
+          total: prs.filter((p) => p.repo === t.repo).length,
+          repoMatches,
+        }
+      })
+      .filter(
+        (v) =>
+          v.tree.roots.length ||
+          v.tree.merged.length ||
+          (filter === "all" && (!q || v.repoMatches)),
+      )
+  }, [trees, prs, q, filter, cmp, staleDays])
 
   const setAll = (v: boolean) =>
     setOpen(
@@ -375,7 +392,10 @@ export function PrDashboard({
       ),
     )
 
-  const count = (match: (p: PrNode) => boolean) => nodes.filter(match).length
+  const counts = useMemo(
+    () => FILTERS.map((f) => nodes.filter(f.match).length),
+    [nodes, staleDays],
+  )
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
@@ -525,7 +545,7 @@ export function PrDashboard({
                       role="group"
                       aria-label={t.filterByStatus}
                     >
-                      {FILTERS.map((f) => (
+                      {FILTERS.map((f, i) => (
                         <Button
                           key={f.id}
                           size="xs"
@@ -537,7 +557,7 @@ export function PrDashboard({
                           <Badge
                             variant={filter === f.id ? "secondary" : "outline"}
                           >
-                            {count(f.match)}
+                            {counts[i]}
                           </Badge>
                         </Button>
                       ))}

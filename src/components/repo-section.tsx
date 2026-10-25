@@ -1,4 +1,4 @@
-import { useTransition } from "react"
+import { memo, useTransition } from "react"
 import { ChevronRight, GitBranch, GitMerge, Trash2 } from "lucide-react"
 import { cn } from "cn"
 
@@ -49,7 +49,8 @@ export type OpenState = {
   markSeen: (ps: PrNode[]) => void
 }
 
-export function RepoSection({
+// memo : un repo dont l'arbre et l'état n'ont pas changé saute le rendu (frappe, stores réglages/Slack)
+export const RepoSection = memo(function RepoSection({
   tree,
   total,
   state,
@@ -124,7 +125,7 @@ export function RepoSection({
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})
 
 function mergedAgo(iso: string, t: typeof S.fr) {
   const h = Math.floor((Date.now() - Date.parse(iso)) / 3_600_000)
