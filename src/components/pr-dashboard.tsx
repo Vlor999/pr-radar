@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useState,
@@ -25,7 +27,6 @@ import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
 import { ReviewList } from "@/components/review-list"
-import { SettingsPage } from "@/components/settings-page"
 import { UpdateBanner } from "@/components/update-banner"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
 import { getSettings, useSettings } from "@/lib/settings"
@@ -160,6 +161,13 @@ const S = strings(
       quit: "Quit",
     },
   },
+)
+
+// réglages : ouverts à la demande, chargés dans leur propre chunk
+const SettingsPage = lazy(() =>
+  import("@/components/settings-page").then((m) => ({
+    default: m.SettingsPage,
+  })),
 )
 
 const TABS = [
@@ -473,7 +481,9 @@ export function PrDashboard({
       <UpdateBanner />
 
       {showSettings ? (
-        <SettingsPage onClose={() => setShowSettings(false)} />
+        <Suspense fallback={null}>
+          <SettingsPage onClose={() => setShowSettings(false)} />
+        </Suspense>
       ) : (
         <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-6 lg:order-last">
