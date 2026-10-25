@@ -237,7 +237,7 @@ const S = strings(
     },
     about: {
       description:
-        "Gratuit, open source (MIT). Aucun serveur : l'app parle directement à GitHub.",
+        "Gratuit, open source (MIT), fourni tel quel, sans garantie. Aucun serveur : l'app parle directement à GitHub et, si vous le connectez, à Slack. Non affilié à GitHub ni à Slack.",
       version: (v: string | null) => (v ? `Version ${v}` : "Version …"),
       upToDate: "À jour",
       updateError: "Mise à jour impossible",
@@ -250,6 +250,8 @@ const S = strings(
       source: "Code source",
       download: "Page de téléchargement",
       report: "Signaler un problème",
+      privacy: "Confidentialité",
+      licenses: "Licences tierces",
     },
     nav: "Sections des réglages",
     back: "Retour",
@@ -422,7 +424,7 @@ const S = strings(
     },
     about: {
       description:
-        "Free, open source (MIT). No server: the app talks directly to GitHub.",
+        "Free, open source (MIT), provided as is, without warranty. No server: the app talks directly to GitHub and, if you connect it, to Slack. Not affiliated with GitHub or Slack.",
       version: (v: string | null) => (v ? `Version ${v}` : "Version …"),
       upToDate: "Up to date",
       updateError: "Update failed",
@@ -435,6 +437,8 @@ const S = strings(
       source: "Source code",
       download: "Download page",
       report: "Report an issue",
+      privacy: "Privacy",
+      licenses: "Third-party licenses",
     },
     nav: "Settings sections",
     back: "Back",
@@ -1625,6 +1629,8 @@ function AboutSection() {
           [t.about.source, REPO_URL],
           [t.about.download, DOWNLOAD_URL],
           [t.about.report, `${REPO_URL}/issues/new`],
+          [t.about.privacy, `${DOWNLOAD_URL}#privacy`],
+          [t.about.licenses, `${REPO_URL}/blob/main/THIRD_PARTY_NOTICES.md`],
         ].map(([label, href]) => (
           <a
             key={href}
