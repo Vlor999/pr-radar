@@ -36,7 +36,7 @@
 
 Two options:
 
-1. **Sign in with GitHub** (device flow): no server, the token is stored in the system keychain. Nothing leaves your machine except the calls to api.github.com.
+1. **Sign in with GitHub** (device flow): no server, the token is stored in the system keychain.
 2. **Personal access token**:
    - fine-grained: read access to Pull requests + Contents/Metadata, and write access to Pull requests to reply;
    - or classic with the `repo` scope.
@@ -45,9 +45,17 @@ Organization repos may require the organization to approve the OAuth app, or SSO
 
 ## Privacy
 
-No backend, no telemetry.
+No backend, no telemetry, no analytics. The app only talks to:
+
+- GitHub: the API with your token, avatars, and update checks on github.com (your IP address and the app version);
+- your GitHub Enterprise server, only if you add one: its API with your token;
+- Slack, only if you connect it: read-only search, tokens in the system keychain. Messages are read on your machine and sent nowhere else.
+
+Settings, followed repos and "seen" marks stay in the app's local storage. The [website](https://vlor999.github.io/pr-radar/) is hosted by GitHub Pages (which logs IP addresses), fetches the latest release from api.github.com in your browser, sets no cookies and only keeps your language choice in `localStorage`.
 
 ## How it compares
+
+As of October 2026, based on each product's public features.
 
 | | github.com/pulls | Gitify | PR Radar |
 |---|---|---|---|
@@ -89,4 +97,6 @@ Without Apple secrets, macOS builds are ad-hoc signed (first launch: "Open Anywa
 
 ## License
 
-MIT
+MIT, see [LICENSE](LICENSE). Third-party licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) (`npm run notices` regenerates it). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
+
+PR Radar is provided as is, without warranty (MIT license). Not affiliated with GitHub or Slack. GitHub, Slack, macOS, Windows and Linux are trademarks of their respective owners.

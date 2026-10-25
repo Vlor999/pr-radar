@@ -237,7 +237,7 @@ const S = strings(
     },
     about: {
       description:
-        "Gratuit, open source (MIT). Aucun serveur : l'app parle directement à GitHub.",
+        "Gratuit, open source (MIT), fourni tel quel, sans garantie. Aucun serveur : l'app parle directement à GitHub, à votre serveur GitHub Enterprise si vous en ajoutez un, et à Slack si vous le connectez. Non affilié à GitHub ni à Slack.",
       version: (v: string | null) => (v ? `Version ${v}` : "Version …"),
       upToDate: "À jour",
       updateError: "Mise à jour impossible",
@@ -250,6 +250,8 @@ const S = strings(
       source: "Code source",
       download: "Page de téléchargement",
       report: "Signaler un problème",
+      privacy: "Confidentialité",
+      licenses: "Licences tierces",
     },
     nav: "Sections des réglages",
     back: "Retour",
@@ -422,7 +424,7 @@ const S = strings(
     },
     about: {
       description:
-        "Free, open source (MIT). No server: the app talks directly to GitHub.",
+        "Free, open source (MIT), provided as is, without warranty. No server: the app talks directly to GitHub, to your GitHub Enterprise server if you add one, and to Slack if you connect it. Not affiliated with GitHub or Slack.",
       version: (v: string | null) => (v ? `Version ${v}` : "Version …"),
       upToDate: "Up to date",
       updateError: "Update failed",
@@ -435,6 +437,8 @@ const S = strings(
       source: "Source code",
       download: "Download page",
       report: "Report an issue",
+      privacy: "Privacy",
+      licenses: "Third-party licenses",
     },
     nav: "Settings sections",
     back: "Back",
@@ -1620,22 +1624,32 @@ function AboutSection() {
           </Button>
         )}
       </Row>
-      <Row label={t.about.links}>
-        {[
-          [t.about.source, REPO_URL],
-          [t.about.download, DOWNLOAD_URL],
-          [t.about.report, `${REPO_URL}/issues/new`],
-        ].map(([label, href]) => (
-          <a
-            key={href}
-            href={href}
-            className="inline-flex items-center gap-1 rounded text-sm text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/30"
-          >
-            {label}
-            <ExternalLink className="size-3" />
-          </a>
-        ))}
-      </Row>
+      {/* label above: the five links do not fit on one line next to it in French */}
+      <div className="border-t py-3">
+        <div className="text-sm font-medium">{t.about.links}</div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          {[
+            [t.about.source, REPO_URL],
+            [t.about.download, DOWNLOAD_URL],
+            [t.about.report, `${REPO_URL}/issues/new`],
+            [t.about.privacy, `${DOWNLOAD_URL}#privacy`],
+            // the notices of this exact version (release tags are vX.Y.Z)
+            [
+              t.about.licenses,
+              `${REPO_URL}/blob/${version ? `v${version}` : "main"}/THIRD_PARTY_NOTICES.md`,
+            ],
+          ].map(([label, href]) => (
+            <a
+              key={href}
+              href={href}
+              className="inline-flex items-center gap-1 rounded text-sm text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/30"
+            >
+              {label}
+              <ExternalLink className="size-3" />
+            </a>
+          ))}
+        </div>
+      </div>
     </Section>
   )
 }

@@ -58,7 +58,10 @@
     "category": "DeveloperTool",
     "shortDescription": "Your open GitHub PRs, as a tree",
     "publisher": "Vlor999",
-    "copyright": "MIT",
+    "copyright": "© 2026 Vlor999. MIT License.",
+    "resources": {
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    },
     "createUpdaterArtifacts": true,
     "macOS": {
       "signingIdentity": "-"
