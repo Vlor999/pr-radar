@@ -137,20 +137,27 @@ export function RepoSidebar({
   const byOrg = new Map<string, string[]>()
   for (const r of repos.filter((r) => lower(r).includes(q))) {
     const org = r.split("/")[0]
-    byOrg.set(org, [...(byOrg.get(org) ?? []), r])
+    const rs = byOrg.get(org)
+    if (rs) rs.push(r)
+    else byOrg.set(org, [r])
   }
   const count = (rs: string[]) =>
     rs.filter((r) => followed.has(lower(r))).length
   // ordre figé sur l'état à l'ouverture : masquer, cocher ou rafraîchir ne fait pas bouger
   // la liste (repos masqués inclus). Orgs avec des repos suivis d'abord, puis par nombre de repos
   const ranked = [...new Set([...(all ?? []), ...current, ...withPrsAtMount])]
-  const rank = (org: string) => {
-    const rs = ranked.filter((r) => r.split("/")[0] === org)
-    return [rs.filter((r) => followedAtMount.has(lower(r))).length, rs.length]
+  // org → [repos suivis, total], en une passe
+  const ranks = new Map<string, [number, number]>()
+  for (const r of ranked) {
+    const org = r.split("/")[0]
+    const k = ranks.get(org) ?? [0, 0]
+    if (followedAtMount.has(lower(r))) k[0]++
+    k[1]++
+    ranks.set(org, k)
   }
   const orgs = [...byOrg].sort(([a], [b]) => {
-    const [fa, na] = rank(a)
-    const [fb, nb] = rank(b)
+    const [fa, na] = ranks.get(a) ?? [0, 0]
+    const [fb, nb] = ranks.get(b) ?? [0, 0]
     return fb - fa || nb - na || a.localeCompare(b)
   })
   const canAddTyped =

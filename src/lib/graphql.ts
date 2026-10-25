@@ -16,3 +16,24 @@ export const gqlFailed = ({ data, errors }: GqlResponse) =>
 /** Message d'échec : les erreurs de GitHub, sinon `fallback` (statut HTTP). */
 export const gqlMessage = ({ errors }: GqlResponse, fallback: string) =>
   errors?.map((e) => e.message).join(" ; ") || fallback
+
+export type RepoNode = {
+  nameWithOwner: string
+  isFork: boolean
+  owner: { login: string; __typename: string }
+}
+
+/**
+ * Même ensemble que REST `/user/repos?affiliation=owner,collaborator,organization_member` :
+ * GraphQL y ajoute les forks de repos d'org possédés par d'autres utilisateurs ; les nœuds null (SSO) sont ignorés.
+ * ponytail: règle mesurée (281 REST = 328 GraphQL - 47 forks d'autrui) ; un fork d'autrui où l'on est
+ * collaborateur explicite serait perdu, refaire une requête `ownerAffiliations: [COLLABORATOR]` si ça compte.
+ */
+export const restRepos = (nodes: (RepoNode | null)[], login: string) =>
+  nodes
+    .filter(
+      (n): n is RepoNode =>
+        !!n &&
+        !(n.isFork && n.owner.__typename === "User" && n.owner.login !== login),
+    )
+    .map((n) => n.nameWithOwner)

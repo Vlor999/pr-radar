@@ -21,9 +21,7 @@
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="icon" href="favicon.png" type="image/png" sizes="64x64">
 <meta name="color-scheme" content="light dark">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="preload" href="fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -65,7 +63,7 @@
                     <div class="r3"><span class="b go" data-i18n="ready">Ready to merge</span><span class="b ok" data-i18n="approved">Approved</span><span class="b">CI ✓</span><span class="b" data-i18n="blocks1">blocks 1 PR</span></div>
                   </div>
                   <ul><li><div class="pc c2">
-                    <div class="r1"><span class="chev">›</span><span class="num">#45</span><span class="ti" data-i18n="pr45">feat(checkout): Apple Pay and Google Pay</span><span class="b go new" data-i18n="new">New</span></div>
+                    <div class="r1"><span class="chev">›</span><span class="num">#45</span><span class="ti" data-i18n="pr45">feat(checkout): saved payment methods</span><span class="b go new" data-i18n="new">New</span></div>
                     <div class="r2"><span>feat/checkout-wallets</span><span><span class="add">+128</span> <span class="del">−9</span></span></div>
                     <div class="r3"><span class="b warn" data-i18n="by42">blocked by #42</span><span class="b ci"><i class="spin"></i>CI <b>✓</b></span><span class="b">💬 3</span></div>
                   </div></li></ul>
@@ -182,6 +180,7 @@
   <div class="wrap">
     <h2 data-i18n="vs">How it compares</h2>
     <p class="lead" data-i18n="vsd">GitHub's own dashboard and other desktop apps are good at what they do. PR Radar is for following PR stacks across repos and answering review threads, on any desktop OS.</p>
+    <p class="muted" data-i18n="vsdate">Comparison as of October 2026, based on each product's public features.</p>
     <div class="vs-wrap">
       <table class="vs">
         <caption class="sr" data-i18n="vsc">Comparison of github.com/pulls, Gitify and PR Radar</caption>
@@ -204,7 +203,9 @@
 <section id="privacy">
   <div class="wrap">
     <h2 data-i18n="privacy">Privacy</h2>
-    <p class="lead" data-i18n="pv">PR Radar only talks to GitHub and, if you connect it, to Slack. No server: tokens live in your OS keychain, Slack tokens are read-only and rotate automatically (they expire every 12 hours), and you can revoke them at any time. Your messages never leave your machine.</p>
+    <p class="lead" data-i18n="pv">PR Radar only talks to GitHub, to your GitHub Enterprise server if you add one, and to Slack if you connect it. No server: tokens live in your OS keychain, Slack tokens are read-only and rotate automatically (they expire every 12 hours), and you can revoke them at any time. Your messages never leave your machine.</p>
+    <p data-i18n="pv2">The app also contacts github.com to check for updates (your IP address and app version) and loads avatars from GitHub. Slack messages are searched and read on your machine only; nothing is sent to us or anyone else.</p>
+    <p data-i18n="pv3">This website is hosted by GitHub Pages, which logs visitors' IP addresses. Your browser asks api.github.com for the latest release. No cookies, no analytics: only your language choice is kept in your browser (localStorage).</p>
     <p><a href="https://github.com/Vlor999/pr-radar" data-i18n="pvl">Read the code (MIT license)</a></p>
   </div>
 </section>
@@ -240,12 +241,22 @@
     </div>
   </div>
 </section>
+
+<section id="legal">
+  <div class="wrap">
+    <h2 data-i18n="legal">Legal notice</h2>
+    <p data-i18n-html="lg1"><strong>Publisher:</strong> Vlor999, private individual, non-commercial. Contact: <a href="https://github.com/Vlor999/pr-radar/issues">GitHub issues</a>.</p>
+    <p data-i18n-html="lg2"><strong>Host:</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, USA.</p>
+    <p data-i18n="lg3">PR Radar is provided as is, without warranty (MIT license). Not affiliated with GitHub or Slack.</p>
+    <p data-i18n="lg4">GitHub, Slack, macOS, Windows and Linux are trademarks of their respective owners.</p>
+  </div>
+</section>
 </main>
 
 <footer class="foot">
   <div class="wrap">
     <span>PR Radar</span>
-    <span class="foot-links"><a href="https://github.com/Vlor999/pr-radar">GitHub</a><a href="https://github.com/Vlor999/pr-radar/releases" data-i18n="rels">Releases</a><a href="https://github.com/Vlor999/pr-radar/issues" data-i18n="bug">Report a bug</a><a href="https://github.com/Vlor999/pr-radar/blob/main/LICENSE" data-i18n="mit">MIT License</a></span>
+    <span class="foot-links"><a href="https://github.com/Vlor999/pr-radar">GitHub</a><a href="https://github.com/Vlor999/pr-radar/releases" data-i18n="rels">Releases</a><a href="https://github.com/Vlor999/pr-radar/issues" data-i18n="bug">Report a bug</a><a href="https://github.com/Vlor999/pr-radar/blob/main/LICENSE" data-i18n="mit">MIT License</a><a href="#legal" data-i18n="legal">Legal notice</a><a href="#privacy" data-i18n="privacy">Privacy</a></span>
   </div>
 </footer>
 <script src="app.js"></script>
