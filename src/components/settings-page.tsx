@@ -1624,24 +1624,32 @@ function AboutSection() {
           </Button>
         )}
       </Row>
-      <Row label={t.about.links}>
-        {[
-          [t.about.source, REPO_URL],
-          [t.about.download, DOWNLOAD_URL],
-          [t.about.report, `${REPO_URL}/issues/new`],
-          [t.about.privacy, `${DOWNLOAD_URL}#privacy`],
-          [t.about.licenses, `${REPO_URL}/blob/main/THIRD_PARTY_NOTICES.md`],
-        ].map(([label, href]) => (
-          <a
-            key={href}
-            href={href}
-            className="inline-flex items-center gap-1 rounded text-sm text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/30"
-          >
-            {label}
-            <ExternalLink className="size-3" />
-          </a>
-        ))}
-      </Row>
+      {/* label above: the five links do not fit on one line next to it in French */}
+      <div className="border-t py-3">
+        <div className="text-sm font-medium">{t.about.links}</div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          {[
+            [t.about.source, REPO_URL],
+            [t.about.download, DOWNLOAD_URL],
+            [t.about.report, `${REPO_URL}/issues/new`],
+            [t.about.privacy, `${DOWNLOAD_URL}#privacy`],
+            // the notices of this exact version (release tags are vX.Y.Z)
+            [
+              t.about.licenses,
+              `${REPO_URL}/blob/${version ? `v${version}` : "main"}/THIRD_PARTY_NOTICES.md`,
+            ],
+          ].map(([label, href]) => (
+            <a
+              key={href}
+              href={href}
+              className="inline-flex items-center gap-1 rounded text-sm text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/30"
+            >
+              {label}
+              <ExternalLink className="size-3" />
+            </a>
+          ))}
+        </div>
+      </div>
     </Section>
   )
 }
