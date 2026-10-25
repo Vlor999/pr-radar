@@ -36,8 +36,6 @@ const S = strings(
     notSignedIn: "Non connecté",
     tokenRejected: "Jeton GitHub refusé",
     http: (status: number) => `GitHub : HTTP ${status}`,
-    httpOn: (status: number, path: string) =>
-      `GitHub : HTTP ${status} sur ${path}`,
     invalidName: (repo: string) =>
       `Nom invalide : « ${repo} » (attendu : owner/repo)`,
     notFound: (repo: string) => `Repo introuvable ou inaccessible : ${repo}`,
@@ -46,8 +44,6 @@ const S = strings(
     notSignedIn: "Not signed in",
     tokenRejected: "GitHub token rejected",
     http: (status: number) => `GitHub: HTTP ${status}`,
-    httpOn: (status: number, path: string) =>
-      `GitHub: HTTP ${status} on ${path}`,
     invalidName: (repo: string) =>
       `Invalid name: "${repo}" (expected: owner/repo)`,
     notFound: (repo: string) => `Repo not found or inaccessible: ${repo}`,
@@ -102,24 +98,6 @@ async function gql<T>(
   if (gqlFailed(json))
     throw new Error(gqlMessage(json, pick(S).http(res.status)))
   return json.data as T
-}
-
-/** GET REST, toutes les pages (en-tête Link). */
-async function restAll<T>(c: Conn, path: string): Promise<T[]> {
-  const out: T[] = []
-  const base = apiUrl(c.host)
-  let url: string | null = `${base}${path}`
-  while (url) {
-    const res = await fetch(url, { headers: headers(c.token, c.account) })
-    if (res.status === 401)
-      throw new AuthError(pick(S).tokenRejected, c.account)
-    if (!res.ok) throw new Error(pick(S).httpOn(res.status, path))
-    out.push(...((await res.json()) as T[]))
-    url =
-      /<([^>]+)>;\s*rel="next"/.exec(res.headers.get("link") ?? "")?.[1] ?? null
-    if (url && !url.startsWith(`${base}/`)) url = null // le jeton ne suit pas un lien vers un autre hôte
-  }
-  return out
 }
 
 type Login = { author: { login: string } | null }
@@ -417,17 +395,39 @@ export function fetchMerged(
   )
 }
 
+// `ownerAffiliations` vaut [OWNER, COLLABORATOR] par défaut : sans ORGANIZATION_MEMBER, les repos d'org disparaissent
+const REPOS_QUERY = `query($after: String) {
+  viewer {
+    repositories(first: 100, after: $after, affiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], orderBy: { field: PUSHED_AT, direction: DESC }) {
+      pageInfo { hasNextPage endCursor }
+      nodes { nameWithOwner }
+    }
+  }
+}`
+type RepoPage = {
+  viewer: {
+    repositories: {
+      pageInfo: { hasNextPage: boolean; endCursor: string }
+      nodes: { nameWithOwner: string }[]
+    }
+  }
+}
+
 /** Tous les repos accessibles (les miens, collaborations, orgs), les plus récemment poussés d'abord. */
 export function listRepos(): Promise<string[]> {
   return cached("repos:all", REPO_LIST_TTL_MS, () =>
-    perAccount(async (a) =>
-      (
-        await restAll<{ full_name: string }>(
-          conn(a),
-          "/user/repos?per_page=100&affiliation=owner,collaborator,organization_member&sort=pushed",
-        )
-      ).map((r) => repoKey(a.id, r.full_name)),
-    ),
+    perAccount(async (a) => {
+      const out: string[] = []
+      let after: string | null = null
+      do {
+        const { repositories: r }: RepoPage["viewer"] = (
+          await gql<RepoPage>(conn(a), REPOS_QUERY, { after })
+        ).viewer
+        out.push(...r.nodes.map((n) => repoKey(a.id, n.nameWithOwner)))
+        after = r.pageInfo.hasNextPage ? r.pageInfo.endCursor : null
+      } while (after)
+      return out
+    }),
   )
 }
 

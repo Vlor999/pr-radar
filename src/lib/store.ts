@@ -84,7 +84,7 @@ export function useData(): Data {
 export async function reload() {
   const id = ++seq
   set({ ...data, loading: true })
-  // préchauffe la liste du panneau des repos (~1,5 Mo), au premier chargement seulement
+  // préchauffe la liste du panneau des repos (1 requête GraphQL par 100 repos), au premier chargement seulement
   if (!data.fetchedAt) listRepos().catch(() => {})
   try {
     const withPrs = await reposWithMyOpenPrs().catch(() => data.withPrs)
