@@ -10,11 +10,8 @@
       if (dbg && /intel/i.test(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL))) os = 'mac-x64';
     } catch (e) {}
   }
-  var ICON = {
-    mac: '<path d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.600-2.800-1.800-3.400-1.800-1.400-.1-2.800.9-3.500.9s-1.800-.8-3-.8c-1.500 0-3 .9-3.800 2.300-1.600 2.800-.4 7 1.200 9.300.8 1.100 1.700 2.400 2.900 2.300 1.200 0 1.600-.7 3-.7s1.800.7 3 .7 2-1.100 2.800-2.200c.9-1.300 1.200-2.500 1.200-2.600 0 0-2.400-.9-2.400-3.900zM14.100 5.800c.6-.8 1.100-1.900.9-3-.9 0-2.100.6-2.700 1.400-.6.700-1.100 1.800-1 2.900 1.100.1 2.200-.5 2.800-1.300z"/>',
-    win: '<path d="M3 5.500 10.500 4.500v7H3zM11.500 4.400 21 3v8.500h-9.500zM3 12.500h7.500v7L3 18.500zM11.500 12.500H21V21l-9.500-1.400z"/>',
-    linux: '<path d="M12 2c-2 0-3 1.800-3 4 0 1.500-.8 2.500-1.800 4C6 11.700 5 13.500 5 16c0 1.500.8 2.500 2 3l-1 2h12l-1-2c1.200-.5 2-1.500 2-3 0-2.500-1-4.300-2.200-6C15.800 8.500 15 7.500 15 6c0-2.200-1-4-3-4z"/>'
-  };
+  // Neutral icon: OS vendor logos are trademarks we may not use.
+  var ICON = '<path d="M3 4h18v12H3zM5 6v8h14V6zM1 18h22v2H1z"/>';
   // FR strings; English stays in index.html (data-i18n / data-i18n-html / data-i18n-attr="attr:key").
   var FR = {
     skip: 'Aller au téléchargement', features: 'Fonctions', dl: 'Télécharger',
@@ -104,13 +101,13 @@
     for (var i = 0; i < assets.length; i++) if (re.test(assets[i].name)) return assets[i];
   }
 
-  function svg(icon) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[icon] + '</svg>'; }
+  function svg() { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON + '</svg>'; }
 
   function card(p, on) {
     var d = document.createElement('div');
     d.className = on ? 'dl on' : 'dl';
     var h = document.createElement('h3');
-    h.innerHTML = svg(p.icon);
+    h.innerHTML = svg();
     h.appendChild(document.createTextNode(p.title));
     var a = document.createElement('a');
     a.className = on ? 'btn primary' : 'btn';
@@ -182,11 +179,11 @@
     function chip(asset) { return asset === arm ? 'Apple Silicon' : 'Intel'; }
     var win = find(a, /_x64-setup\.exe$/) || find(a, /\.msi$/);
     var all = [
-      { key: 'mac', icon: 'mac', title: 'macOS', main: macMain, label: macMain && t('Télécharger pour ', 'Download for ') + chip(macMain),
+      { key: 'mac', title: 'macOS', main: macMain, label: macMain && t('Télécharger pour ', 'Download for ') + chip(macMain),
         or: t('ou ', 'or '), extra: macAlt ? [{ asset: macAlt, label: chip(macAlt) + ' (.dmg)' }] : [],
         note: t('✓ Signée et notarisée par Apple', '✓ Signed and notarized by Apple'), brew: true },
-      { key: 'win', icon: 'win', title: 'Windows', main: win, label: win && t('Télécharger', 'Download') + (/\.msi$/.test(win.name) ? ' (.msi)' : ' (.exe)') },
-      { key: 'linux', icon: 'linux', title: 'Linux', main: find(a, /\.AppImage$/), label: t('Télécharger AppImage', 'Download AppImage'), or: t('ou paquet ', 'or package '), extra: [
+      { key: 'win', title: 'Windows', main: win, label: win && t('Télécharger', 'Download') + (/\.msi$/.test(win.name) ? ' (.msi)' : ' (.exe)') },
+      { key: 'linux', title: 'Linux', main: find(a, /\.AppImage$/), label: t('Télécharger AppImage', 'Download AppImage'), or: t('ou paquet ', 'or package '), extra: [
         { asset: find(a, /\.deb$/), label: '.deb (Debian, Ubuntu)' },
         { asset: find(a, /\.rpm$/), label: '.rpm (Fedora)' }
       ].filter(function (k) { return k.asset; }) }
@@ -198,7 +195,7 @@
       box.appendChild(card(p, on));
       if (!on) return;
       heroDl.href = p.main.browser_download_url;
-      heroDl.innerHTML = svg(p.icon);
+      heroDl.innerHTML = svg();
       heroDl.appendChild(document.createTextNode(t('Télécharger pour ', 'Download for ') + p.title));
     });
   }
