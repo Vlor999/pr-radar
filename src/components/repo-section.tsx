@@ -49,7 +49,7 @@ export type OpenState = {
   markSeen: (ps: PrNode[]) => void
 }
 
-// memo : un repo dont l'arbre et l'état n'ont pas changé saute le rendu (frappe, stores réglages/Slack)
+// memo : saute le rendu quand seul un autre état du tableau de bord change (stores réglages/Slack/mise à jour) ; recherche, filtre, tri, dépliage et rafraîchissement re-rendent tous les repos
 export const RepoSection = memo(function RepoSection({
   tree,
   total,
