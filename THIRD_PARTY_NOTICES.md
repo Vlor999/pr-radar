@@ -208,9 +208,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 - litrs 1.0.1 (MIT OR Apache-2.0)
 - miniz_oxide 0.8.9 (MIT OR Zlib OR Apache-2.0)
 - miniz_oxide 0.9.1 (MIT OR Zlib OR Apache-2.0)
+- num-conv 0.2.2 (MIT OR Apache-2.0)
 - num_enum 0.7.6 (BSD-3-Clause OR MIT OR Apache-2.0)
 - num_enum_derive 0.7.6 (BSD-3-Clause OR MIT OR Apache-2.0)
-- num-conv 0.2.2 (MIT OR Apache-2.0)
 - osakit 0.3.1 (MIT OR Apache-2.0)
 - pin-project-lite 0.2.17 (Apache-2.0 OR MIT)
 - portable-atomic 1.15.0 (Apache-2.0 OR MIT)
@@ -225,13 +225,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 - ryu 1.0.23 (Apache-2.0 OR BSL-1.0)
 - semver 1.0.28 (MIT OR Apache-2.0)
 - serde 1.0.229 (MIT OR Apache-2.0)
+- serde-untagged 0.1.9 (MIT OR Apache-2.0)
 - serde_core 1.0.229 (MIT OR Apache-2.0)
 - serde_derive 1.0.229 (MIT OR Apache-2.0)
 - serde_derive_internals 0.29.1 (MIT OR Apache-2.0)
 - serde_json 1.0.154 (MIT OR Apache-2.0)
 - serde_repr 0.1.21 (MIT OR Apache-2.0)
 - serde_urlencoded 0.7.1 (MIT/Apache-2.0)
-- serde-untagged 0.1.9 (MIT OR Apache-2.0)
 - simdutf8 0.1.5 (MIT OR Apache-2.0)
 - syn 2.0.119 (MIT OR Apache-2.0)
 - syn 3.0.9 (MIT OR Apache-2.0)
@@ -545,6 +545,26 @@ Creator: Person: Daniel Thompson-Yvetot
 
 - @types/react 19.3.0 (MIT)
 - windows 0.62.2 (MIT OR Apache-2.0)
+- windows-collections 0.3.2 (MIT OR Apache-2.0)
+- windows-core 0.62.2 (MIT OR Apache-2.0)
+- windows-future 0.3.2 (MIT OR Apache-2.0)
+- windows-implement 0.60.2 (MIT OR Apache-2.0)
+- windows-interface 0.59.3 (MIT OR Apache-2.0)
+- windows-link 0.2.1 (MIT OR Apache-2.0)
+- windows-numerics 0.3.1 (MIT OR Apache-2.0)
+- windows-registry 0.6.1 (MIT OR Apache-2.0)
+- windows-result 0.4.1 (MIT OR Apache-2.0)
+- windows-strings 0.5.1 (MIT OR Apache-2.0)
+- windows-sys 0.45.0 (MIT OR Apache-2.0)
+- windows-sys 0.52.0 (MIT OR Apache-2.0)
+- windows-sys 0.59.0 (MIT OR Apache-2.0)
+- windows-sys 0.60.2 (MIT OR Apache-2.0)
+- windows-sys 0.61.2 (MIT OR Apache-2.0)
+- windows-targets 0.42.2 (MIT OR Apache-2.0)
+- windows-targets 0.52.6 (MIT OR Apache-2.0)
+- windows-targets 0.53.5 (MIT OR Apache-2.0)
+- windows-threading 0.2.1 (MIT OR Apache-2.0)
+- windows-version 0.1.7 (MIT OR Apache-2.0)
 - windows_aarch64_gnullvm 0.42.2 (MIT OR Apache-2.0)
 - windows_aarch64_gnullvm 0.52.6 (MIT OR Apache-2.0)
 - windows_aarch64_gnullvm 0.53.1 (MIT OR Apache-2.0)
@@ -568,26 +588,6 @@ Creator: Person: Daniel Thompson-Yvetot
 - windows_x86_64_msvc 0.42.2 (MIT OR Apache-2.0)
 - windows_x86_64_msvc 0.52.6 (MIT OR Apache-2.0)
 - windows_x86_64_msvc 0.53.1 (MIT OR Apache-2.0)
-- windows-collections 0.3.2 (MIT OR Apache-2.0)
-- windows-core 0.62.2 (MIT OR Apache-2.0)
-- windows-future 0.3.2 (MIT OR Apache-2.0)
-- windows-implement 0.60.2 (MIT OR Apache-2.0)
-- windows-interface 0.59.3 (MIT OR Apache-2.0)
-- windows-link 0.2.1 (MIT OR Apache-2.0)
-- windows-numerics 0.3.1 (MIT OR Apache-2.0)
-- windows-registry 0.6.1 (MIT OR Apache-2.0)
-- windows-result 0.4.1 (MIT OR Apache-2.0)
-- windows-strings 0.5.1 (MIT OR Apache-2.0)
-- windows-sys 0.45.0 (MIT OR Apache-2.0)
-- windows-sys 0.52.0 (MIT OR Apache-2.0)
-- windows-sys 0.59.0 (MIT OR Apache-2.0)
-- windows-sys 0.60.2 (MIT OR Apache-2.0)
-- windows-sys 0.61.2 (MIT OR Apache-2.0)
-- windows-targets 0.42.2 (MIT OR Apache-2.0)
-- windows-targets 0.52.6 (MIT OR Apache-2.0)
-- windows-targets 0.53.5 (MIT OR Apache-2.0)
-- windows-threading 0.2.1 (MIT OR Apache-2.0)
-- windows-version 0.1.7 (MIT OR Apache-2.0)
 
 ```
 MIT License
@@ -858,8 +858,8 @@ limitations under the License.
 - cairo-rs 0.18.5 (MIT)
 - cairo-sys-rs 0.18.2 (MIT)
 - camino 1.2.6 (MIT OR Apache-2.0)
-- cargo_metadata 0.19.2 (MIT)
 - cargo-platform 0.1.9 (MIT OR Apache-2.0)
+- cargo_metadata 0.19.2 (MIT)
 - concurrent-queue 2.5.0 (Apache-2.0 OR MIT)
 - ctor 1.0.13 (Apache-2.0 OR MIT)
 - displaydoc 0.2.7 (MIT OR Apache-2.0)
@@ -914,12 +914,12 @@ limitations under the License.
 - rustversion 1.0.23 (MIT OR Apache-2.0)
 - semver 1.0.28 (MIT OR Apache-2.0)
 - serde 1.0.229 (MIT OR Apache-2.0)
+- serde-untagged 0.1.9 (MIT OR Apache-2.0)
 - serde_core 1.0.229 (MIT OR Apache-2.0)
 - serde_derive 1.0.229 (MIT OR Apache-2.0)
 - serde_derive_internals 0.29.1 (MIT OR Apache-2.0)
 - serde_json 1.0.154 (MIT OR Apache-2.0)
 - serde_repr 0.1.21 (MIT OR Apache-2.0)
-- serde-untagged 0.1.9 (MIT OR Apache-2.0)
 - servo_arc 0.4.3 (MIT OR Apache-2.0)
 - simd_cesu8 1.2.0 (Apache-2.0 OR MIT)
 - siphasher 1.0.4 (MIT OR Apache-2.0)
@@ -1005,12 +1005,12 @@ DEALINGS IN THE SOFTWARE.
 - concurrent-queue 2.5.0 (Apache-2.0 OR MIT)
 - const-random 0.1.18 (MIT OR Apache-2.0)
 - const-random-macro 0.1.16 (MIT OR Apache-2.0)
-- core_detect 1.0.0 (MIT/Apache-2.0)
 - core-foundation 0.10.1 (MIT OR Apache-2.0)
 - core-foundation 0.9.4 (MIT OR Apache-2.0)
 - core-foundation-sys 0.8.7 (MIT OR Apache-2.0)
 - core-graphics 0.25.0 (MIT OR Apache-2.0)
 - core-graphics-types 0.2.0 (MIT OR Apache-2.0)
+- core_detect 1.0.0 (MIT/Apache-2.0)
 - cpufeatures 0.2.17 (MIT OR Apache-2.0)
 - cpufeatures 0.3.1 (MIT OR Apache-2.0)
 - crossbeam-channel 0.5.17 (MIT OR Apache-2.0)
@@ -1137,8 +1137,8 @@ DEALINGS IN THE SOFTWARE.
 - wasm-bindgen-macro 0.2.129 (MIT OR Apache-2.0)
 - wasm-bindgen-macro-support 0.2.129 (MIT OR Apache-2.0)
 - wasm-bindgen-shared 0.2.129 (MIT OR Apache-2.0)
-- web_atoms 0.2.6 (MIT OR Apache-2.0)
 - web-sys 0.3.106 (MIT OR Apache-2.0)
+- web_atoms 0.2.6 (MIT OR Apache-2.0)
 - window-vibrancy 0.8.1 (Apache-2.0 OR MIT)
 - wit-bindgen 0.57.1 (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT)
 - wry 0.57.0 (Apache-2.0 OR MIT)
@@ -3286,10 +3286,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-- core_detect 1.0.0 (MIT/Apache-2.0)
+- core-foundation 0.10.1 (MIT OR Apache-2.0)
+- core-foundation 0.9.4 (MIT OR Apache-2.0)
+- core-foundation-sys 0.8.7 (MIT OR Apache-2.0)
+- core-graphics 0.25.0 (MIT OR Apache-2.0)
+- core-graphics-types 0.2.0 (MIT OR Apache-2.0)
+- string_cache 0.9.0 (MIT OR Apache-2.0)
 
 ```
-Copyright (c) 2017-2020 The Rust Project Developers
+Copyright (c) 2012-2013 Mozilla Foundation
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -3316,15 +3321,10 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-- core-foundation 0.10.1 (MIT OR Apache-2.0)
-- core-foundation 0.9.4 (MIT OR Apache-2.0)
-- core-foundation-sys 0.8.7 (MIT OR Apache-2.0)
-- core-graphics 0.25.0 (MIT OR Apache-2.0)
-- core-graphics-types 0.2.0 (MIT OR Apache-2.0)
-- string_cache 0.9.0 (MIT OR Apache-2.0)
+- core_detect 1.0.0 (MIT/Apache-2.0)
 
 ```
-Copyright (c) 2012-2013 Mozilla Foundation
+Copyright (c) 2017-2020 The Rust Project Developers
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -9434,6 +9434,30 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+- num-conv 0.2.2 (MIT OR Apache-2.0)
+
+```
+Copyright (c) Jacob Pratt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 - num_enum 0.7.6 (BSD-3-Clause OR MIT OR Apache-2.0)
 - num_enum_derive 0.7.6 (BSD-3-Clause OR MIT OR Apache-2.0)
 
@@ -9465,30 +9489,6 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-```
-
-- num-conv 0.2.2 (MIT OR Apache-2.0)
-
-```
-Copyright (c) Jacob Pratt
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 ```
 
 - open 5.4.4 (MIT)
@@ -15240,6 +15240,26 @@ Creator: Person: Daniel Thompson-Yvetot
 ```
 
 - windows 0.62.2 (MIT OR Apache-2.0)
+- windows-collections 0.3.2 (MIT OR Apache-2.0)
+- windows-core 0.62.2 (MIT OR Apache-2.0)
+- windows-future 0.3.2 (MIT OR Apache-2.0)
+- windows-implement 0.60.2 (MIT OR Apache-2.0)
+- windows-interface 0.59.3 (MIT OR Apache-2.0)
+- windows-link 0.2.1 (MIT OR Apache-2.0)
+- windows-numerics 0.3.1 (MIT OR Apache-2.0)
+- windows-registry 0.6.1 (MIT OR Apache-2.0)
+- windows-result 0.4.1 (MIT OR Apache-2.0)
+- windows-strings 0.5.1 (MIT OR Apache-2.0)
+- windows-sys 0.45.0 (MIT OR Apache-2.0)
+- windows-sys 0.52.0 (MIT OR Apache-2.0)
+- windows-sys 0.59.0 (MIT OR Apache-2.0)
+- windows-sys 0.60.2 (MIT OR Apache-2.0)
+- windows-sys 0.61.2 (MIT OR Apache-2.0)
+- windows-targets 0.42.2 (MIT OR Apache-2.0)
+- windows-targets 0.52.6 (MIT OR Apache-2.0)
+- windows-targets 0.53.5 (MIT OR Apache-2.0)
+- windows-threading 0.2.1 (MIT OR Apache-2.0)
+- windows-version 0.1.7 (MIT OR Apache-2.0)
 - windows_aarch64_gnullvm 0.42.2 (MIT OR Apache-2.0)
 - windows_aarch64_gnullvm 0.52.6 (MIT OR Apache-2.0)
 - windows_aarch64_gnullvm 0.53.1 (MIT OR Apache-2.0)
@@ -15263,26 +15283,6 @@ Creator: Person: Daniel Thompson-Yvetot
 - windows_x86_64_msvc 0.42.2 (MIT OR Apache-2.0)
 - windows_x86_64_msvc 0.52.6 (MIT OR Apache-2.0)
 - windows_x86_64_msvc 0.53.1 (MIT OR Apache-2.0)
-- windows-collections 0.3.2 (MIT OR Apache-2.0)
-- windows-core 0.62.2 (MIT OR Apache-2.0)
-- windows-future 0.3.2 (MIT OR Apache-2.0)
-- windows-implement 0.60.2 (MIT OR Apache-2.0)
-- windows-interface 0.59.3 (MIT OR Apache-2.0)
-- windows-link 0.2.1 (MIT OR Apache-2.0)
-- windows-numerics 0.3.1 (MIT OR Apache-2.0)
-- windows-registry 0.6.1 (MIT OR Apache-2.0)
-- windows-result 0.4.1 (MIT OR Apache-2.0)
-- windows-strings 0.5.1 (MIT OR Apache-2.0)
-- windows-sys 0.45.0 (MIT OR Apache-2.0)
-- windows-sys 0.52.0 (MIT OR Apache-2.0)
-- windows-sys 0.59.0 (MIT OR Apache-2.0)
-- windows-sys 0.60.2 (MIT OR Apache-2.0)
-- windows-sys 0.61.2 (MIT OR Apache-2.0)
-- windows-targets 0.42.2 (MIT OR Apache-2.0)
-- windows-targets 0.52.6 (MIT OR Apache-2.0)
-- windows-targets 0.53.5 (MIT OR Apache-2.0)
-- windows-threading 0.2.1 (MIT OR Apache-2.0)
-- windows-version 0.1.7 (MIT OR Apache-2.0)
 
 ```
 Apache License
@@ -15962,44 +15962,44 @@ freely, subject to the following restrictions:
 
 The license is the one declared in the package metadata; its standard text applies.
 
-- alloc-stdlib 0.3.0 (BSD-3-Clause): https://crates.io/crates/alloc-stdlib/0.3.0
-- block2 0.6.2 (MIT): https://crates.io/crates/block2/0.6.2
-- cesu8 1.1.0 (Apache-2.0/MIT): https://crates.io/crates/cesu8/1.1.0
-- dispatch2 0.3.1 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/dispatch2/0.3.1
-- dlopen2 0.8.2 (MIT): https://crates.io/crates/dlopen2/0.8.2
-- dlopen2_derive 0.4.3 (MIT): https://crates.io/crates/dlopen2_derive/0.4.3
-- jni 0.22.4 (MIT OR Apache-2.0): https://crates.io/crates/jni/0.22.4
-- jni-macros 0.22.4 (MIT OR Apache-2.0): https://crates.io/crates/jni-macros/0.22.4
-- jni-sys-macros 0.4.1 (MIT OR Apache-2.0): https://crates.io/crates/jni-sys-macros/0.4.1
+- alloc-stdlib 0.3.0 (BSD-3-Clause), by Daniel Reiter Horn <danielrh@dropbox.com>: https://crates.io/crates/alloc-stdlib/0.3.0
+- block2 0.6.2 (MIT), by Mads Marquart <mads@marquart.dk>: https://crates.io/crates/block2/0.6.2
+- cesu8 1.1.0 (Apache-2.0/MIT), by Eric Kidd <git@randomhacks.net>: https://crates.io/crates/cesu8/1.1.0
+- dispatch2 0.3.1 (Zlib OR Apache-2.0 OR MIT), by Mads Marquart <mads@marquart.dk>, Mary <mary@mary.zone>: https://crates.io/crates/dispatch2/0.3.1
+- dlopen2 0.8.2 (MIT), by Szymon Wieloch <szymon.wieloch@gmail.com>, Ahmed Masud <ahmed.masud@saf.ai>, OpenByte <development.openbyte@gmail.com>: https://crates.io/crates/dlopen2/0.8.2
+- dlopen2_derive 0.4.3 (MIT), by Szymon Wieloch <szymon.wieloch@gmail.com>, OpenByte <development.openbyte@gmail.com>: https://crates.io/crates/dlopen2_derive/0.4.3
+- jni 0.22.4 (MIT OR Apache-2.0), by jni team: https://crates.io/crates/jni/0.22.4
+- jni-macros 0.22.4 (MIT OR Apache-2.0), by https://github.com/jni-rs/jni-rs: https://crates.io/crates/jni-macros/0.22.4
+- jni-sys-macros 0.4.1 (MIT OR Apache-2.0), by Robert Bragg <robert@sixbynine.org>: https://crates.io/crates/jni-sys-macros/0.4.1
 - libappindicator-sys 0.9.0 (Apache-2.0 OR MIT): https://crates.io/crates/libappindicator-sys/0.9.0
-- mac-notification-sys 0.6.15 (MIT/Apache-2.0): https://crates.io/crates/mac-notification-sys/0.6.15
-- ndk 0.9.0 (MIT OR Apache-2.0): https://crates.io/crates/ndk/0.9.0
-- ndk-context 0.1.1 (MIT OR Apache-2.0): https://crates.io/crates/ndk-context/0.1.1
-- ndk-sys 0.6.0+11769913 (MIT OR Apache-2.0): https://crates.io/crates/ndk-sys/0.6.0+11769913
-- objc2 0.6.5 (MIT): https://crates.io/crates/objc2/0.6.5
-- objc2-app-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-app-kit/0.3.2
-- objc2-cloud-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-cloud-kit/0.3.2
-- objc2-core-data 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-core-data/0.3.2
-- objc2-core-foundation 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-core-foundation/0.3.2
-- objc2-core-graphics 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-core-graphics/0.3.2
-- objc2-core-image 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-core-image/0.3.2
-- objc2-core-location 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-core-location/0.3.2
-- objc2-core-text 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-core-text/0.3.2
-- objc2-encode 4.1.0 (MIT): https://crates.io/crates/objc2-encode/4.1.0
-- objc2-exception-helper 0.1.1 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-exception-helper/0.1.1
-- objc2-foundation 0.3.2 (MIT): https://crates.io/crates/objc2-foundation/0.3.2
-- objc2-io-surface 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-io-surface/0.3.2
-- objc2-osa-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-osa-kit/0.3.2
-- objc2-quartz-core 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-quartz-core/0.3.2
-- objc2-ui-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-ui-kit/0.3.2
-- objc2-user-notifications 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-user-notifications/0.3.2
-- objc2-web-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT): https://crates.io/crates/objc2-web-kit/0.3.2
-- r-efi 5.3.0 (MIT OR Apache-2.0 OR LGPL-2.1-or-later): https://crates.io/crates/r-efi/5.3.0
-- r-efi 6.0.0 (MIT OR Apache-2.0 OR LGPL-2.1-or-later): https://crates.io/crates/r-efi/6.0.0
-- rustls-platform-verifier-android 0.2.0 (MIT OR Apache-2.0): https://crates.io/crates/rustls-platform-verifier-android/0.2.0
-- selectors 0.38.0 (MPL-2.0): https://crates.io/crates/selectors/0.38.0
-- webview2-com 0.39.1 (MIT): https://crates.io/crates/webview2-com/0.39.1
-- webview2-com-macros 0.8.1 (MIT): https://crates.io/crates/webview2-com-macros/0.8.1
-- webview2-com-sys 0.39.1 (MIT): https://crates.io/crates/webview2-com-sys/0.39.1
-- winapi-i686-pc-windows-gnu 0.4.0 (MIT/Apache-2.0): https://crates.io/crates/winapi-i686-pc-windows-gnu/0.4.0
-- winapi-x86_64-pc-windows-gnu 0.4.0 (MIT/Apache-2.0): https://crates.io/crates/winapi-x86_64-pc-windows-gnu/0.4.0
+- mac-notification-sys 0.6.15 (MIT/Apache-2.0), by Felix Döring <development@felixdoering.com>, Hendrik Sollich <hendrik@hoodie.de>: https://crates.io/crates/mac-notification-sys/0.6.15
+- ndk 0.9.0 (MIT OR Apache-2.0), by The Rust Mobile contributors: https://crates.io/crates/ndk/0.9.0
+- ndk-context 0.1.1 (MIT OR Apache-2.0), by The Rust Windowing contributors: https://crates.io/crates/ndk-context/0.1.1
+- ndk-sys 0.6.0+11769913 (MIT OR Apache-2.0), by The Rust Windowing contributors: https://crates.io/crates/ndk-sys/0.6.0+11769913
+- objc2 0.6.5 (MIT), by Mads Marquart <mads@marquart.dk>: https://crates.io/crates/objc2/0.6.5
+- objc2-app-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-app-kit/0.3.2
+- objc2-cloud-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-cloud-kit/0.3.2
+- objc2-core-data 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-core-data/0.3.2
+- objc2-core-foundation 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-core-foundation/0.3.2
+- objc2-core-graphics 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-core-graphics/0.3.2
+- objc2-core-image 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-core-image/0.3.2
+- objc2-core-location 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-core-location/0.3.2
+- objc2-core-text 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-core-text/0.3.2
+- objc2-encode 4.1.0 (MIT), by Mads Marquart <mads@marquart.dk>: https://crates.io/crates/objc2-encode/4.1.0
+- objc2-exception-helper 0.1.1 (Zlib OR Apache-2.0 OR MIT), by Mads Marquart <mads@marquart.dk>: https://crates.io/crates/objc2-exception-helper/0.1.1
+- objc2-foundation 0.3.2 (MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-foundation/0.3.2
+- objc2-io-surface 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-io-surface/0.3.2
+- objc2-osa-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-osa-kit/0.3.2
+- objc2-quartz-core 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-quartz-core/0.3.2
+- objc2-ui-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-ui-kit/0.3.2
+- objc2-user-notifications 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-user-notifications/0.3.2
+- objc2-web-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-web-kit/0.3.2
+- r-efi 5.3.0 (MIT OR Apache-2.0 OR LGPL-2.1-or-later), by https://github.com/r-efi/r-efi: https://crates.io/crates/r-efi/5.3.0
+- r-efi 6.0.0 (MIT OR Apache-2.0 OR LGPL-2.1-or-later), by https://github.com/r-efi/r-efi: https://crates.io/crates/r-efi/6.0.0
+- rustls-platform-verifier-android 0.2.0 (MIT OR Apache-2.0), by https://github.com/rustls/rustls-platform-verifier: https://crates.io/crates/rustls-platform-verifier-android/0.2.0
+- selectors 0.38.0 (MPL-2.0), by The Servo Project Developers: https://crates.io/crates/selectors/0.38.0
+- webview2-com 0.39.1 (MIT), by https://github.com/wravery/webview2-rs: https://crates.io/crates/webview2-com/0.39.1
+- webview2-com-macros 0.8.1 (MIT), by https://github.com/wravery/webview2-rs: https://crates.io/crates/webview2-com-macros/0.8.1
+- webview2-com-sys 0.39.1 (MIT), by https://github.com/wravery/webview2-rs: https://crates.io/crates/webview2-com-sys/0.39.1
+- winapi-i686-pc-windows-gnu 0.4.0 (MIT/Apache-2.0), by Peter Atashian <retep998@gmail.com>: https://crates.io/crates/winapi-i686-pc-windows-gnu/0.4.0
+- winapi-x86_64-pc-windows-gnu 0.4.0 (MIT/Apache-2.0), by Peter Atashian <retep998@gmail.com>: https://crates.io/crates/winapi-x86_64-pc-windows-gnu/0.4.0

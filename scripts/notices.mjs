@@ -10,7 +10,9 @@ const licenseTexts = (dir) =>
   readdirSync(dir)
     .filter((f) => LICENSE_FILE.test(f))
     .sort()
-    .map((f) => readFileSync(join(dir, f), "utf8").trim())
+    .map((f) =>
+      readFileSync(join(dir, f), "utf8").replace(/\r\n/g, "\n").trim(),
+    )
 
 /** Crates linked into the app: normal dependencies reachable from pr-radar, every target OS. */
 const crates = () => {
@@ -38,6 +40,7 @@ const crates = () => {
       version: p.version,
       license: p.license ?? "see text",
       source: `https://crates.io/crates/${p.name}/${p.version}`,
+      credit: p.authors.length ? p.authors.join(", ") : p.repository,
       texts: licenseTexts(dirname(p.manifest_path)),
     }
   })
@@ -45,7 +48,13 @@ const crates = () => {
 
 /** Production npm packages (the bundled frontend). */
 const npmPackages = () =>
-  JSON.parse(execFileSync("npm", ["query", ".prod"], { maxBuffer: 1 << 26 }))
+  JSON.parse(
+    execFileSync("npm", ["query", ".prod"], {
+      maxBuffer: 1 << 26,
+      // npm is npm.cmd on Windows
+      shell: process.platform === "win32",
+    }),
+  )
     .filter((p) => !p.private)
     .map((p) => ({
       name: p.name,
@@ -55,8 +64,10 @@ const npmPackages = () =>
       texts: licenseTexts(p.path),
     }))
 
+// code-point order, the same on every machine (localeCompare depends on the locale)
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 const pkgs = [...crates(), ...npmPackages()].sort(
-  (a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version),
+  (a, b) => cmp(a.name, b.name) || cmp(a.version, b.version),
 )
 
 const groups = new Map()
@@ -97,7 +108,9 @@ if (bare.length)
     "",
     "The license is the one declared in the package metadata; its standard text applies.",
     "",
-    ...bare.map((p) => `- ${id(p)}: ${p.source}`),
+    ...bare.map(
+      (p) => `- ${id(p)}${p.credit ? `, by ${p.credit}` : ""}: ${p.source}`,
+    ),
     "",
   )
 
