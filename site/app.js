@@ -51,7 +51,7 @@
     r2a: 'une PR à la fois', r3: 'Notifications système natives', r3a: 'web uniquement',
     r4: 'Répondre aux fils non résolus depuis la liste', r4a: 'en ouvrant chaque PR', r5: 'Calendrier des merges',
     privacy: 'Confidentialité',
-    pv: 'PR Radar parle uniquement à GitHub et, si vous le connectez, à Slack. Aucun serveur : les jetons restent dans le trousseau de votre OS, les jetons Slack sont en lecture seule avec rotation automatique (ils expirent toutes les 12 h), et révocables à tout moment. Vos messages ne quittent jamais votre machine.',
+    pv: 'PR Radar parle uniquement à GitHub, à votre serveur GitHub Enterprise si vous en ajoutez un, et à Slack si vous le connectez. Aucun serveur : les jetons restent dans le trousseau de votre OS, les jetons Slack sont en lecture seule avec rotation automatique (ils expirent toutes les 12 h), et révocables à tout moment. Vos messages ne quittent jamais votre machine.',
     pv2: 'L\'app contacte aussi github.com pour vérifier les mises à jour (votre adresse IP et la version de l\'app) et charge les avatars depuis GitHub. Les messages Slack sont cherchés et lus sur votre machine uniquement : rien ne nous est envoyé, ni à personne d\'autre.',
     pv3: 'Ce site est hébergé par GitHub Pages, qui enregistre l\'adresse IP des visiteurs. Votre navigateur demande la dernière version à api.github.com. Aucun cookie, aucune mesure d\'audience : seule la langue choisie est gardée dans votre navigateur (localStorage).',
     pvl: 'Lire le code (licence MIT)', faq: 'Questions fréquentes', q1: 'Quels droits l\'app demande-t-elle ?',
