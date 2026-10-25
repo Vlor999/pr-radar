@@ -53,12 +53,20 @@ export function useSeen(prs: Pr[]) {
   const markSeen = useCallback(
     (ps: Pr[]) => {
       if (!ps.some(isNew)) return
+      // purge les PR fermées des repos affichés ; un repo absent (compte en échec) garde ses marques
+      const repos = new Set(prs.map((p) => p.repo))
+      const live = new Set(prs.map(prKey))
+      const kept = Object.entries(
+        JSON.parse(read() || "{}") as Record<string, string>,
+      ).filter(
+        ([k]) => live.has(k) || !repos.has(k.slice(0, k.lastIndexOf("#"))),
+      )
       write({
-        ...JSON.parse(read() || "{}"),
+        ...Object.fromEntries(kept),
         ...Object.fromEntries(ps.map((p) => [prKey(p), p.updated])),
       })
     },
-    [isNew],
+    [isNew, prs],
   )
 
   return { isNew, markSeen, count: prs.filter(isNew).length }
