@@ -13,6 +13,7 @@ import {
   type AccountError,
 } from "./accounts"
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
+import { sweep, type Entry } from "./cache"
 import {
   gqlFailed,
   gqlMessage,
@@ -268,7 +269,6 @@ function toPr(p: RawPr, login: string, account: string): Pr {
 }
 
 // ponytail: caches en mémoire de la fenêtre, suffisent pour une app mono-utilisateur
-type Entry<T> = { until: number; value: Promise<T> }
 const caches = new Map<string, Entry<unknown>>()
 
 function cached<T>(
@@ -279,8 +279,7 @@ function cached<T>(
   const now = Date.now()
   const hit = caches.get(key) as Entry<T> | undefined
   if (hit && now < hit.until) return hit.value
-  // les clés changent (jour, repos suivis) : purge les expirées pour ne pas les garder jusqu'à clearCache
-  for (const [k, e] of caches) if (now >= e.until) caches.delete(k)
+  sweep(caches, now)
   const value = load()
   value.catch(() => caches.delete(key)) // ne garde pas une erreur en cache
   caches.set(key, { until: now + ttl, value })
