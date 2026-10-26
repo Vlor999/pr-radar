@@ -163,6 +163,16 @@ const PRS: Pr[] = [
     repo: "globex/billing",
     number: 7,
     title: "Export CSV des factures",
+    // commentaire général seul, sans fil sur un fichier
+    comments: 1,
+    conversation: [
+      {
+        author: "dave",
+        body: "Pense à l'encodage UTF-8 avec BOM pour Excel.",
+        url: `${COMMENT_URL}c7-1`,
+        at: ago(4),
+      },
+    ],
     additions: 640,
     deletions: 12,
     files: 14,
