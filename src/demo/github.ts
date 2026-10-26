@@ -292,6 +292,9 @@ export const replyToThread = async (
 ) => {
   console.info("[demo] reply", threadId, body, repo)
 }
+export const commentOnPr = async (prId: string, body: string, repo: string) => {
+  console.info("[demo] comment", prId, body, repo)
+}
 
 export type Profile = {
   login: string

@@ -485,6 +485,17 @@ export async function replyToThread(
   )
 }
 
+/** Commentaire général sur une PR, en tant que le compte qui suit ce repo. */
+export async function commentOnPr(prId: string, body: string, repo: string) {
+  const a = findAccount(splitKey(repo).account)
+  if (!a) throw new AuthError(pick(S).notSignedIn)
+  await gql(
+    conn(a),
+    "mutation($id: ID!, $body: String!) { addComment(input: { subjectId: $id, body: $body }) { commentEdge { node { id } } } }",
+    { id: prId, body },
+  )
+}
+
 export type Profile = {
   login: string
   name: string | null
