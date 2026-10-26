@@ -17,6 +17,8 @@ export type Thread = {
 export type Note = Thread["comments"][number] & { state?: string }
 
 export type Pr = {
+  /** id GraphQL (nœud) de la PR */
+  id: string
   /** `owner/name` */
   repo: string
   number: number

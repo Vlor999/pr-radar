@@ -18,6 +18,7 @@ const pr = (
   base: string,
   extra: Partial<Pr> = {},
 ): Pr => ({
+  id: `PR_${number}`,
   repo: "o/r",
   number,
   title: `PR ${number}`,

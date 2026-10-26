@@ -114,6 +114,7 @@ async function gql<T>(
 type Login = { author: { login: string } | null }
 type RawComment = Login & { bodyText: string; url: string; createdAt: string }
 type RawPr = RawConversation & {
+  id: string
   number: number
   title: string
   url: string
@@ -222,6 +223,7 @@ function toPr(p: RawPr, login: string, account: string): Pr {
     nodes.filter((n) => n.author?.login !== login).length
   const threads = p.reviewThreads.nodes
   return {
+    id: p.id,
     repo: repoKey(account, p.repository.nameWithOwner),
     number: p.number,
     title: p.title,
@@ -480,6 +482,17 @@ export async function replyToThread(
     conn(a),
     "mutation($id: ID!, $body: String!) { addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $id, body: $body }) { comment { id } } }",
     { id: threadId, body },
+  )
+}
+
+/** Commentaire général sur une PR, en tant que le compte qui suit ce repo. */
+export async function commentOnPr(prId: string, body: string, repo: string) {
+  const a = findAccount(splitKey(repo).account)
+  if (!a) throw new AuthError(pick(S).notSignedIn)
+  await gql(
+    conn(a),
+    "mutation($id: ID!, $body: String!) { addComment(input: { subjectId: $id, body: $body }) { commentEdge { node { id } } } }",
+    { id: prId, body },
   )
 }
 

@@ -3,7 +3,7 @@ import { ExternalLink, Loader2, Send } from "lucide-react"
 import { cn } from "cn"
 
 import { Avatar } from "@/components/avatar"
-import { reply } from "@/lib/actions"
+import { comment, reply } from "@/lib/actions"
 import { strings, useStrings } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -27,6 +27,7 @@ const S = strings(
     outdated: "code modifié depuis",
     reply: "Répondre",
     replyPlaceholder: "Répondre…",
+    commentPlaceholder: "Commenter la PR…",
     viewOnGithub: "Voir sur GitHub",
   },
   {
@@ -43,6 +44,7 @@ const S = strings(
     outdated: "code changed since",
     reply: "Reply",
     replyPlaceholder: "Reply…",
+    commentPlaceholder: "Comment on the PR…",
     viewOnGithub: "View on GitHub",
   },
 )
@@ -55,10 +57,12 @@ function ago(iso: string, t: typeof S.fr) {
 /** Colonne des discussions ouvertes d'une PR, reliée à sa carte par des traits (affichée sous la carte) :
  * d'abord les commentaires généraux, puis les fils non résolus. */
 export function ThreadColumn({
+  prId,
   threads,
   conversation,
   repo,
 }: {
+  prId: string
   threads: Thread[]
   conversation: Note[]
   repo: string
@@ -67,7 +71,7 @@ export function ThreadColumn({
     <ul className="flex min-w-0 animate-in flex-col gap-3 pl-14 duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none">
       {conversation.length > 0 && (
         <Bubble>
-          <ConversationCard notes={conversation} />
+          <ConversationCard notes={conversation} prId={prId} repo={repo} />
         </Bubble>
       )}
       {threads.map((t) => (
@@ -103,17 +107,6 @@ function Bubble({ children }: { children: ReactNode }) {
 
 function ThreadCard({ thread, repo }: { thread: Thread; repo: string }) {
   const t = useStrings(S)
-  const [draft, setDraft] = useState("")
-  const [error, setError] = useState("")
-  const [sending, start] = useTransition()
-
-  const send = () =>
-    start(async () => {
-      const res = await reply(thread.id, draft, repo)
-      setError(res.error ?? "")
-      if (!res.error) setDraft("")
-    })
-
   return (
     <Card
       size="sm"
@@ -142,54 +135,25 @@ function ThreadCard({ thread, repo }: { thread: Thread; repo: string }) {
 
       <Messages notes={thread.comments} />
 
-      <form
-        className="flex flex-col gap-2 border-t px-4 py-3"
-        onSubmit={(e) => {
-          e.preventDefault()
-          send()
-        }}
-      >
-        <label htmlFor={`reply-${thread.id}`} className="sr-only">
-          {t.reply}
-        </label>
-        <textarea
-          id={`reply-${thread.id}`}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault()
-              send()
-            }
-          }}
-          rows={2}
-          placeholder={t.replyPlaceholder}
-          disabled={sending}
-          className="min-h-16 w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-        />
-        {error && <p className="text-xs text-destructive">{error}</p>}
-        <div className="flex items-center justify-between gap-2">
-          <a
-            href={thread.comments.at(-1)?.url}
-            target="_blank"
-            rel="noopener"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
-          >
-            {t.viewOnGithub} <ExternalLink className="size-3" />
-          </a>
-          <Button type="submit" size="sm" disabled={sending || !draft.trim()}>
-            {sending ? <Loader2 className="animate-spin" /> : <Send />}
-            {t.reply}
-            <kbd className="font-sans text-xs opacity-70">⌘↵</kbd>
-          </Button>
-        </div>
-      </form>
+      <ReplyForm
+        id={thread.id}
+        link={thread.comments.at(-1)?.url}
+        onSend={(text) => reply(thread.id, text, repo)}
+      />
     </Card>
   )
 }
 
-/** Commentaires généraux et textes de review : lecture seule, on répond sur GitHub. */
-function ConversationCard({ notes }: { notes: Note[] }) {
+/** Commentaires généraux et textes de review ; la réponse est un nouveau commentaire général sur la PR. */
+function ConversationCard({
+  notes,
+  prId,
+  repo,
+}: {
+  notes: Note[]
+  prId: string
+  repo: string
+}) {
   const t = useStrings(S)
   return (
     <Card
@@ -203,15 +167,83 @@ function ConversationCard({ notes }: { notes: Note[] }) {
         <Participants notes={notes} />
       </header>
       <Messages notes={notes} />
-      <a
-        href={notes.at(-1)?.url}
-        target="_blank"
-        rel="noopener"
-        className="inline-flex items-center gap-1 border-t px-4 py-3 text-xs text-muted-foreground hover:underline"
-      >
-        {t.viewOnGithub} <ExternalLink className="size-3" />
-      </a>
+      <ReplyForm
+        id={prId}
+        link={notes.at(-1)?.url}
+        onSend={(text) => comment(prId, text, repo)}
+        placeholder={t.commentPlaceholder}
+      />
     </Card>
+  )
+}
+
+/** Zone de réponse en bas d'une carte : ⌘↵ envoie, vidée après succès. */
+function ReplyForm({
+  id,
+  link,
+  onSend,
+  placeholder,
+}: {
+  id: string
+  link?: string
+  onSend: (text: string) => Promise<{ error?: string }>
+  placeholder?: string
+}) {
+  const t = useStrings(S)
+  const [draft, setDraft] = useState("")
+  const [error, setError] = useState("")
+  const [sending, start] = useTransition()
+
+  const send = () =>
+    start(async () => {
+      const res = await onSend(draft)
+      setError(res.error ?? "")
+      if (!res.error) setDraft("")
+    })
+
+  return (
+    <form
+      className="flex flex-col gap-2 border-t px-4 py-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        send()
+      }}
+    >
+      <label htmlFor={`reply-${id}`} className="sr-only">
+        {t.reply}
+      </label>
+      <textarea
+        id={`reply-${id}`}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault()
+            send()
+          }
+        }}
+        rows={2}
+        placeholder={placeholder ?? t.replyPlaceholder}
+        disabled={sending}
+        className="min-h-16 w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex items-center justify-between gap-2">
+        <a
+          href={link}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+        >
+          {t.viewOnGithub} <ExternalLink className="size-3" />
+        </a>
+        <Button type="submit" size="sm" disabled={sending || !draft.trim()}>
+          {sending ? <Loader2 className="animate-spin" /> : <Send />}
+          {t.reply}
+          <kbd className="font-sans text-xs opacity-70">⌘↵</kbd>
+        </Button>
+      </div>
+    </form>
   )
 }
 
