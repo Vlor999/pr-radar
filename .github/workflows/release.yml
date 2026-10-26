@@ -108,6 +108,32 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+  # tauri-action writes api.github.com asset URLs in latest.json: without a token, the updater hits the
+  # 60 requests/hour per IP limit and gets a JSON error instead of the archive. Point them to the direct downloads.
+  updater-urls:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Rewrite latest.json URLs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ $GITHUB_REF_TYPE == tag ]]; then
+            TAG=$GITHUB_REF_NAME
+          else
+            TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          fi
+          [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq '[.assets[] | {key: .url, value: .browser_download_url}] | from_entries' > urls.json
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json
+          jq --slurpfile u urls.json '.platforms |= map_values(.url = ($u[0][.url] // .url))' latest.json > fixed.json
+          jq -e '[.platforms[].url | startswith("https://github.com/")] | all' fixed.json
+          mv fixed.json latest.json
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber latest.json
+
   # Homebrew cask (Vlor999/homebrew-tap): updated only when the HOMEBREW_TAP_TOKEN secret exists
   homebrew:
     needs: release
