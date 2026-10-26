@@ -69,6 +69,7 @@ const pr = (p: Partial<Pr> & Pick<Pr, "repo" | "number" | "title">): Pr => ({
   comments: 0,
   unresolved: 0,
   threads: [],
+  conversation: [],
   additions: 120,
   deletions: 30,
   files: 6,
@@ -123,7 +124,7 @@ const PRS: Pr[] = [
     decision: "CHANGES_REQUESTED",
     // discussion + messages Slack, sans PR stackée (voir src/demo/slack.ts)
     unresolved: 1,
-    comments: 2,
+    comments: 3,
     threads: [
       thread(
         "t2",
@@ -132,6 +133,22 @@ const PRS: Pr[] = [
       ),
     ],
     reviews: [{ who: "bob", state: "CHANGES_REQUESTED" }],
+    // commentaires généraux, hors fichier
+    conversation: [
+      {
+        author: "carol",
+        body: "PR à reprendre : l'API des commandes a bougé entre-temps.",
+        url: `${COMMENT_URL}c88-1`,
+        at: ago(26),
+      },
+      {
+        author: "bob",
+        body: "Le principe me va, voir le commentaire sur le curseur.",
+        url: `${COMMENT_URL}c88-2`,
+        at: ago(24),
+        state: "CHANGES_REQUESTED",
+      },
+    ],
     updated: ago(30),
   }),
   pr({
@@ -146,6 +163,16 @@ const PRS: Pr[] = [
     repo: "globex/billing",
     number: 7,
     title: "Export CSV des factures",
+    // commentaire général seul, sans fil sur un fichier
+    comments: 1,
+    conversation: [
+      {
+        author: "dave",
+        body: "Pense à l'encodage UTF-8 avec BOM pour Excel.",
+        url: `${COMMENT_URL}c7-1`,
+        at: ago(4),
+      },
+    ],
     additions: 640,
     deletions: 12,
     files: 14,

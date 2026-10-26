@@ -31,6 +31,7 @@ const pr = (
   comments: 0,
   unresolved: 0,
   threads: [],
+  conversation: [],
   additions: 0,
   deletions: 0,
   files: 0,
