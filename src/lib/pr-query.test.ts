@@ -1,7 +1,12 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { isStackFieldError, queryFor, withStackFallback } from "./pr-query.ts"
+import {
+  isStackFieldError,
+  queryFor,
+  toConversation,
+  withStackFallback,
+} from "./pr-query.ts"
 
 test("github.com demande les stacks natifs, pas un GitHub Enterprise", () => {
   assert.match(queryFor("github.com"), /stackEntry/)
@@ -83,4 +88,50 @@ test("pas de relance quand le champ est déjà écarté", async () => {
     ),
   )
   assert.equal(calls, 1)
+})
+
+test("conversation : commentaires et textes de review mêlés par date, review vide ou en cours ignorée", () => {
+  const note = (login: string | null, bodyText: string, url: string) => ({
+    author: login ? { login } : null,
+    bodyText,
+    url,
+  })
+  const notes = toConversation({
+    conversation: {
+      nodes: [
+        {
+          ...note("phc", "PR à reprendre", "c1"),
+          createdAt: "2026-10-26T11:00:00Z",
+        },
+        { ...note(null, "fantôme", "c2"), createdAt: "2026-10-26T13:00:00Z" },
+      ],
+    },
+    reviews: {
+      nodes: [
+        {
+          ...note("bob", "Ok pour moi", "r1"),
+          state: "APPROVED",
+          submittedAt: "2026-10-26T12:00:00Z",
+        },
+        {
+          ...note("bob", "", "r2"),
+          state: "APPROVED",
+          submittedAt: "2026-10-26T12:30:00Z",
+        },
+        {
+          ...note("me", "brouillon", "r3"),
+          state: "PENDING",
+          submittedAt: null,
+        },
+      ],
+    },
+  })
+  assert.deepEqual(
+    notes.map((n) => [n.author, n.url, n.state]),
+    [
+      ["phc", "c1", undefined],
+      ["bob", "r1", "APPROVED"],
+      ["ghost", "c2", undefined],
+    ],
+  )
 })
