@@ -6,6 +6,7 @@ import { splitKey } from "./accounts"
 import { allAccounts, logout } from "./auth"
 import {
   clearCache,
+  commentOnPr,
   reposWithMyOpenPrs,
   fetchMerged,
   listRepos,
@@ -64,19 +65,18 @@ export async function refreshPrs() {
   await reload()
 }
 
-/** Répond dans un fil de discussion de review, puis relit GitHub pour afficher la réponse. */
-export async function reply(
-  threadId: string,
+/** Publie un message sur le nœud GitHub `id`, puis relit GitHub pour l'afficher. */
+async function post(
+  id: string,
   body: string,
-  repo: string,
+  send: (text: string) => Promise<void>,
 ): Promise<{ error?: string }> {
   const text = body.trim()
-  if (!/^[\w=-]+$/.test(threadId))
-    return { error: "Fil de discussion invalide" }
+  if (!/^[\w=-]+$/.test(id)) return { error: "Identifiant GitHub invalide" }
   if (!text) return { error: "Message vide" }
   if (text.length > 65_000) return { error: "Message trop long" }
   try {
-    await replyToThread(threadId, text, repo)
+    await send(text)
   } catch (e) {
     return { error: message(e) }
   }
@@ -84,6 +84,14 @@ export async function reply(
   await reload()
   return {}
 }
+
+/** Répond dans un fil de discussion de review. */
+export const reply = (threadId: string, body: string, repo: string) =>
+  post(threadId, body, (text) => replyToThread(threadId, text, repo))
+
+/** Commentaire général sur la PR (une review ne se répond pas individuellement sur GitHub). */
+export const comment = (prId: string, body: string, repo: string) =>
+  post(prId, body, (text) => commentOnPr(prId, text, repo))
 
 /** Compte ajouté dans les réglages : on suit d'office ses repos où j'ai des PR ouvertes. */
 export async function accountAdded(id: string) {

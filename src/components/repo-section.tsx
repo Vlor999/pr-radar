@@ -256,6 +256,7 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
                 {threadsOpen && (
                   <div className="w-full max-w-xl min-w-0 @[44rem]:col-start-1">
                     <ThreadColumn
+                      prId={n.id}
                       threads={n.threads}
                       conversation={n.conversation}
                       repo={n.repo}
