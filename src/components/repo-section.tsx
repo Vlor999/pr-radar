@@ -191,7 +191,8 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
         const key = `${n.repo}#${n.number}`
         const open = state.isOpen(key, false)
         const slackOpen = state.isOpen(`${key}:slack`, false)
-        const threadsOpen = open && n.threads.length > 0
+        const threadsOpen =
+          open && (n.threads.length > 0 || n.conversation.length > 0)
         return (
           <li
             key={n.number}
@@ -254,7 +255,11 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
                 />
                 {threadsOpen && (
                   <div className="w-full max-w-xl min-w-0 @[44rem]:col-start-1">
-                    <ThreadColumn threads={n.threads} repo={n.repo} />
+                    <ThreadColumn
+                      threads={n.threads}
+                      conversation={n.conversation}
+                      repo={n.repo}
+                    />
                   </div>
                 )}
               </div>

@@ -13,6 +13,9 @@ export type Thread = {
   comments: { author: string; body: string; url: string; at: string }[]
 }
 
+/** Commentaire général de la PR ou texte d'une review ; `state` : celui de la review. */
+export type Note = Thread["comments"][number] & { state?: string }
+
 export type Pr = {
   /** `owner/name` */
   repo: string
@@ -28,6 +31,8 @@ export type Pr = {
   comments: number
   unresolved: number
   threads: Thread[]
+  /** 10 derniers commentaires généraux et textes des 30 dernières reviews, du plus ancien au plus récent */
+  conversation: Note[]
   additions: number
   deletions: number
   files: number

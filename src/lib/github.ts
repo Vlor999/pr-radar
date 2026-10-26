@@ -22,7 +22,11 @@ import {
   type RepoNode,
 } from "./graphql"
 import { pick, strings } from "./i18n"
-import { withStackFallback } from "./pr-query"
+import {
+  toConversation,
+  withStackFallback,
+  type RawConversation,
+} from "./pr-query"
 import { trackQuota } from "./quota"
 import { toReview, type RawReview } from "./review"
 import type { Reviewer } from "./reviewers"
@@ -109,7 +113,7 @@ async function gql<T>(
 
 type Login = { author: { login: string } | null }
 type RawComment = Login & { bodyText: string; url: string; createdAt: string }
-type RawPr = {
+type RawPr = RawConversation & {
   number: number
   title: string
   url: string
@@ -154,6 +158,8 @@ type Page<N> = {
   }
 }
 
+const clip = (s: string) =>
+  s.length > MAX_BODY ? s.slice(0, MAX_BODY) + "…" : s
 const lastLines = (s: string, n: number) => s.split("\n").slice(-n).join("\n")
 const chunk = <T>(xs: T[], n: number) =>
   Array.from({ length: Math.ceil(xs.length / n) }, (_, i) =>
@@ -240,14 +246,12 @@ function toPr(p: RawPr, login: string, account: string): Pr {
         hunk: lastLines(t.hunk.nodes[0]?.diffHunk ?? "", HUNK_LINES),
         comments: t.comments.nodes.map((c) => ({
           author: c.author?.login ?? "ghost",
-          body:
-            c.bodyText.length > MAX_BODY
-              ? c.bodyText.slice(0, MAX_BODY) + "…"
-              : c.bodyText,
+          body: clip(c.bodyText),
           url: c.url,
           at: c.createdAt,
         })),
       })),
+    conversation: toConversation(p).map((n) => ({ ...n, body: clip(n.body) })),
     additions: p.additions,
     deletions: p.deletions,
     files: p.changedFiles,
