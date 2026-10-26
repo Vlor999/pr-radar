@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       new: ${{ steps.check.outputs.new }}
+      tag: ${{ steps.check.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - id: check
@@ -22,6 +23,7 @@ jobs:
         run: |
           v=$(node -p "require('./package.json').version")
           if gh release view "v$v" >/dev/null 2>&1; then echo new=false; else echo new=true; fi >> "$GITHUB_OUTPUT"
+          echo "tag=v$v" >> "$GITHUB_OUTPUT"
 
   release:
     needs: version
@@ -111,7 +113,8 @@ jobs:
   # tauri-action writes api.github.com asset URLs in latest.json: without a token, the updater hits the
   # 60 requests/hour per IP limit and gets a JSON error instead of the archive. Point them to the direct downloads.
   updater-urls:
-    needs: release
+    # a failed build skips this job: latest.json keeps the API URLs until the failed jobs are re-run
+    needs: [version, release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -119,18 +122,15 @@ jobs:
       - name: Rewrite latest.json URLs
         env:
           GH_TOKEN: ${{ github.token }}
+          # the release just built, not the repo's latest one (workflow_dispatch can rebuild an older version)
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
-          if [[ $GITHUB_REF_TYPE == tag ]]; then
-            TAG=$GITHUB_REF_NAME
-          else
-            TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
-          fi
           [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
             --jq '[.assets[] | {key: .url, value: .browser_download_url}] | from_entries' > urls.json
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json
           jq --slurpfile u urls.json '.platforms |= map_values(.url = ($u[0][.url] // .url))' latest.json > fixed.json
-          jq -e '[.platforms[].url | startswith("https://github.com/")] | all' fixed.json
+          jq -e '(.platforms | length > 0) and ([.platforms[].url | startswith("https://github.com/")] | all)' fixed.json
           mv fixed.json latest.json
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber latest.json
 
