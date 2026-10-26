@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<title>PR Radar: Slack</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Retour OAuth de Slack : relaie la query string à l'app (prradar://oauth?…), sans rien envoyer ailleurs. -->
+<main>
+<section>
+  <div class="wrap">
+    <p><img src="logo.svg" width="48" height="48" alt=""></p>
+    <h1 id="title">Returning to PR Radar…</h1>
+    <p class="lead" id="text">You can close this tab once PR Radar shows Slack as connected.</p>
+    <p class="muted" id="hint">Nothing happened?</p>
+    <p class="actions"><a id="open" class="btn primary" href="#">Open PR Radar</a></p>
+  </div>
+</section>
+</main>
+<script>
+(function () {
+  var q = location.search.slice(1);
+  var p = new URLSearchParams(q);
+  var err = p.get('error') || (p.get('code') ? '' : '?');
+  var lang;
+  try { lang = localStorage.getItem('lang'); } catch (e) {}
+  if (lang !== 'fr' && lang !== 'en') lang = /^fr/i.test(navigator.language || '') ? 'fr' : 'en';
+  var T = {
+    en: {
+      ok: 'Returning to PR Radar…', okText: 'You can close this tab once PR Radar shows Slack as connected.',
+      ko: 'Slack sign-in failed', koText: 'Slack returned: ', koAny: 'Slack returned an error', retry: '. Try again from the PR Radar settings.',
+      idle: 'This page completes the Slack sign-in started from PR Radar. Nothing to do here.',
+      hint: 'Nothing happened?', open: 'Open PR Radar'
+    },
+    fr: {
+      ok: 'Retour vers PR Radar…', okText: 'Vous pourrez fermer cet onglet quand PR Radar affichera Slack comme connecté.',
+      ko: 'Échec de la connexion Slack', koText: 'Slack a répondu : ', koAny: 'Slack a renvoyé une erreur', retry: '. Réessayez depuis les réglages de PR Radar.',
+      idle: 'Cette page termine la connexion Slack lancée depuis PR Radar. Rien à faire ici.',
+      hint: 'Rien ne s\'est passé ?', open: 'Ouvrir PR Radar'
+    }
+  }[lang];
+  var open = document.getElementById('open');
+  var hint = document.getElementById('hint');
+  document.documentElement.lang = lang;
+  document.getElementById('title').textContent = err ? T.ko : T.ok;
+  // code d'erreur affiché seulement s'il a la forme attendue (access_denied…), jamais du texte arbitraire
+  document.getElementById('text').textContent = !q ? T.idle
+    : err ? (/^[a-z_]{1,64}$/.test(err) ? T.koText + err : T.koAny) + T.retry : T.okText;
+  hint.textContent = T.hint;
+  open.textContent = T.open;
+  // page ouverte à la main ou rechargée (query déjà effacée) : rien à relayer
+  if (!q) { document.getElementById('title').textContent = 'PR Radar'; open.parentNode.hidden = hint.hidden = true; return; }
+  document.title = 'PR Radar: ' + (err ? T.ko : T.ok);
+  // erreurs aussi relayées : l'app abandonne tout de suite au lieu d'attendre 5 min
+  var link = 'prradar://oauth?' + q;
+  open.href = link;
+  history.replaceState(null, '', location.pathname);
+  location.href = link;
+})();
+</script>
+</body>
+</html>

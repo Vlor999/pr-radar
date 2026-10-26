@@ -8,6 +8,7 @@ description: Publish a new PR Radar version (bump on dev, PR dev → main, follo
 Flow: everything goes through `dev`; merging the `dev → main` PR triggers `release.yml`, which publishes if the `package.json` version has no release yet (otherwise nothing).
 
 1. Prerequisites: `dev` clean and up to date, no `release.yml` run in progress (`gh run list --workflow release.yml --limit 3`). One release at a time.
+   The Slack app Redirect URLs (api.slack.com → OAuth & Permissions) must include `https://vlor999.github.io/pr-radar/oauth.html` (keep `prradar://oauth` for older versions).
 2. Checks: `npm run typecheck && npm test && (cd src-tauri && cargo clippy -- -D warnings && cargo test)`.
 3. Bump the same `X.Y.Z` version in:
    - `package.json`
@@ -23,5 +24,5 @@ Flow: everything goes through `dev`; merging the `dev → main` PR triggers `rel
    ```
    No manual tag: `tauri-action` creates the `vX.Y.Z` tag and the release.
 6. Follow: `gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')`. All 4 builds (macOS arm64/x64, Windows, Linux) must be green.
-7. Check the release: `gh release view vX.Y.Z` → assets present, `latest.json` holds the new version.
+7. Check the release: `gh release view vX.Y.Z` → assets present, `latest.json` holds the new version. The Slack return page answers 200: `curl -so /dev/null -w '%{http_code}' https://vlor999.github.io/pr-radar/oauth.html`.
 8. If the Apple secrets exist (`gh secret list | grep APPLE`): check the notarization of the arm64 `.dmg` (see `docs/apple-notarization.md`, step 7).

@@ -237,7 +237,7 @@ const S = strings(
     },
     about: {
       description:
-        "Gratuit, open source (MIT), fourni tel quel, sans garantie. Aucun serveur : l'app parle directement à GitHub, à votre serveur GitHub Enterprise si vous en ajoutez un, et à Slack si vous le connectez. Non affilié à GitHub ni à Slack.",
+        "Gratuit, open source (MIT), fourni tel quel, sans garantie. Aucun serveur : l'app parle directement à GitHub, à votre serveur GitHub Enterprise si vous en ajoutez un, et à Slack si vous le connectez. Pendant la connexion Slack, le code à usage unique passe brièvement par une page statique du site, qui ne garde rien ; il est inutilisable sans la clé gardée dans l'app. Non affilié à GitHub ni à Slack.",
       version: (v: string | null) => (v ? `Version ${v}` : "Version …"),
       upToDate: "À jour",
       updateError: "Mise à jour impossible",
@@ -424,7 +424,7 @@ const S = strings(
     },
     about: {
       description:
-        "Free, open source (MIT), provided as is, without warranty. No server: the app talks directly to GitHub, to your GitHub Enterprise server if you add one, and to Slack if you connect it. Not affiliated with GitHub or Slack.",
+        "Free, open source (MIT), provided as is, without warranty. No server: the app talks directly to GitHub, to your GitHub Enterprise server if you add one, and to Slack if you connect it. During Slack sign-in, the one-time code briefly passes through a static page of the website, which stores nothing; it is unusable without the key kept in the app. Not affiliated with GitHub or Slack.",
       version: (v: string | null) => (v ? `Version ${v}` : "Version …"),
       upToDate: "Up to date",
       updateError: "Update failed",
