@@ -2,7 +2,7 @@
 import { GITHUB } from "./accounts.ts"
 import type { Note } from "./types.ts"
 
-const PAGE_SIZE = 20 // le coût GraphQL suit les bornes demandées, pas les nœuds renvoyés : 20 × 50 fils × 20 messages ≈ 21 points (103 avec 50 × 100 × 50)
+const PAGE_SIZE = 20 // le coût GraphQL suit les bornes demandées, pas les nœuds renvoyés : 20 × 50 fils × 20 messages ≈ 21 points (103 avec 50 × 100 × 50) ; les connexions propres à chaque PR (commentaires, reviews…) ajoutent ~1 point
 
 const QUERY = `
 query($q: String!, $after: String) {
@@ -13,7 +13,7 @@ query($q: String!, $after: String) {
       repository { nameWithOwner }
       comments(first: 100) { nodes { author { login } } }
       conversation: comments(last: 10) { nodes { author { login } bodyText url createdAt } }
-      reviews(last: 10) { nodes { author { login } state bodyText url submittedAt } }
+      reviews(last: 30) { nodes { author { login } state bodyText url submittedAt } }
       reviewThreads(first: 50) { nodes { id isResolved isOutdated path line
         hunk: comments(first: 1) { nodes { diffHunk } }
         comments(first: 20) { nodes { author { login } bodyText url createdAt } } } }
