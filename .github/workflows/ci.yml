@@ -17,6 +17,7 @@ jobs:
         run: '[[ $HEAD == dev && $REPO == "$GITHUB_REPOSITORY" ]] || { echo "PRs to main must come from dev"; exit 1; }'
 
   check:
+    timeout-minutes: 15
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
