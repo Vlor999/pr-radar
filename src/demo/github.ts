@@ -59,6 +59,7 @@ const thread = (id: string, path: string, body: string): Thread => ({
 })
 
 const pr = (p: Partial<Pr> & Pick<Pr, "repo" | "number" | "title">): Pr => ({
+  id: `PR_${p.number}`,
   url: `https://github.com/${p.repo}/pull/${p.number}`,
   head: `feat/${p.number}`,
   base: "main",

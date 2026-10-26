@@ -114,6 +114,7 @@ async function gql<T>(
 type Login = { author: { login: string } | null }
 type RawComment = Login & { bodyText: string; url: string; createdAt: string }
 type RawPr = RawConversation & {
+  id: string
   number: number
   title: string
   url: string
@@ -222,6 +223,7 @@ function toPr(p: RawPr, login: string, account: string): Pr {
     nodes.filter((n) => n.author?.login !== login).length
   const threads = p.reviewThreads.nodes
   return {
+    id: p.id,
     repo: repoKey(account, p.repository.nameWithOwner),
     number: p.number,
     title: p.title,
