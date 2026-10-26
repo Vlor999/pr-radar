@@ -27,6 +27,7 @@ const S = strings(
     outdated: "code modifié depuis",
     reply: "Répondre",
     replyPlaceholder: "Répondre…",
+    commentPlaceholder: "Commenter la PR…",
     viewOnGithub: "Voir sur GitHub",
   },
   {
@@ -43,6 +44,7 @@ const S = strings(
     outdated: "code changed since",
     reply: "Reply",
     replyPlaceholder: "Reply…",
+    commentPlaceholder: "Comment on the PR…",
     viewOnGithub: "View on GitHub",
   },
 )
@@ -169,6 +171,7 @@ function ConversationCard({
         id={prId}
         link={notes.at(-1)?.url}
         onSend={(text) => comment(prId, text, repo)}
+        placeholder={t.commentPlaceholder}
       />
     </Card>
   )
@@ -179,10 +182,12 @@ function ReplyForm({
   id,
   link,
   onSend,
+  placeholder,
 }: {
   id: string
   link?: string
   onSend: (text: string) => Promise<{ error?: string }>
+  placeholder?: string
 }) {
   const t = useStrings(S)
   const [draft, setDraft] = useState("")
@@ -218,7 +223,7 @@ function ReplyForm({
           }
         }}
         rows={2}
-        placeholder={t.replyPlaceholder}
+        placeholder={placeholder ?? t.replyPlaceholder}
         disabled={sending}
         className="min-h-16 w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
       />
