@@ -197,9 +197,9 @@ function ConversationCard({ notes }: { notes: Note[] }) {
       className="gap-0 rounded-2xl rounded-tl-md py-0 shadow-sm ring-foreground/10"
     >
       <header className="flex items-center justify-between gap-2 border-b px-4 py-2">
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        <h3 className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">
           {t.conversation}
-        </span>
+        </h3>
         <Participants notes={notes} />
       </header>
       <Messages notes={notes} />
