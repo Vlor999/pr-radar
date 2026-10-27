@@ -163,6 +163,10 @@ code{font:13px/1.5 'JetBrains Mono',monospace}
 @keyframes v-press{0%,58%{transform:none}60%{transform:scale(.88)}62%,100%{transform:none}}
 .v-sent{animation:v-show 8s ease infinite both}
 @keyframes v-show{0%,63%{opacity:0;transform:translateY(6px)}68%,93%{opacity:1;transform:none}98%,100%{opacity:0}}
+.v-rev{display:flex;flex-direction:column;gap:8px}.v-rev .cal-h{margin:0}
+.v-rev .pc{animation:v-rise 8s ease infinite both .4s}.v-rev .pc+.pc{animation-delay:1s}
+.revs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:2px;padding-top:8px;border-top:1px solid var(--line);color:var(--muted)}.revs>span:first-child{margin-right:4px}
+.v-add{animation:v-pop 8s ease infinite both;animation-delay:1.6s}
 .cal-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:600}
 .seg{display:flex;padding:2px;border-radius:8px;background:var(--chip);font-size:10px;font-weight:500}.seg i{font-style:normal;padding:1px 6px;border-radius:6px;color:var(--muted)}.seg i.on{background:var(--card);color:var(--fg)}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:27px;gap:2px;counter-reset:d}
