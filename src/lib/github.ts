@@ -27,7 +27,7 @@ import {
   withStackFallback,
   type RawConversation,
 } from "./pr-query"
-import { trackQuota, type Quota } from "./quota"
+import { trackQuota, validQuota, type Quota } from "./quota"
 import { toReview, type RawReview } from "./review"
 import type { Reviewer } from "./reviewers"
 import type { Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
@@ -509,9 +509,13 @@ export async function rateLimit(a: Account): Promise<Quota | null> {
       }
     }
     const g = resources?.graphql
-    return g
-      ? { limit: g.limit, remaining: g.remaining, resetAt: g.reset * 1000 }
-      : null
+    if (!g) return null
+    const q = {
+      limit: g.limit,
+      remaining: g.remaining,
+      resetAt: g.reset * 1000,
+    }
+    return validQuota(q) ? q : null
   } catch {
     return null
   }

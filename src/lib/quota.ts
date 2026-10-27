@@ -40,14 +40,21 @@ export const resetTime = (at: number) =>
     minute: "2-digit",
   })
 
+/** Quota utilisable : nombres finis et limite non nulle (réponse GitHub incomplète sinon). */
+export const validQuota = (q: Quota) =>
+  Number.isFinite(q.limit) &&
+  q.limit > 0 &&
+  Number.isFinite(q.remaining) &&
+  Number.isFinite(q.resetAt)
+
 export function trackQuota(h: Headers, account = "") {
-  const limit = Number(h.get("x-ratelimit-limit"))
-  if (!limit) return
   const quota = {
-    limit,
+    limit: Number(h.get("x-ratelimit-limit")),
     remaining: Number(h.get("x-ratelimit-remaining")),
     resetAt: Number(h.get("x-ratelimit-reset")) * 1000,
   }
+  if (!validQuota(quota)) return
+  const { limit } = quota
   quotas.set(account, quota)
   // le compte le plus contraint (plus petite part restante) est celui affiché
   worst = [...quotas.values()].reduce((a, b) =>
@@ -92,6 +99,7 @@ export function autoIntervalMs(
       const left = quota.resetAt - now
       const budget = quota.remaining - RESERVE * quota.limit
       const ms = budget <= 0 ? left : (cost * left) / budget
+      if (Number.isNaN(ms)) return AUTO_DEFAULT_MS
       // plancher aussi quand la fenêtre est finie (reset passé) : pas de boucle d'actualisations
       return Math.min(Math.max(ms, AUTO_MIN_MS), AUTO_MAX_MS)
     }),
@@ -110,6 +118,7 @@ export function recordRateLimits(
     snapshots.set(account, quota)
     return [{ quota, cost }]
   })
+  if (!measured.length) return
   const next = autoIntervalMs(measured, Date.now())
   if (next === autoMs) return
   autoMs = next
@@ -126,6 +135,8 @@ const subscribe = (l: () => void) => {
 export const useQuota = (): Quota | null =>
   useSyncExternalStore(subscribe, () => worst)
 
+export const getAutoInterval = () => autoMs
+
 /** Intervalle courant du mode auto (ms), recalculé après chaque actualisation. */
 export const useAutoInterval = () =>
-  useSyncExternalStore(subscribe, () => autoMs)
+  useSyncExternalStore(subscribe, getAutoInterval)
