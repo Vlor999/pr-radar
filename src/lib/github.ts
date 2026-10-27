@@ -103,7 +103,8 @@ async function gql<T>(
     },
     body: JSON.stringify({ query, variables }),
   })
-  trackQuota(res.headers, c.account)
+  // quota rangé par compte connecté ; pas de compte (connexion en cours) ou compte déconnecté entre-temps : ignoré
+  if (c.account && findAccount(c.account)) trackQuota(res.headers, c.account)
   if (res.status === 401) throw new AuthError(pick(S).tokenRejected, c.account)
   const json = (await res.json()) as GqlResponse
   if (gqlFailed(json))

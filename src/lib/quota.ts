@@ -69,7 +69,7 @@ export function forgetQuota(account: string) {
 
 export const getQuota = () => worst
 
-export function trackQuota(h: Headers, account = "") {
+export function trackQuota(h: Headers, account: string) {
   const quota = {
     limit: Number(h.get("x-ratelimit-limit")),
     remaining: Number(h.get("x-ratelimit-remaining")),

@@ -263,6 +263,7 @@ export const fetchPrs = async (repos: string[]) => {
       "x-ratelimit-remaining": "420",
       "x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 1800),
     }),
+    DEFAULT_ID,
   )
   return {
     data: [...PRS, ...otherPrs()].filter((p) => has(repos)(p.repo)),

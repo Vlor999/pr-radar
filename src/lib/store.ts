@@ -155,7 +155,9 @@ export async function reload({ measure = false } = {}) {
     if (measure && getSettings().refreshMinutes === "auto")
       Promise.all(queried.map(async (a) => [a.id, await rateLimit(a)] as const))
         .then((snaps) => {
-          if (id === seq) recordRateLimits(snaps)
+          // compte déconnecté pendant le relevé : ignoré
+          if (id === seq)
+            recordRateLimits(snaps.filter(([a]) => findAccount(a)))
         })
         .catch(() => {})
   } catch (e) {
