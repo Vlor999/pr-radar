@@ -315,7 +315,11 @@ function Messages({ notes }: { notes: Note[] }) {
 
 /** Message rendu par GitHub (Markdown, liens, suggestions), assaini : la webview a accès à l'IPC Tauri. */
 function Body({ html }: { html: string }) {
-  const clean = useMemo(() => DOMPurify.sanitize(html), [html])
+  // images retirées : la CSP `img-src` ne les autorise pas
+  const clean = useMemo(
+    () => DOMPurify.sanitize(html, { FORBID_TAGS: ["img"] }),
+    [html],
+  )
   return (
     <div
       className="gh-body max-h-96 overflow-y-auto break-words"

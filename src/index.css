@@ -155,9 +155,6 @@
   & ol {
     @apply list-decimal pl-5;
   }
-  & img {
-    @apply inline max-w-full;
-  }
   & h1,
   & h2,
   & h3 {
