@@ -10,6 +10,7 @@ export type Thread = {
   outdated: boolean
   /** fin du diff autour de la ligne commentée */
   hunk: string
+  /** `body` : HTML rendu par GitHub (`bodyHTML`), à assainir avant affichage */
   comments: { author: string; body: string; url: string; at: string }[]
 }
 

@@ -1,13 +1,25 @@
-import { useState, useTransition, type ReactNode } from "react"
+import { useMemo, useState, useTransition, type ReactNode } from "react"
+import DOMPurify from "dompurify"
 import { ExternalLink, Loader2, Send } from "lucide-react"
 import { cn } from "cn"
 
 import { Avatar } from "@/components/avatar"
 import { comment, reply } from "@/lib/actions"
 import { strings, useStrings } from "@/lib/i18n"
+import { isExternalHref } from "@/lib/links"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import type { Note, Thread } from "@/lib/types"
+
+// liens du HTML GitHub : https → navigateur du système, comme les autres liens de l'app ; sinon texte seul
+// (DOMPurify retire déjà `javascript:`)
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.tagName !== "A") return
+  if (isExternalHref(node.getAttribute("href") ?? "")) {
+    node.setAttribute("target", "_blank")
+    node.setAttribute("rel", "noopener")
+  } else node.removeAttribute("href")
+})
 
 /** initiales affichées dans l'en-tête d'une discussion, au-delà : un « +N » */
 const MAX_INITIALS = 3
@@ -293,11 +305,26 @@ function Messages({ notes }: { notes: Note[] }) {
                 </span>
               )}
             </div>
-            <p className="break-words whitespace-pre-line">{c.body}</p>
+            <Body html={c.body} />
           </div>
         </li>
       ))}
     </ol>
+  )
+}
+
+/** Message rendu par GitHub (Markdown, liens, suggestions), assaini : la webview a accès à l'IPC Tauri. */
+function Body({ html }: { html: string }) {
+  // images retirées : la CSP `img-src` ne les autorise pas
+  const clean = useMemo(
+    () => DOMPurify.sanitize(html, { FORBID_TAGS: ["img"] }),
+    [html],
+  )
+  return (
+    <div
+      className="gh-body max-h-96 overflow-y-auto break-words"
+      dangerouslySetInnerHTML={{ __html: clean }}
+    />
   )
 }
 
