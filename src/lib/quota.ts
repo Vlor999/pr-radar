@@ -47,6 +47,23 @@ export const validQuota = (q: Quota) =>
   Number.isFinite(q.remaining) &&
   Number.isFinite(q.resetAt)
 
+// le compte le plus contraint (plus petite part restante) est celui affiché
+function updateWorst() {
+  worst = [...quotas.values()].reduce<Quota | null>(
+    (a, b) => (!a || b.remaining / b.limit < a.remaining / a.limit ? b : a),
+    null,
+  )
+  emit()
+}
+
+/** Compte déconnecté : son quota n'est plus affiché ni pris en compte. */
+export function forgetQuota(account: string) {
+  for (const m of [quotas, warned, snapshots, costs]) m.delete(account)
+  updateWorst()
+}
+
+export const getQuota = () => worst
+
 export function trackQuota(h: Headers, account = "") {
   const quota = {
     limit: Number(h.get("x-ratelimit-limit")),
@@ -56,11 +73,7 @@ export function trackQuota(h: Headers, account = "") {
   if (!validQuota(quota)) return
   const { limit } = quota
   quotas.set(account, quota)
-  // le compte le plus contraint (plus petite part restante) est celui affiché
-  worst = [...quotas.values()].reduce((a, b) =>
-    b.remaining / b.limit < a.remaining / a.limit ? b : a,
-  )
-  emit()
+  updateWorst()
   if (quota.remaining > limit * LOW || warned.get(account) === quota.resetAt)
     return
   warned.set(account, quota.resetAt)
@@ -133,7 +146,7 @@ const subscribe = (l: () => void) => {
 }
 
 export const useQuota = (): Quota | null =>
-  useSyncExternalStore(subscribe, () => worst)
+  useSyncExternalStore(subscribe, getQuota)
 
 export const getAutoInterval = () => autoMs
 

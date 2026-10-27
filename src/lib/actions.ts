@@ -14,6 +14,7 @@ import {
   requestReviewer,
   resolveRepo,
 } from "./github"
+import { forgetQuota } from "./quota"
 import { getRepos, reload, setRepos } from "./store"
 import type { MergedPr } from "./types"
 
@@ -109,6 +110,7 @@ export async function accountAdded(id: string) {
 /** Déconnecte un compte ; ses repos suivis sont gardés pour une reconnexion. */
 export async function signOut(id: string) {
   await logout(id)
+  forgetQuota(id)
   clearCache({ all: true })
   if (allAccounts().length) await reload()
 }

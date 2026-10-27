@@ -5,7 +5,9 @@ import {
   AUTO_DEFAULT_MS,
   AUTO_MAX_MS,
   autoIntervalMs,
+  forgetQuota,
   getAutoInterval,
+  getQuota,
   measureCost,
   recordRateLimits,
   trackQuota,
@@ -102,4 +104,13 @@ test("en-tête non numérique ignoré : l'intervalle courant est gardé", () => 
   trackQuota(headers("abc", "123"), "invalide")
   recordRateLimits([["invalide", null]])
   assert.equal(getAutoInterval(), before)
+})
+
+test("compte déconnecté : son quota n'est plus le plus contraint affiché", () => {
+  const reset = String(Math.floor(Date.now() / 1000) + 30 * 60)
+  trackQuota(headers("4000", reset), "garde")
+  trackQuota(headers("600", reset), "parti")
+  assert.equal(getQuota()?.remaining, 600)
+  forgetQuota("parti")
+  assert.notEqual(getQuota()?.remaining, 600)
 })
