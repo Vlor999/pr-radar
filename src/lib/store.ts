@@ -7,8 +7,10 @@ import {
   fetchPrs,
   fetchReviews,
   listRepos,
+  rateLimit,
   reposWithMyOpenPrs,
 } from "./github"
+import { recordRateLimits } from "./quota"
 import { mergeReviews, type Reviews } from "./review"
 import { getSettings } from "./settings"
 import { buildTree, keepVanished } from "./tree"
@@ -146,6 +148,12 @@ export async function reload() {
       fetchedAt: now.toISOString(),
       loading: false,
     })
+    // relevé du quota de chaque compte après l'actualisation : base du mode « auto »
+    recordRateLimits(
+      await Promise.all(
+        queried.map(async (a) => [a.id, await rateLimit(a)] as const),
+      ),
+    )
   } catch (e) {
     if (id !== seq) return
     set({

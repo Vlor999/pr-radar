@@ -27,7 +27,7 @@ import {
   withStackFallback,
   type RawConversation,
 } from "./pr-query"
-import { trackQuota } from "./quota"
+import { trackQuota, type Quota } from "./quota"
 import { toReview, type RawReview } from "./review"
 import type { Reviewer } from "./reviewers"
 import type { Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
@@ -103,7 +103,7 @@ async function gql<T>(
     },
     body: JSON.stringify({ query, variables }),
   })
-  trackQuota(res.headers)
+  trackQuota(res.headers, c.account)
   if (res.status === 401) throw new AuthError(pick(S).tokenRejected, c.account)
   const json = (await res.json()) as GqlResponse
   if (gqlFailed(json))
@@ -494,6 +494,27 @@ export async function commentOnPr(prId: string, body: string, repo: string) {
     "mutation($id: ID!, $body: String!) { addComment(input: { subjectId: $id, body: $body }) { commentEdge { node { id } } } }",
     { id: prId, body },
   )
+}
+
+/** Quota GraphQL d'un compte (`GET /rate_limit`, gratuit : ne compte pas dans la limite) ; null si absent ou en échec. */
+export async function rateLimit(a: Account): Promise<Quota | null> {
+  try {
+    const res = await fetch(`${apiUrl(a.host)}/rate_limit`, {
+      headers: headers(tokenOf(a.id), a.id),
+    })
+    if (!res.ok) return null
+    const { resources } = (await res.json()) as {
+      resources?: {
+        graphql?: { limit: number; remaining: number; reset: number }
+      }
+    }
+    const g = resources?.graphql
+    return g
+      ? { limit: g.limit, remaining: g.remaining, resetAt: g.reset * 1000 }
+      : null
+  } catch {
+    return null
+  }
 }
 
 export type Profile = {

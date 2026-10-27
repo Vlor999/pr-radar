@@ -1,8 +1,6 @@
 import { useSyncExternalStore } from "react"
 
-import { notify } from "@/hooks/use-pr-notifications"
-
-import { locale, pick, strings } from "./i18n"
+import { locale, pick, strings } from "./i18n.ts" // extension : chargé aussi par node --test
 
 const S = strings(
   {
@@ -21,9 +19,20 @@ const S = strings(
 export type Quota = { remaining: number; limit: number; resetAt: number }
 
 export const LOW = 0.1 // notification sous 10 % restants, une fois par fenêtre
-let quota: Quota | null = null
-let warned = 0
+// mode « auto » : finir chaque fenêtre horaire GitHub avec au moins 20 % du quota
+export const RESERVE = 0.2
+export const AUTO_MIN_MS = 60_000
+export const AUTO_MAX_MS = 15 * 60_000
+export const AUTO_DEFAULT_MS = 5 * 60_000 // coût d'une actualisation encore inconnu
+
+const quotas = new Map<string, Quota>() // par compte, d'après les en-têtes
+const warned = new Map<string, number>() // fenêtre déjà notifiée, par compte
+const snapshots = new Map<string, Quota>() // dernier GET /rate_limit après une actualisation
+const costs = new Map<string, number>() // points consommés par la dernière actualisation mesurée
+let worst: Quota | null = null
+let autoMs = AUTO_DEFAULT_MS
 const listeners = new Set<() => void>()
+const emit = () => listeners.forEach((l) => l())
 
 export const resetTime = (at: number) =>
   new Date(at).toLocaleTimeString(locale(), {
@@ -31,30 +40,92 @@ export const resetTime = (at: number) =>
     minute: "2-digit",
   })
 
-export function trackQuota(h: Headers) {
+export function trackQuota(h: Headers, account = "") {
   const limit = Number(h.get("x-ratelimit-limit"))
   if (!limit) return
-  quota = {
+  const quota = {
     limit,
     remaining: Number(h.get("x-ratelimit-remaining")),
     resetAt: Number(h.get("x-ratelimit-reset")) * 1000,
   }
-  listeners.forEach((l) => l())
-  if (quota.remaining > limit * LOW || warned === quota.resetAt) return
-  warned = quota.resetAt
+  quotas.set(account, quota)
+  // le compte le plus contraint (plus petite part restante) est celui affiché
+  worst = [...quotas.values()].reduce((a, b) =>
+    b.remaining / b.limit < a.remaining / a.limit ? b : a,
+  )
+  emit()
+  if (quota.remaining > limit * LOW || warned.get(account) === quota.resetAt)
+    return
+  warned.set(account, quota.resetAt)
   const t = pick(S)
-  notify(
-    t.lowTitle,
-    t.lowBody(quota.remaining, limit, resetTime(quota.resetAt)),
-  ).catch(() => {})
+  // import différé : le module des notifications (Tauri, alias @/) n'est pas chargeable par node --test
+  import("@/hooks/use-pr-notifications")
+    .then(({ notify }) =>
+      notify(
+        t.lowTitle,
+        t.lowBody(quota.remaining, limit, resetTime(quota.resetAt)),
+      ),
+    )
+    .catch(() => {})
 }
 
-export function useQuota(): Quota | null {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l)
-      return () => listeners.delete(l)
-    },
-    () => quota,
+/** Coût d'une actualisation entre deux relevés ; garde l'ancien si la fenêtre a changé ou si rien n'a été consommé (cache). */
+export const measureCost = (
+  prev: Quota | undefined,
+  now: Quota,
+  cost: number | undefined,
+) => {
+  if (!prev || prev.resetAt !== now.resetAt) return cost
+  const used = prev.remaining - now.remaining
+  return used > 0 ? used : cost
+}
+
+/** Intervalle du mode auto : le plus long des comptes, pour garder `RESERVE` du quota en fin de fenêtre. */
+export function autoIntervalMs(
+  accounts: { quota: Quota; cost?: number }[],
+  now: number,
+): number {
+  if (!accounts.length) return AUTO_DEFAULT_MS
+  return Math.max(
+    ...accounts.map(({ quota, cost }) => {
+      if (cost === undefined) return AUTO_DEFAULT_MS
+      const left = quota.resetAt - now
+      const budget = quota.remaining - RESERVE * quota.limit
+      const ms = budget <= 0 ? left : (cost * left) / budget
+      // plancher aussi quand la fenêtre est finie (reset passé) : pas de boucle d'actualisations
+      return Math.min(Math.max(ms, AUTO_MIN_MS), AUTO_MAX_MS)
+    }),
   )
 }
+
+/** Relevés `GET /rate_limit` des comptes après une actualisation (null : en-têtes à la place). */
+export function recordRateLimits(
+  snaps: (readonly [account: string, Quota | null])[],
+) {
+  const measured = snaps.flatMap(([account, snap]) => {
+    const quota = snap ?? quotas.get(account)
+    if (!quota) return []
+    const cost = measureCost(snapshots.get(account), quota, costs.get(account))
+    if (cost !== undefined) costs.set(account, cost)
+    snapshots.set(account, quota)
+    return [{ quota, cost }]
+  })
+  const next = autoIntervalMs(measured, Date.now())
+  if (next === autoMs) return
+  autoMs = next
+  emit()
+}
+
+const subscribe = (l: () => void) => {
+  listeners.add(l)
+  return () => {
+    listeners.delete(l)
+  }
+}
+
+export const useQuota = (): Quota | null =>
+  useSyncExternalStore(subscribe, () => worst)
+
+/** Intervalle courant du mode auto (ms), recalculé après chaque actualisation. */
+export const useAutoInterval = () =>
+  useSyncExternalStore(subscribe, () => autoMs)
