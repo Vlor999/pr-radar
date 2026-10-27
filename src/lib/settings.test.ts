@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { DEFAULT_SETTINGS, shouldNotify } from "./settings.ts"
+import { DEFAULT_SETTINGS, refreshMinutesOf, shouldNotify } from "./settings.ts"
 import type { Pr } from "./types.ts"
 
 const pr = (draft: boolean) => ({ draft }) as Pr
@@ -32,4 +32,15 @@ test("réglage brouillons décoché : une demande de review sur un brouillon n'e
     shouldNotify(noDrafts, { draft: true }, "reviewRequested"),
     false,
   )
+})
+
+test("fréquence enregistrée : auto et minutes entières >= 0 gardées", () => {
+  assert.equal(refreshMinutesOf("auto"), "auto")
+  assert.equal(refreshMinutesOf(0), 0)
+  assert.equal(refreshMinutesOf(10), 10)
+})
+
+test("fréquence invalide (non entière, négative, inconnue) : valeur par défaut", () => {
+  for (const v of [2.5, -1, "5", null, undefined])
+    assert.equal(refreshMinutesOf(v), DEFAULT_SETTINGS.refreshMinutes)
 })

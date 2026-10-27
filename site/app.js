@@ -63,7 +63,7 @@
     q5: 'Comment se font les mises à jour ?',
     a5: 'L\'app vérifie la dernière release GitHub au démarrage puis toutes les 6 heures. Chaque mise à jour est signée : l\'app vérifie la signature avant d\'installer, puis redémarre.',
     q7: 'À quelle fréquence l\'app interroge-t-elle GitHub ?',
-    a7: 'Toutes les 5 minutes par défaut, réglable de 1 à 30 minutes ou en manuel. Les requêtes comptent dans votre quota d\'API GitHub habituel.',
+    a7: 'Auto par défaut : l\'intervalle s\'adapte à votre quota GitHub restant (entre 1 et 15 minutes, en gardant 20 % du quota horaire en réserve). Ou un intervalle fixe de 1 à 30 minutes, ou en manuel. Les requêtes comptent dans votre quota d\'API GitHub habituel.',
     q8: 'Mon admin Slack doit-il approuver ?',
     a8: 'Oui si votre workspace l\'exige. Cliquez sur Connecter, Slack propose de demander l\'installation.',
     legal: 'Mentions légales',

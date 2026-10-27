@@ -76,7 +76,7 @@ function Dashboard() {
 
   useEffect(() => {
     clearCache({ all: true }) // nouveau compte possible : rien ne doit venir du précédent
-    reload()
+    reload({ measure: true })
   }, [])
 
   if (data.authError)
