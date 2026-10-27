@@ -12,11 +12,11 @@ query($q: String!, $after: String) {
       id number title url isDraft updatedAt mergeable reviewDecision headRefName baseRefName additions deletions changedFiles
       repository { nameWithOwner }
       comments(first: 100) { nodes { author { login } } }
-      conversation: comments(last: 10) { nodes { author { login } bodyText url createdAt } }
-      reviews(last: 30) { nodes { author { login } state bodyText url submittedAt } }
+      conversation: comments(last: 10) { nodes { author { login } bodyHTML url createdAt } }
+      reviews(last: 30) { nodes { author { login } state bodyHTML url submittedAt } }
       reviewThreads(first: 50) { nodes { id isResolved isOutdated path line
         hunk: comments(first: 1) { nodes { diffHunk } }
-        comments(first: 20) { nodes { author { login } bodyText url createdAt } } } }
+        comments(first: 20) { nodes { author { login } bodyHTML url createdAt } } } }
       latestOpinionatedReviews(first: 20) { nodes { author { login } state } }
       reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
@@ -26,7 +26,7 @@ query($q: String!, $after: String) {
 }`
 type RawNote = {
   author: { login: string } | null
-  bodyText: string
+  bodyHTML: string
   url: string
 }
 export type RawConversation = {
@@ -44,12 +44,12 @@ export const toConversation = ({
   [
     ...conversation.nodes.map((c) => ({ c, at: c.createdAt })),
     ...reviews.nodes
-      .filter((r) => r.bodyText.trim() && r.submittedAt)
+      .filter((r) => r.bodyHTML.trim() && r.submittedAt)
       .map((r) => ({ c: r, at: r.submittedAt!, state: r.state })),
   ]
     .map(({ c, ...n }) => ({
       author: c.author?.login ?? "ghost",
-      body: c.bodyText,
+      body: c.bodyHTML,
       url: c.url,
       ...n,
     }))

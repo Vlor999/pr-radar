@@ -35,7 +35,6 @@ import type { Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
 const REPOS_PER_QUERY = 5 // une requête de recherche GitHub est limitée en longueur et en opérateurs
-const MAX_BODY = 4000 // caractères gardés par message de discussion
 const HUNK_LINES = 8 // GitHub montre aussi la fin du hunk, qui se termine sur la ligne commentée
 const ASSIGNABLE_PAGE = 20 // assez pour un popover ; la recherche affine au-delà
 // la recherche GitHub renvoie parfois 0 résultat sans erreur (~1 appel sur 3) : un vide est relu avant d'être cru.
@@ -113,7 +112,7 @@ async function gql<T>(
 }
 
 type Login = { author: { login: string } | null }
-type RawComment = Login & { bodyText: string; url: string; createdAt: string }
+type RawComment = Login & { bodyHTML: string; url: string; createdAt: string }
 type RawPr = RawConversation & {
   id: string
   number: number
@@ -160,8 +159,6 @@ type Page<N> = {
   }
 }
 
-const clip = (s: string) =>
-  s.length > MAX_BODY ? s.slice(0, MAX_BODY) + "…" : s
 const lastLines = (s: string, n: number) => s.split("\n").slice(-n).join("\n")
 const chunk = <T>(xs: T[], n: number) =>
   Array.from({ length: Math.ceil(xs.length / n) }, (_, i) =>
@@ -249,12 +246,12 @@ function toPr(p: RawPr, login: string, account: string): Pr {
         hunk: lastLines(t.hunk.nodes[0]?.diffHunk ?? "", HUNK_LINES),
         comments: t.comments.nodes.map((c) => ({
           author: c.author?.login ?? "ghost",
-          body: clip(c.bodyText),
+          body: c.bodyHTML,
           url: c.url,
           at: c.createdAt,
         })),
       })),
-    conversation: toConversation(p).map((n) => ({ ...n, body: clip(n.body) })),
+    conversation: toConversation(p),
     additions: p.additions,
     deletions: p.deletions,
     files: p.changedFiles,

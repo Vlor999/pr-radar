@@ -1,4 +1,5 @@
-import { useState, useTransition, type ReactNode } from "react"
+import { useMemo, useState, useTransition, type ReactNode } from "react"
+import DOMPurify from "dompurify"
 import { ExternalLink, Loader2, Send } from "lucide-react"
 import { cn } from "cn"
 
@@ -8,6 +9,14 @@ import { strings, useStrings } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import type { Note, Thread } from "@/lib/types"
+
+// liens du HTML GitHub : navigateur du système, comme les autres liens de l'app
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.tagName === "A") {
+    node.setAttribute("target", "_blank")
+    node.setAttribute("rel", "noopener")
+  }
+})
 
 /** initiales affichées dans l'en-tête d'une discussion, au-delà : un « +N » */
 const MAX_INITIALS = 3
@@ -293,11 +302,22 @@ function Messages({ notes }: { notes: Note[] }) {
                 </span>
               )}
             </div>
-            <p className="break-words whitespace-pre-line">{c.body}</p>
+            <Body html={c.body} />
           </div>
         </li>
       ))}
     </ol>
+  )
+}
+
+/** Message rendu par GitHub (Markdown, liens, suggestions), assaini : la webview a accès à l'IPC Tauri. */
+function Body({ html }: { html: string }) {
+  const clean = useMemo(() => DOMPurify.sanitize(html), [html])
+  return (
+    <div
+      className="gh-body max-h-96 overflow-y-auto break-words"
+      dangerouslySetInnerHTML={{ __html: clean }}
+    />
   )
 }
 
