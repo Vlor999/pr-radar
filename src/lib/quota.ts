@@ -61,11 +61,26 @@ function updateWorst() {
   emit()
 }
 
+// intervalle auto recalculé sur les comptes relevés (5 min s'il n'y en a plus)
+function updateAuto(now: number) {
+  const next = autoIntervalMs(
+    [...snapshots].map(([id, quota]) => ({ quota, cost: costs.get(id) })),
+    now,
+  )
+  if (next === autoMs) return
+  autoMs = next
+  emit()
+}
+
 /** Compte déconnecté : son quota n'est plus affiché ni pris en compte. */
-export function forgetQuota(account: string) {
+export function forgetQuota(account: string, now = Date.now()) {
   for (const m of [quotas, warned, snapshots, costs]) m.delete(account)
   updateWorst()
+  updateAuto(now)
 }
+
+/** Passage en mode auto : un ancien relevé (fenêtre peut-être encore ouverte) gonflerait le premier coût. */
+export const dropSnapshots = () => snapshots.clear()
 
 export const getQuota = () => worst
 
@@ -122,6 +137,7 @@ export function autoIntervalMs(
 /** Relevés `GET /rate_limit` des comptes après une actualisation (null : en-têtes à la place). */
 export function recordRateLimits(
   snaps: (readonly [account: string, Quota | null])[],
+  now = Date.now(),
 ) {
   const measured = snaps.flatMap(([account, snap]) => {
     const quota = snap ?? quotas.get(account)
@@ -129,13 +145,9 @@ export function recordRateLimits(
     const cost = measureCost(snapshots.get(account), quota, costs.get(account))
     if (cost !== undefined) costs.set(account, cost)
     snapshots.set(account, quota)
-    return [{ quota, cost }]
+    return [account]
   })
-  if (!measured.length) return
-  const next = autoIntervalMs(measured, Date.now())
-  if (next === autoMs) return
-  autoMs = next
-  emit()
+  if (measured.length) updateAuto(now)
 }
 
 const subscribe = (l: () => void) => {

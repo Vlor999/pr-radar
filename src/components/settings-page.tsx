@@ -39,7 +39,13 @@ import {
 } from "@/lib/github"
 import { currentLang, locale, strings, useStrings, type Lang } from "@/lib/i18n"
 import { openExternal } from "@/lib/open"
-import { LOW, resetTime, useAutoInterval, useQuota } from "@/lib/quota"
+import {
+  dropSnapshots,
+  LOW,
+  resetTime,
+  useAutoInterval,
+  useQuota,
+} from "@/lib/quota"
 import { resetSettings, updateSettings, useSettings } from "@/lib/settings"
 import { checkForUpdate, installUpdate, useUpdate } from "@/lib/updater"
 import { getRepos, reload, setRepos } from "@/lib/store"
@@ -1065,12 +1071,13 @@ function RefreshSection() {
           <select
             aria-labelledby="refresh-label"
             value={s.refreshMinutes}
-            onChange={(e) =>
+            onChange={(e) => {
+              if (e.target.value === "auto") dropSnapshots()
               updateSettings({
                 refreshMinutes:
                   e.target.value === "auto" ? "auto" : Number(e.target.value),
               })
-            }
+            }}
             className="h-8 appearance-none rounded-lg border bg-background pr-7 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
           >
             {(["auto", 0, 1, 2, 5, 10, 15, 30] as const).map((m) => (
