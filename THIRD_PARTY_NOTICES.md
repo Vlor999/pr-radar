@@ -8,6 +8,7 @@ Packages under the Mozilla Public License 2.0 are used unmodified; their source 
 
 - cssparser 0.37.0: https://crates.io/crates/cssparser/0.37.0
 - cssparser-macros 0.7.1: https://crates.io/crates/cssparser-macros/0.7.1
+- dompurify 3.4.17: https://www.npmjs.com/package/dompurify/v/3.4.17
 - dtoa-short 0.3.5: https://crates.io/crates/dtoa-short/0.3.5
 - option-ext 0.2.0: https://crates.io/crates/option-ext/0.2.0
 - selectors 0.38.0: https://crates.io/crates/selectors/0.38.0
@@ -544,6 +545,7 @@ Creator: Person: Daniel Thompson-Yvetot
 ```
 
 - @types/react 19.3.0 (MIT)
+- @types/trusted-types 2.0.7 (MIT)
 - windows 0.62.2 (MIT OR Apache-2.0)
 - windows-collections 0.3.2 (MIT OR Apache-2.0)
 - windows-core 0.62.2 (MIT OR Apache-2.0)
@@ -1025,6 +1027,7 @@ DEALINGS IN THE SOFTWARE.
 - digest 0.10.7 (MIT OR Apache-2.0)
 - displaydoc 0.2.7 (MIT OR Apache-2.0)
 - document-features 0.2.12 (MIT OR Apache-2.0)
+- dompurify 3.4.17 ((MPL-2.0 OR Apache-2.0))
 - embed_plist 1.2.2 (MIT OR Apache-2.0)
 - encoding_rs 0.8.42 ((Apache-2.0 OR MIT) AND BSD-3-Clause)
 - equivalent 1.0.3 (Apache-2.0 OR MIT)
@@ -4126,6 +4129,7 @@ DEALINGS IN THE SOFTWARE.
 
 - cssparser 0.37.0 (MPL-2.0)
 - cssparser-macros 0.7.1 (MPL-2.0)
+- dompurify 3.4.17 ((MPL-2.0 OR Apache-2.0))
 - dtoa-short 0.3.5 (MPL-2.0)
 
 ```
