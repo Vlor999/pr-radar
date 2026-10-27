@@ -62,6 +62,12 @@ export const DEFAULT_SETTINGS: Settings = {
 }
 
 const KEY = "pr-radar:settings"
+
+/** Fréquence enregistrée : "auto" ou des minutes entières >= 0 ; sinon la valeur par défaut. */
+export const refreshMinutesOf = (v: unknown): Settings["refreshMinutes"] =>
+  v === "auto" || (Number.isInteger(v) && (v as number) >= 0)
+    ? (v as Settings["refreshMinutes"])
+    : DEFAULT_SETTINGS.refreshMinutes
 const listeners = new Set<() => void>()
 
 function read(): Settings {
@@ -79,13 +85,7 @@ function read(): Settings {
         ? saved.reviewWho!
         : "all",
       reviewHideApproved: saved.reviewHideApproved === true,
-      refreshMinutes:
-        saved.refreshMinutes === "auto" ||
-        (typeof saved.refreshMinutes === "number" &&
-          Number.isInteger(saved.refreshMinutes) &&
-          saved.refreshMinutes >= 0)
-          ? saved.refreshMinutes
-          : DEFAULT_SETTINGS.refreshMinutes,
+      refreshMinutes: refreshMinutesOf(saved.refreshMinutes),
     }
   } catch {
     return DEFAULT_SETTINGS
