@@ -41,6 +41,19 @@ const REPOS = [
 /** URL github.com fictive : affiche les avatars, clés de liste distinctes */
 const COMMENT_URL = "https://github.com/acme/web/pull/1#discussion_"
 
+// corps au format `bodyHTML` de GitHub (balisage simplifié, mêmes classes)
+const SUGGESTION_ROW = (kind: "deletion" | "addition", code: string) =>
+  `<tr class="border-0"><td class="blob-num blob-num-${kind} blob-num-hidden" data-line-number="·"></td><td class="blob-code-inner blob-code-${kind} js-blob-code-${kind} blob-code-marker-${kind}">${code}</td></tr>`
+const SUGGESTION = `<p>On pourrait lever une erreur ici plutôt que renvoyer <code class="notranslate">null</code>.</p>
+<div class="my-2 border rounded-2 js-suggested-changes-blob diff-view">
+<div class="f6 p-2 lh-condensed border-bottom d-flex"><div class="flex-auto flex-items-center color-fg-muted">Suggested change</div></div>
+<div itemprop="text" class="blob-wrapper data file"><table class="d-table tab-size mb-0 width-full"><tbody>
+${SUGGESTION_ROW("deletion", "  return null")}
+${SUGGESTION_ROW("addition", "  throw new InvalidAddress(input)")}
+</tbody></table></div></div>`
+const CODE_BLOCK = `<p>PR à reprendre : l'API des commandes a bougé entre-temps. Nouvelle signature :</p>
+<div class="highlight highlight-source-ts notranslate position-relative overflow-auto"><pre><span class="pl-k">export</span> <span class="pl-k">async</span> <span class="pl-k">function</span> <span class="pl-en">listOrders</span>(<span class="pl-s1">cursor</span>?: <span class="pl-smi">string</span>): <span class="pl-smi">Promise</span>&lt;<span class="pl-smi">Page</span>&lt;<span class="pl-smi">Order</span>&gt;&gt;</pre></div>`
+
 const thread = (id: string, path: string, body: string): Thread => ({
   id,
   path,
@@ -51,7 +64,7 @@ const thread = (id: string, path: string, body: string): Thread => ({
     { author: "alice", body, url: `${COMMENT_URL}${id}-1`, at: ago(5) },
     {
       author: "me",
-      body: "Bonne idée, je corrige.",
+      body: "<p>Bonne idée, je corrige.</p>",
       url: `${COMMENT_URL}${id}-2`,
       at: ago(3),
     },
@@ -100,13 +113,7 @@ const PRS: Pr[] = [
     stack: { number: 5, position: 2, size: 3 },
     unresolved: 1,
     comments: 2,
-    threads: [
-      thread(
-        "t1",
-        "src/checkout/address.ts",
-        "On pourrait lever une erreur ici plutôt que renvoyer null.",
-      ),
-    ],
+    threads: [thread("t1", "src/checkout/address.ts", SUGGESTION)],
   }),
   pr({
     repo: "acme/web",
@@ -130,7 +137,7 @@ const PRS: Pr[] = [
       thread(
         "t2",
         "src/orders/cursor.ts",
-        "Le curseur devrait être opaque (base64) plutôt qu'un id brut.",
+        '<p>Le curseur devrait être opaque (<code class="notranslate">base64</code>) plutôt qu\'un id brut, comme dans <a class="issue-link js-issue-link" href="https://github.com/acme/api/pull/80">#80</a>.</p>',
       ),
     ],
     reviews: [{ who: "bob", state: "CHANGES_REQUESTED" }],
@@ -138,13 +145,13 @@ const PRS: Pr[] = [
     conversation: [
       {
         author: "carol",
-        body: "PR à reprendre : l'API des commandes a bougé entre-temps.",
+        body: CODE_BLOCK,
         url: `${COMMENT_URL}c88-1`,
         at: ago(26),
       },
       {
         author: "bob",
-        body: "Le principe me va, voir le commentaire sur le curseur.",
+        body: "<p>Le principe me va, voir le commentaire sur le curseur.</p>",
         url: `${COMMENT_URL}c88-2`,
         at: ago(24),
         state: "CHANGES_REQUESTED",
@@ -169,7 +176,7 @@ const PRS: Pr[] = [
     conversation: [
       {
         author: "dave",
-        body: "Pense à l'encodage UTF-8 avec BOM pour Excel.",
+        body: "<p>Pense à l'encodage UTF-8 avec BOM pour Excel.</p>",
         url: `${COMMENT_URL}c7-1`,
         at: ago(4),
       },

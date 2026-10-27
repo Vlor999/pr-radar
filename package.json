@@ -1,7 +1,7 @@
 {
   "name": "pr-radar",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.7.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,6 +24,7 @@
     "@tauri-apps/plugin-updater": "^2.14.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.0",
+    "dompurify": "^3.4.17",
     "lucide-react": "^1.60.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

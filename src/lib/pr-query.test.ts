@@ -91,9 +91,9 @@ test("pas de relance quand le champ est déjà écarté", async () => {
 })
 
 test("conversation : commentaires et textes de review mêlés par date, review vide ou en cours ignorée", () => {
-  const note = (login: string | null, bodyText: string, url: string) => ({
+  const note = (login: string | null, bodyHTML: string, url: string) => ({
     author: login ? { login } : null,
-    bodyText,
+    bodyHTML,
     url,
   })
   const notes = toConversation({
