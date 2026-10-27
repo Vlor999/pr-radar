@@ -6,16 +6,19 @@ import { cn } from "cn"
 import { Avatar } from "@/components/avatar"
 import { comment, reply } from "@/lib/actions"
 import { strings, useStrings } from "@/lib/i18n"
+import { isExternalHref } from "@/lib/links"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import type { Note, Thread } from "@/lib/types"
 
-// liens du HTML GitHub : navigateur du système, comme les autres liens de l'app
+// liens du HTML GitHub : https → navigateur du système, comme les autres liens de l'app ; sinon texte seul
+// (DOMPurify retire déjà `javascript:`)
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
-  if (node.tagName === "A") {
+  if (node.tagName !== "A") return
+  if (isExternalHref(node.getAttribute("href") ?? "")) {
     node.setAttribute("target", "_blank")
     node.setAttribute("rel", "noopener")
-  }
+  } else node.removeAttribute("href")
 })
 
 /** initiales affichées dans l'en-tête d'une discussion, au-delà : un « +N » */
