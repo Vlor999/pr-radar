@@ -62,7 +62,7 @@ export async function accessibleRepos(): Promise<{
 /** Bouton Rafraîchir : ignore le cache et relit GitHub. */
 export async function refreshPrs() {
   clearCache()
-  await reload()
+  await reload({ measure: true })
 }
 
 /** Publie un message sur le nœud GitHub `id`, puis relit GitHub pour l'afficher. */

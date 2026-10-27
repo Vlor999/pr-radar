@@ -29,7 +29,7 @@ import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { useThumb } from "@/hooks/use-thumb"
 import { Login } from "@/components/login"
 import { GITHUB, type Account } from "@/lib/accounts"
-import { accountAdded, signOut } from "@/lib/actions"
+import { accountAdded, refreshPrs, signOut } from "@/lib/actions"
 import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
 import {
   clearCache,
@@ -1051,8 +1051,7 @@ function RefreshSection() {
   const [busy, setBusy] = useState(false)
   const refresh = async () => {
     setBusy(true)
-    clearCache()
-    await reload().finally(() => setBusy(false))
+    await refreshPrs().finally(() => setBusy(false))
   }
   return (
     <Section

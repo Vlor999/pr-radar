@@ -21,7 +21,6 @@ import {
 import { cn } from "cn"
 
 import { refreshPrs } from "@/lib/actions"
-import { reload } from "@/lib/store"
 import { locale, pick, strings, useStrings } from "@/lib/i18n"
 import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
@@ -314,7 +313,7 @@ export function PrDashboard({
       : settings.refreshMinutes * 60_000
   useEffect(() => {
     if (!intervalMs || refreshing) return
-    const id = setTimeout(() => startRefresh(() => reload()), intervalMs)
+    const id = setTimeout(() => startRefresh(() => refreshPrs()), intervalMs)
     return () => clearTimeout(id)
   }, [intervalMs, refreshing, fetchedAt])
 
@@ -323,7 +322,8 @@ export function PrDashboard({
     const onFocus = () => {
       // pas plus souvent que l'actualisation automatique (5 min en mode manuel)
       const min = intervalMs || 5 * 60_000
-      if (Date.now() - Date.parse(fetchedAt) > min) startRefresh(() => reload())
+      if (Date.now() - Date.parse(fetchedAt) > min)
+        startRefresh(() => refreshPrs())
     }
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)

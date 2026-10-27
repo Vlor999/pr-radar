@@ -82,8 +82,11 @@ export function useData(): Data {
   )
 }
 
-/** (Re)charge tout depuis GitHub. Les réponses d'un chargement dépassé sont ignorées. */
-export async function reload() {
+/**
+ * (Re)charge tout depuis GitHub. Les réponses d'un chargement dépassé sont ignorées.
+ * `measure` : chargement sans cache (actualisation), son coût en quota sert au mode « auto ».
+ */
+export async function reload({ measure = false } = {}) {
   const id = ++seq
   set({ ...data, loading: true })
   // préchauffe la liste du panneau des repos (1 requête GraphQL par 100 repos), au premier chargement seulement
@@ -148,12 +151,13 @@ export async function reload() {
       fetchedAt: now.toISOString(),
       loading: false,
     })
-    // relevé du quota de chaque compte après l'actualisation : base du mode « auto »
-    recordRateLimits(
-      await Promise.all(
-        queried.map(async (a) => [a.id, await rateLimit(a)] as const),
-      ),
-    )
+    // relevé du quota de chaque compte, sans faire attendre la fin de l'actualisation : base du mode « auto »
+    if (measure && getSettings().refreshMinutes === "auto")
+      Promise.all(queried.map(async (a) => [a.id, await rateLimit(a)] as const))
+        .then((snaps) => {
+          if (id === seq) recordRateLimits(snaps)
+        })
+        .catch(() => {})
   } catch (e) {
     if (id !== seq) return
     set({
