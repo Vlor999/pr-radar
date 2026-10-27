@@ -39,7 +39,7 @@ import {
 } from "@/lib/github"
 import { currentLang, locale, strings, useStrings, type Lang } from "@/lib/i18n"
 import { openExternal } from "@/lib/open"
-import { LOW, resetTime, useQuota } from "@/lib/quota"
+import { LOW, resetTime, useAutoInterval, useQuota } from "@/lib/quota"
 import { resetSettings, updateSettings, useSettings } from "@/lib/settings"
 import { checkForUpdate, installUpdate, useUpdate } from "@/lib/updater"
 import { getRepos, reload, setRepos } from "@/lib/store"
@@ -142,6 +142,7 @@ const S = strings(
       description: "Quand PR Radar relit GitHub.",
       frequency: "Fréquence",
       manual: "Manuelle",
+      auto: (min: number) => `Auto · ${min} min`,
       onFocus: "Actualiser en revenant sur la fenêtre",
       quota: "Quota GitHub",
       quotaDescription:
@@ -332,6 +333,7 @@ const S = strings(
       description: "When PR Radar re-reads GitHub.",
       frequency: "Frequency",
       manual: "Manual",
+      auto: (min: number) => `Auto · ${min} min`,
       onFocus: "Refresh when returning to the window",
       quota: "GitHub quota",
       quotaDescription: "GraphQL points per hour. Notifies below 10% left.",
@@ -1044,6 +1046,7 @@ function AppearanceSection() {
 function RefreshSection() {
   const s = useSettings()
   const quota = useQuota()
+  const autoMs = useAutoInterval()
   const t = useStrings(S)
   const [busy, setBusy] = useState(false)
   const refresh = async () => {
@@ -1064,13 +1067,20 @@ function RefreshSection() {
             aria-labelledby="refresh-label"
             value={s.refreshMinutes}
             onChange={(e) =>
-              updateSettings({ refreshMinutes: Number(e.target.value) })
+              updateSettings({
+                refreshMinutes:
+                  e.target.value === "auto" ? "auto" : Number(e.target.value),
+              })
             }
             className="h-8 appearance-none rounded-lg border bg-background pr-7 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
           >
-            {[0, 1, 2, 5, 10, 15, 30].map((m) => (
+            {(["auto", 0, 1, 2, 5, 10, 15, 30] as const).map((m) => (
               <option key={m} value={m}>
-                {m === 0 ? t.refresh.manual : `${m} min`}
+                {m === "auto"
+                  ? t.refresh.auto(Math.round(autoMs / 60_000))
+                  : m === 0
+                    ? t.refresh.manual
+                    : `${m} min`}
               </option>
             ))}
           </select>

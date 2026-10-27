@@ -29,6 +29,7 @@ import { RepoSidebar } from "@/components/repo-sidebar"
 import { ReviewList } from "@/components/review-list"
 import { UpdateBanner } from "@/components/update-banner"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
+import { useAutoInterval } from "@/lib/quota"
 import { getSettings, useSettings } from "@/lib/settings"
 import { refreshMentions, useSlack } from "@/lib/slack"
 import { RepoSection, type OpenState } from "@/components/repo-section"
@@ -87,6 +88,7 @@ const S = strings(
     myOpenPrs: "Mes PR ouvertes",
     updatedAt: (time: string) => `mis à jour ${time}`,
     auto: (min: number) => `auto toutes les ${min} min`,
+    autoMode: (min: number) => `Auto (${min} min)`,
     manual: "actualisation manuelle",
     refreshing: "Rafraîchissement…",
     refresh: "Rafraîchir",
@@ -135,6 +137,7 @@ const S = strings(
     myOpenPrs: "My open PRs",
     updatedAt: (time: string) => `updated ${time}`,
     auto: (min: number) => `auto every ${min} min`,
+    autoMode: (min: number) => `Auto (${min} min)`,
     manual: "manual refresh",
     refreshing: "Refreshing…",
     refresh: "Refresh",
@@ -302,26 +305,29 @@ export function PrDashboard({
     [prs, slackTeamId, slackExpired, settings.slackAll, settings.slackChannels],
   )
 
-  // actualisation automatique (0 = manuelle) et au retour sur la fenêtre
+  // actualisation automatique (0 = manuelle, "auto" = selon le quota) et au retour sur la fenêtre.
+  // setTimeout relancé à la fin de chaque actualisation (auto, manuelle, au focus) : le délai repart de là.
+  const autoMs = useAutoInterval()
+  const intervalMs =
+    settings.refreshMinutes === "auto"
+      ? autoMs
+      : settings.refreshMinutes * 60_000
   useEffect(() => {
-    if (!settings.refreshMinutes) return
-    const id = setInterval(
-      () => startRefresh(() => reload()),
-      settings.refreshMinutes * 60_000,
-    )
-    return () => clearInterval(id)
-  }, [settings.refreshMinutes])
+    if (!intervalMs || refreshing) return
+    const id = setTimeout(() => startRefresh(() => reload()), intervalMs)
+    return () => clearTimeout(id)
+  }, [intervalMs, refreshing, fetchedAt])
 
   useEffect(() => {
     if (!settings.refreshOnFocus) return
     const onFocus = () => {
       // pas plus souvent que l'actualisation automatique (5 min en mode manuel)
-      const min = (settings.refreshMinutes || 5) * 60_000
+      const min = intervalMs || 5 * 60_000
       if (Date.now() - Date.parse(fetchedAt) > min) startRefresh(() => reload())
     }
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
-  }, [settings.refreshOnFocus, settings.refreshMinutes, fetchedAt])
+  }, [settings.refreshOnFocus, intervalMs, fetchedAt])
 
   // mise à jour : vérifiée au lancement puis toutes les 6 h (bandeau + badge sur l'engrenage)
   useEffect(() => {
@@ -446,9 +452,11 @@ export function PrDashboard({
                 }),
               )}
               ,{" "}
-              {settings.refreshMinutes
-                ? t.auto(settings.refreshMinutes)
-                : t.manual}
+              {settings.refreshMinutes === "auto"
+                ? t.autoMode(Math.round(autoMs / 60_000))
+                : settings.refreshMinutes
+                  ? t.auto(settings.refreshMinutes)
+                  : t.manual}
             </p>
           </div>
         </div>

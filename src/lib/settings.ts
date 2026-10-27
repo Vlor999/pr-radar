@@ -5,8 +5,8 @@ import type { Who } from "./review"
 
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
 export type Settings = {
-  /** minutes entre deux actualisations automatiques ; 0 = manuelle */
-  refreshMinutes: number
+  /** minutes entre deux actualisations automatiques ; 0 = manuelle ; "auto" = selon le quota GitHub */
+  refreshMinutes: number | "auto"
   /** actualiser en revenant sur la fenêtre (si la dernière lecture a plus d'une minute) */
   refreshOnFocus: boolean
   notify: {
@@ -40,7 +40,7 @@ export type Settings = {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  refreshMinutes: 5,
+  refreshMinutes: "auto",
   refreshOnFocus: true,
   notify: {
     approved: true,
@@ -79,6 +79,13 @@ function read(): Settings {
         ? saved.reviewWho!
         : "all",
       reviewHideApproved: saved.reviewHideApproved === true,
+      refreshMinutes:
+        saved.refreshMinutes === "auto" ||
+        (typeof saved.refreshMinutes === "number" &&
+          Number.isInteger(saved.refreshMinutes) &&
+          saved.refreshMinutes >= 0)
+          ? saved.refreshMinutes
+          : DEFAULT_SETTINGS.refreshMinutes,
     }
   } catch {
     return DEFAULT_SETTINGS
