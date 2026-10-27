@@ -31,6 +31,11 @@ const snapshots = new Map<string, Quota>() // dernier GET /rate_limit après une
 const costs = new Map<string, number>() // points consommés par la dernière actualisation mesurée
 let worst: Quota | null = null
 let autoMs = AUTO_DEFAULT_MS
+// notification du quota bas, branchée par l'app (main.tsx) : Tauri reste hors de ce module testé par node --test
+let notifyLow: (title: string, body: string) => void = () => {}
+export const setLowQuotaNotifier = (fn: typeof notifyLow) => {
+  notifyLow = fn
+}
 const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((l) => l())
 
@@ -78,15 +83,10 @@ export function trackQuota(h: Headers, account = "") {
     return
   warned.set(account, quota.resetAt)
   const t = pick(S)
-  // import différé : le module des notifications (Tauri, alias @/) n'est pas chargeable par node --test
-  import("@/hooks/use-pr-notifications")
-    .then(({ notify }) =>
-      notify(
-        t.lowTitle,
-        t.lowBody(quota.remaining, limit, resetTime(quota.resetAt)),
-      ),
-    )
-    .catch(() => {})
+  notifyLow(
+    t.lowTitle,
+    t.lowBody(quota.remaining, limit, resetTime(quota.resetAt)),
+  )
 }
 
 /** Coût d'une actualisation entre deux relevés ; garde l'ancien si la fenêtre a changé ou si rien n'a été consommé (cache). */
