@@ -4,6 +4,7 @@ import { test } from "node:test"
 import {
   AUTO_DEFAULT_MS,
   AUTO_MAX_MS,
+  AUTO_MIN_MS,
   autoIntervalMs,
   forgetQuota,
   getAutoInterval,
@@ -50,6 +51,20 @@ test("coût nul ou négatif (réponses du cache) : le coût précédent est gard
   assert.equal(measureCost(q(), q({ remaining: 2950 }), 80), 50)
 })
 
+test("fenêtre déjà réinitialisée (reset passé) : 1 min, pas de boucle à 0 ms", () => {
+  const past = q({ resetAt: NOW - MIN })
+  assert.equal(autoIntervalMs([{ quota: past, cost: 100 }], NOW), AUTO_MIN_MS)
+})
+
+test("résultat très court : 1 min au moins", () => {
+  assert.equal(autoIntervalMs([{ quota: q(), cost: 1 }], NOW), AUTO_MIN_MS)
+})
+
+test("budget épuisé avec une fin de fenêtre proche : 1 min au moins", () => {
+  const low = q({ remaining: 900, resetAt: NOW + 10_000 })
+  assert.equal(autoIntervalMs([{ quota: low, cost: 100 }], NOW), AUTO_MIN_MS)
+})
+
 test("plusieurs comptes : l'intervalle le plus long l'emporte", () => {
   const ms = autoIntervalMs(
     [
@@ -81,36 +96,64 @@ test("coût non numérique : 5 min, jamais NaN", () => {
   )
 })
 
-const headers = (remaining: string, reset: string) =>
+// en-têtes GraphQL d'un compte, fenêtre qui se termine à `resetAt` (ms)
+const headers = (remaining: number, resetAt = NOW + 40 * MIN) =>
   new Headers({
     "x-ratelimit-limit": "5000",
-    "x-ratelimit-remaining": remaining,
-    "x-ratelimit-reset": reset,
+    "x-ratelimit-remaining": String(remaining),
+    "x-ratelimit-reset": String(resetAt / 1000),
   })
 
+// deux actualisations relevées par les en-têtes (pas de /rate_limit) : coût = from - to
+const measureTwice = (
+  account: string,
+  from: number,
+  to: number,
+  resetAt?: number,
+) => {
+  trackQuota(headers(from, resetAt), account)
+  recordRateLimits([[account, null]], NOW)
+  trackQuota(headers(to, resetAt), account)
+  recordRateLimits([[account, null]], NOW)
+}
+
 test("relevé /rate_limit absent : le quota des en-têtes sert de relevé", () => {
-  const reset = String(Math.floor(Date.now() / 1000) + 38 * 60)
-  trackQuota(headers("2900", reset), "repli")
-  recordRateLimits([["repli", null]])
-  assert.equal(getAutoInterval(), AUTO_DEFAULT_MS) // premier relevé : coût inconnu
-  trackQuota(headers("1900", reset), "repli")
-  recordRateLimits([["repli", null]])
-  // 1000 points par actualisation, 900 de budget : borné à 15 min
-  assert.equal(getAutoInterval(), AUTO_MAX_MS)
+  // 400 points par actualisation, 1600 de budget, 40 min restantes → 10 min
+  measureTwice("repli", 3000, 2600)
+  assert.equal(getAutoInterval(), 10 * MIN)
+  forgetQuota("repli", NOW)
 })
 
 test("en-tête non numérique ignoré : l'intervalle courant est gardé", () => {
-  const before = getAutoInterval()
-  trackQuota(headers("abc", "123"), "invalide")
-  recordRateLimits([["invalide", null]])
-  assert.equal(getAutoInterval(), before)
+  measureTwice("valide", 3000, 2600)
+  trackQuota(
+    new Headers({
+      "x-ratelimit-limit": "5000",
+      "x-ratelimit-remaining": "abc",
+    }),
+    "invalide",
+  )
+  recordRateLimits([["invalide", null]], NOW)
+  assert.equal(getAutoInterval(), 10 * MIN)
+  forgetQuota("valide", NOW)
 })
 
 test("compte déconnecté : son quota n'est plus le plus contraint affiché", () => {
-  const reset = String(Math.floor(Date.now() / 1000) + 30 * 60)
-  trackQuota(headers("4000", reset), "garde")
-  trackQuota(headers("600", reset), "parti")
+  trackQuota(headers(4000), "garde")
+  trackQuota(headers(600), "parti")
   assert.equal(getQuota()?.remaining, 600)
-  forgetQuota("parti")
-  assert.notEqual(getQuota()?.remaining, 600)
+  forgetQuota("parti", NOW)
+  assert.equal(getQuota()?.remaining, 4000)
+  forgetQuota("garde", NOW)
+  assert.equal(getQuota(), null)
+})
+
+test("compte déconnecté : l'intervalle auto est recalculé sans lui, 5 min sans compte", () => {
+  measureTwice("lent", 3000, 2600) // 10 min
+  measureTwice("rapide", 3000, 2900, NOW + 38 * MIN) // 100 × 38 min / 1900 = 2 min
+  assert.equal(getAutoInterval(), 10 * MIN)
+  forgetQuota("lent", NOW)
+  assert.equal(getAutoInterval(), 2 * MIN)
+  forgetQuota("rapide", NOW)
+  assert.equal(getAutoInterval(), AUTO_DEFAULT_MS)
 })
