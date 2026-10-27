@@ -15,14 +15,17 @@ import type { Pr, SlackConversation, SlackMention } from "./types.ts"
 
 /**
  * Mentions Slack des PR, sans serveur : app Slack publique en PKCE (pas de secret), retour par
- * le lien profond `prradar://oauth` (relayé par Rust en événement `slack-oauth`). Jetons dans le trousseau
+ * une page statique du site (`site/oauth.html`) qui relaie vers le lien profond `prradar://oauth`
+ * (relayé par Rust en événement `slack-oauth`). Jetons dans le trousseau
  * (`slack:<team_id>`), localStorage : seulement l'équipe connectée. Un seul workspace.
  */
 
 /** App Slack « PR Radar ». L'identifiant est public, ce n'est pas un secret. */
 const CLIENT_ID: string =
   import.meta.env?.VITE_SLACK_CLIENT_ID || "1916463416562.12372389120262"
-const REDIRECT_URI = "prradar://oauth"
+/** page statique qui relaie vers `prradar://oauth?…` (l'onglet Slack ne reste pas bloqué) ;
+ * `prradar://oauth` reste déclaré chez Slack pour les anciennes versions */
+const REDIRECT_URI = "https://vlor999.github.io/pr-radar/oauth.html"
 /** abandon de la connexion si Slack n'a pas renvoyé vers l'app */
 const OAUTH_TIMEOUT_MS = 5 * 60_000
 
