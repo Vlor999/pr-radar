@@ -8,7 +8,7 @@ description: Publish a new PR Radar version (bump on dev, PR dev → main, follo
 Flow: everything goes through `dev`; merging the `dev → main` PR triggers `release.yml`, which publishes if the `package.json` version has no release yet (otherwise nothing).
 
 1. Prerequisites: `dev` clean and up to date, no `release.yml` run in progress (`gh run list --workflow release.yml --limit 3`). One release at a time.
-   The Slack app Redirect URLs (api.slack.com → OAuth & Permissions) must include `https://vlor999.github.io/pr-radar/oauth.html` (keep `prradar://oauth` for older versions).
+   The Slack app Redirect URLs (api.slack.com → OAuth & Permissions) must include `https://vlor999.github.io/pr-radar/oauth.html` (`prradar://oauth` was removed: Slack sign-in fails before v0.6.3).
 2. Checks: `npm run typecheck && npm test && (cd src-tauri && cargo clippy -- -D warnings && cargo test)`.
 3. Bump the same `X.Y.Z` version in:
    - `package.json`
