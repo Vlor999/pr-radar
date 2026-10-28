@@ -217,7 +217,9 @@ async function listenAll() {
 }
 
 /**
- * Au lancement : infos du binaire, écoute des requêtes, socket rouvert si le réglage est actif.
+ * Au lancement de l'app (connecté ou non) : infos du binaire, écoute des requêtes, puis socket aligné
+ * sur le réglage. L'écoute précède l'ouverture du socket. Après un rechargement de la webview, Rust
+ * garde son socket : réglage désactivé → fermé, activé → gardé (`mcp_enable` ne recrée rien).
  * Échec (infos, écoute) : `started` revient à false, le prochain appel réessaie.
  */
 export async function startMcp() {
@@ -233,8 +235,12 @@ export async function startMcp() {
     setState({ error: message(e) })
     return
   }
-  if (getSettings().mcpEnabled)
-    await invoke("mcp_enable")
-      .then(() => setState({ running: true, error: undefined }))
-      .catch((e: unknown) => setState({ running: false, error: message(e) }))
+  const on = getSettings().mcpEnabled
+  await invoke(on ? "mcp_enable" : "mcp_disable")
+    .then(() => setState({ running: on, error: undefined }))
+    .catch((e: unknown) =>
+      setState(
+        on ? { running: false, error: message(e) } : { error: message(e) },
+      ),
+    )
 }

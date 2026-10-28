@@ -32,7 +32,7 @@ import { checkForUpdate, useUpdate } from "@/lib/updater"
 import { useAutoInterval } from "@/lib/quota"
 import { getSettings, useSettings } from "@/lib/settings"
 import { refreshMentions, useSlack } from "@/lib/slack"
-import { startMcp, useMcp } from "@/lib/mcp"
+import { useMcp } from "@/lib/mcp"
 import { RepoSection, type OpenState } from "@/components/repo-section"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -339,9 +339,6 @@ export function PrDashboard({
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
   }, [settings.refreshOnFocus, refreshing, intervalMs, fetchedAt])
-
-  // serveur MCP local : écoute des requêtes, socket rouvert s'il était activé
-  useEffect(() => void startMcp(), [])
 
   // mise à jour : vérifiée au lancement puis toutes les 6 h (bandeau + badge sur l'engrenage)
   useEffect(() => {

@@ -8,6 +8,7 @@ import { useThemeEffects } from "@/hooks/use-theme"
 import { signOut } from "@/lib/actions"
 import { loadToken, useAuth } from "@/lib/auth"
 import { clearCache } from "@/lib/github"
+import { startMcp } from "@/lib/mcp"
 import { currentLang, strings, useStrings, type Lang } from "@/lib/i18n"
 import { updateSettings, useSettings } from "@/lib/settings"
 import { reload, useData } from "@/lib/store"
@@ -33,6 +34,9 @@ export default function App() {
   useEffect(() => {
     loadToken()
   }, [])
+
+  // serveur MCP local : démarré quel que soit l'état de connexion (écran de connexion, jeton refusé)
+  useEffect(() => void startMcp(), [])
 
   useEffect(() => {
     document.documentElement.lang = currentLang(lang)
