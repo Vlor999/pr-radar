@@ -95,7 +95,8 @@ export async function setMcpEnabled(on: boolean) {
     updateSettings({ mcpEnabled: on })
     setState({ running: on, error: undefined })
   } catch (e) {
-    setState({ running: false, error: message(e) })
+    // désactivation en échec : le socket est peut-être encore ouvert, l'état affiché ne change pas
+    setState(on ? { running: false, error: message(e) } : { error: message(e) })
   }
 }
 
@@ -185,27 +186,53 @@ async function onRequest({ id, tool, args, client }: Request) {
 }
 
 let started = false
+/** écoute des événements Rust, enregistrée une seule fois */
+let listening = false
 
-/** Au lancement : infos du binaire, écoute des requêtes, socket rouvert si le réglage est actif. */
+const onTimeout = (p: Timeout) =>
+  record({
+    at: new Date().toISOString(),
+    client: p.client,
+    tool: p.tool,
+    args: p.args,
+    ms: p.ms,
+    ok: false,
+    error: "timeout",
+    bytes: 0,
+  })
+
+/** Écoute `mcp-request` et `mcp-timeout` ; un échec retire l'écoute déjà posée (pas de doublon au nouvel essai). */
+async function listenAll() {
+  if (listening) return
+  const results = await Promise.allSettled([
+    listen<Request>("mcp-request", (e) => void onRequest(e.payload)),
+    listen<Timeout>("mcp-timeout", (e) => onTimeout(e.payload)),
+  ])
+  const failed = results.find((r) => r.status === "rejected")
+  if (failed) {
+    results.forEach((r) => r.status === "fulfilled" && r.value())
+    throw failed.reason
+  }
+  listening = true
+}
+
+/**
+ * Au lancement : infos du binaire, écoute des requêtes, socket rouvert si le réglage est actif.
+ * Échec (infos, écoute) : `started` revient à false, le prochain appel réessaie.
+ */
 export async function startMcp() {
   if (started) return
   started = true
-  const info = await invoke<McpInfo>("mcp_info").catch(() => null)
-  setState({ info })
-  if (!info?.supported) return
-  await listen<Request>("mcp-request", (e) => void onRequest(e.payload))
-  await listen<Timeout>("mcp-timeout", ({ payload: p }) =>
-    record({
-      at: new Date().toISOString(),
-      client: p.client,
-      tool: p.tool,
-      args: p.args,
-      ms: p.ms,
-      ok: false,
-      error: "timeout",
-      bytes: 0,
-    }),
-  )
+  try {
+    const info = await invoke<McpInfo>("mcp_info")
+    setState({ info })
+    if (!info.supported) return
+    await listenAll()
+  } catch (e) {
+    started = false
+    setState({ error: message(e) })
+    return
+  }
   if (getSettings().mcpEnabled)
     await invoke("mcp_enable")
       .then(() => setState({ running: true, error: undefined }))
