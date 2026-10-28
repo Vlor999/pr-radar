@@ -8,12 +8,6 @@ const commands: Record<string, unknown> = {
     dataPaths: ["~/Library/Application Support/com.pr-radar.app"],
     note: null, // démo : invoke journalisé, rien n'est supprimé
   },
-  mcp_info: {
-    exe: "/Applications/PR Radar.app/Contents/MacOS/pr-radar",
-    socket:
-      "/Users/me/Library/Application Support/io.github.vlor999.prradar/mcp.sock",
-    supported: true,
-  },
 }
 
 export async function invoke<T>(cmd: string, args?: unknown): Promise<T> {
