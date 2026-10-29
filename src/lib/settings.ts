@@ -74,11 +74,10 @@ export const refreshMinutesOf = (v: unknown): Settings["refreshMinutes"] =>
     : DEFAULT_SETTINGS.refreshMinutes
 const listeners = new Set<() => void>()
 
-function read(): Settings {
+/** Réglages enregistrés (JSON), complétés par les valeurs par défaut. */
+export function parseSettings(raw: string | null): Settings {
   try {
-    const saved = JSON.parse(
-      localStorage.getItem(KEY) ?? "{}",
-    ) as Partial<Settings>
+    const saved = JSON.parse(raw ?? "{}") as Partial<Settings>
     return {
       ...DEFAULT_SETTINGS,
       ...saved,
@@ -92,6 +91,14 @@ function read(): Settings {
       mcpEnabled: saved.mcpEnabled === true,
       refreshMinutes: refreshMinutesOf(saved.refreshMinutes),
     }
+  } catch {
+    return DEFAULT_SETTINGS
+  }
+}
+
+function read(): Settings {
+  try {
+    return parseSettings(localStorage.getItem(KEY))
   } catch {
     return DEFAULT_SETTINGS
   }
@@ -119,13 +126,18 @@ export type SettingsPatch = Partial<Omit<Settings, "notify">> & {
   notify?: Partial<Settings["notify"]>
 }
 
+export const applyPatch = (s: Settings, patch: SettingsPatch): Settings => ({
+  ...s,
+  ...patch,
+  notify: { ...s.notify, ...patch.notify },
+})
+
 export function updateSettings(patch: SettingsPatch) {
-  current = {
-    ...current,
-    ...patch,
-    notify: { ...current.notify, ...patch.notify },
-  }
-  saveItem(KEY, JSON.stringify(current))
+  current = applyPatch(current, patch)
+  // envoi recalculé sur les réglages partagés relus juste avant : un champ changé dans l'autre fenêtre est gardé
+  saveItem(KEY, JSON.stringify(current), (remote) =>
+    JSON.stringify(applyPatch(parseSettings(remote), patch)),
+  )
   listeners.forEach((l) => l())
 }
 

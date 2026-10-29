@@ -1,7 +1,13 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { applySnapshot, isSynced, snapshotOf } from "./sync.ts"
+import {
+  applySnapshot,
+  createSync,
+  isSynced,
+  snapshotOf,
+  type Transport,
+} from "./sync.ts"
 
 /** Stockage en mémoire, même interface que localStorage. */
 const storage = (init: Record<string, string> = {}) => {
@@ -69,4 +75,105 @@ test("le thème local n'est ni effacé ni écrasé par l'instantané", () => {
   const s = storage({ "pr-radar:theme": "dark" })
   applySnapshot(s, { "pr-radar:theme": "light" })
   assert.deepEqual(s.entries(), { "pr-radar:theme": "dark" })
+})
+
+/** Copie partagée de l'app, en mémoire ; `pull` peut être retenu ou échouer, `push` peut échouer. */
+const app = (init: Record<string, string> = {}) => {
+  const kv: Record<string, string> = { ...init }
+  const pushes: Record<string, string | null>[] = []
+  let failPush = 0
+  let failPull = false
+  let hold: Promise<void> | null = null
+  const transport: Transport = {
+    pull: async () => {
+      const snap = { ...kv }
+      if (hold) await hold
+      if (failPull) throw new Error("503")
+      return snap
+    },
+    push: async (entries) => {
+      if (failPush-- > 0) throw new Error("offline")
+      pushes.push(entries)
+      for (const [k, v] of Object.entries(entries))
+        if (v === null) delete kv[k]
+        else kv[k] = v
+    },
+    seed: async () => {},
+  }
+  return {
+    kv,
+    pushes,
+    transport,
+    failNextPush: () => void (failPush = 1),
+    failPulls: () => void (failPull = true),
+    holdPull: () => {
+      let release = () => {}
+      hold = new Promise((r) => (release = r))
+      return () => {
+        hold = null
+        release()
+      }
+    },
+  }
+}
+
+test("une écriture faite pendant une relecture n'est pas écrasée par l'instantané", async () => {
+  const s = storage({ "pr-radar:repos": "[]" })
+  const a = app({ "pr-radar:repos": "[]" })
+  const sync = createSync(() => s, a.transport)
+  const release = a.holdPull()
+  const pulled = sync.pull()
+  sync.save("pr-radar:repos", '["a/b"]')
+  release()
+  await pulled
+  await sync.idle()
+  assert.equal(s.getItem("pr-radar:repos"), '["a/b"]')
+  assert.equal(a.kv["pr-radar:repos"], '["a/b"]')
+})
+
+test("un envoi en échec reste en attente et part à la relecture suivante", async () => {
+  const s = storage()
+  const a = app()
+  const sync = createSync(() => s, a.transport)
+  a.failNextPush()
+  sync.save("pr-radar:repos", '["a/b"]')
+  await sync.idle()
+  assert.equal(a.kv["pr-radar:repos"], undefined)
+  await sync.pull()
+  assert.equal(a.kv["pr-radar:repos"], '["a/b"]')
+  assert.equal(s.getItem("pr-radar:repos"), '["a/b"]')
+})
+
+test("une relecture en échec ne touche pas au stockage", async () => {
+  const s = storage({ "pr-radar:repos": "[]" })
+  const a = app()
+  a.failPulls()
+  const sync = createSync(() => s, a.transport)
+  await assert.rejects(sync.pull())
+  assert.equal(s.getItem("pr-radar:repos"), "[]")
+})
+
+test("une écriture recalculée sur la valeur partagée garde le champ changé dans l'autre fenêtre", async () => {
+  const s = storage({ "pr-radar:settings": '{"a":1,"b":1}' })
+  const a = app({ "pr-radar:settings": '{"a":2,"b":1}' })
+  const sync = createSync(() => s, a.transport)
+  const changed: string[][] = []
+  sync.onPulled((keys) => changed.push(keys))
+  const patch = (raw: string | null) =>
+    JSON.stringify({ ...(JSON.parse(raw ?? "{}") as object), b: 3 })
+  sync.save("pr-radar:settings", '{"a":1,"b":3}', patch)
+  await sync.idle()
+  assert.equal(a.kv["pr-radar:settings"], '{"a":2,"b":3}')
+  assert.equal(s.getItem("pr-radar:settings"), '{"a":2,"b":3}')
+  assert.deepEqual(changed, [["pr-radar:settings"]])
+})
+
+test("une clé propre à la fenêtre n'est jamais envoyée", async () => {
+  const s = storage()
+  const a = app()
+  const sync = createSync(() => s, a.transport)
+  sync.save("pr-radar:theme", "dark")
+  await sync.idle()
+  assert.deepEqual(a.pushes, [])
+  assert.equal(s.getItem("pr-radar:theme"), "dark")
 })
