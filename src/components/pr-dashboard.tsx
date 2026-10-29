@@ -17,6 +17,8 @@ import {
   RefreshCw,
   Search,
   Settings as SettingsIcon,
+  TriangleAlert,
+  X,
 } from "lucide-react"
 import { cn } from "cn"
 
@@ -26,14 +28,16 @@ import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
 import { ReviewList } from "@/components/review-list"
-import { RunningDot } from "@/components/running-dot"
 import { UpdateBanner } from "@/components/update-banner"
+import { RunningDot } from "@/components/running-dot"
+import { WebMenu } from "@/components/web-menu"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
 import { invoke, isWeb } from "@/lib/platform"
 import { useAutoInterval } from "@/lib/quota"
 import { getSettings, useSettings } from "@/lib/settings"
 import { refreshMentions, useSlack } from "@/lib/slack"
 import { useMcp } from "@/lib/mcp"
+import { openWeb, startErrorText, toggleWeb, WEB_ERRORS } from "@/lib/web"
 import { RepoSection, type OpenState } from "@/components/repo-section"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -61,7 +65,7 @@ import {
   sortTree,
 } from "@/lib/tree"
 import { reviewCount, type Reviews } from "@/lib/review"
-import type { Pr, PrNode, RepoTree } from "@/lib/types"
+import type { Pr, PrNode, RepoTree, WebStatus } from "@/lib/types"
 
 const S = strings(
   {
@@ -100,6 +104,8 @@ const S = strings(
     settingsTitle: "Réglages (⌘,)",
     mcp: "Serveur MCP",
     mcpOn: "Serveur MCP (actif)",
+    webSettings: "Réglages de la version web",
+    dismiss: "Fermer",
     view: "Vue",
     fetchFailed: (e: string) => `Récupération GitHub en échec : ${e}`,
     searchPlaceholder: "Repo, titre, branche, #numéro",
@@ -152,6 +158,8 @@ const S = strings(
     settingsTitle: "Settings (⌘,)",
     mcp: "MCP server",
     mcpOn: "MCP server (on)",
+    webSettings: "Web version settings",
+    dismiss: "Dismiss",
     view: "View",
     fetchFailed: (e: string) => `GitHub fetch failed: ${e}`,
     searchPlaceholder: "Repo, title, branch, #number",
@@ -174,7 +182,7 @@ const S = strings(
   },
 )
 
-// réglages et serveur MCP : ouverts à la demande, chargés dans leur propre chunk
+// réglages, serveur MCP et version web : ouverts à la demande, chargés dans leur propre chunk
 const SettingsPage = lazy(() =>
   import("@/components/settings-page").then((m) => ({
     default: m.SettingsPage,
@@ -182,6 +190,9 @@ const SettingsPage = lazy(() =>
 )
 const McpPage = lazy(() =>
   import("@/components/mcp-page").then((m) => ({ default: m.McpPage })),
+)
+const WebPage = lazy(() =>
+  import("@/components/web-page").then((m) => ({ default: m.WebPage })),
 )
 
 const TABS = [
@@ -258,8 +269,13 @@ export function PrDashboard({
   const [filter, setFilter] = useState<keyof typeof S.fr.filters>("all")
   const settings = useSettings()
   const [sort, setSort] = useState<string>(() => getSettings().defaultSort)
-  const [showSettings, setShowSettings] = useState(false)
-  const [showMcp, setShowMcp] = useState(false)
+  // page plein écran affichée à la place du tableau de bord
+  const [page, setPage] = useState<"settings" | "mcp" | "web" | null>(null)
+  const toggle = (p: NonNullable<typeof page>) =>
+    setPage((v) => (v === p ? null : p))
+  const [webError, setWebError] = useState<string | null>(null)
+  const [webBusy, setWebBusy] = useState(false)
+  const webErrors = useStrings(WEB_ERRORS)
   const mcp = useMcp()
   const updateState = useUpdate()
   const update = updateState.status === "available" ? updateState.version : null
@@ -267,7 +283,7 @@ export function PrDashboard({
   // la barre d'onglets disparaît pendant les réglages : re-mesurer à son retour
   const [tabBox, underline] = useThumb<HTMLElement>(
     '[aria-selected="true"]',
-    `${tab}:${showSettings}:${showMcp}`,
+    `${tab}:${page}`,
   )
   usePrNotifications(prs)
   useReviewNotifications(reviews)
@@ -371,13 +387,27 @@ export function PrDashboard({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "," && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        setShowMcp(false)
-        setShowSettings((v) => !v)
+        toggle("settings")
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [])
+
+  // version web (globe : démarrée si besoin puis ouverte ; bulle : démarrée / arrêtée) ;
+  // erreur de démarrage affichée sous l'en-tête
+  const runWeb = async (action: () => Promise<WebStatus>) => {
+    setWebBusy(true)
+    setWebError(null)
+    try {
+      const status = await action()
+      if (!status.running) setWebError(startErrorText(webErrors, status))
+    } catch (e) {
+      setWebError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setWebBusy(false)
+    }
+  }
 
   const cmp = SORTS.find((s) => s.id === sort)?.cmp
   const nodes = useMemo(
@@ -502,31 +532,34 @@ export function PrDashboard({
           </Button>
           {mcp.info?.supported && (
             <Button
-              variant={showMcp ? "secondary" : "ghost"}
+              variant={page === "mcp" ? "secondary" : "ghost"}
               size="icon"
               aria-label={mcp.running ? t.mcpOn : t.mcp}
               title={mcp.running ? t.mcpOn : t.mcp}
-              aria-pressed={showMcp}
-              onClick={() => {
-                setShowSettings(false)
-                setShowMcp((v) => !v)
-              }}
+              aria-pressed={page === "mcp"}
+              onClick={() => toggle("mcp")}
               className="relative"
             >
               <Plug />
               {mcp.running && <RunningDot />}
             </Button>
           )}
+          {!isWeb && (
+            <WebMenu
+              label={t.tray.web}
+              busy={webBusy}
+              onOpen={() => void runWeb(openWeb)}
+              onToggle={() => void runWeb(toggleWeb)}
+              onSettings={() => setPage("web")}
+            />
+          )}
           <Button
-            variant={showSettings ? "secondary" : "ghost"}
+            variant={page === "settings" ? "secondary" : "ghost"}
             size="icon"
             aria-label={update ? t.settingsUpdate(update) : t.settings}
             title={update ? t.settingsTitleUpdate(update) : t.settingsTitle}
-            aria-pressed={showSettings}
-            onClick={() => {
-              setShowMcp(false)
-              setShowSettings((v) => !v)
-            }}
+            aria-pressed={page === "settings"}
+            onClick={() => toggle("settings")}
             className="relative"
           >
             <SettingsIcon />
@@ -539,13 +572,49 @@ export function PrDashboard({
 
       <UpdateBanner />
 
-      {showSettings ? (
+      {webError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm duration-300 animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none"
+        >
+          <TriangleAlert className="size-4 shrink-0 text-destructive" />
+          <span className="min-w-0 flex-1">{webError}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setWebError(null)
+              setPage("web")
+            }}
+          >
+            {t.webSettings}
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t.dismiss}
+            title={t.dismiss}
+            onClick={() => setWebError(null)}
+          >
+            <X />
+          </Button>
+        </div>
+      )}
+
+      {page === "settings" ? (
         <Suspense fallback={null}>
-          <SettingsPage onClose={() => setShowSettings(false)} />
+          <SettingsPage
+            onClose={() => setPage(null)}
+            onOpenWeb={() => setPage("web")}
+          />
         </Suspense>
-      ) : showMcp ? (
+      ) : page === "mcp" ? (
         <Suspense fallback={null}>
-          <McpPage onClose={() => setShowMcp(false)} />
+          <McpPage onClose={() => setPage(null)} />
+        </Suspense>
+      ) : page === "web" ? (
+        <Suspense fallback={null}>
+          <WebPage onClose={() => setPage(null)} />
         </Suspense>
       ) : (
         <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
