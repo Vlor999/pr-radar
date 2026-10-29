@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react"
 
 import type { Lang } from "./i18n"
 import type { Who } from "./review"
+import { onPulled, saveItem } from "./sync.ts" // extension : chargé aussi par node --test
 
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
 export type Settings = {
@@ -94,6 +95,13 @@ function read(): Settings {
 
 let current = read()
 
+// réglages changés dans l'autre fenêtre (app ou version web)
+onPulled((keys) => {
+  if (!keys.includes(KEY)) return
+  current = read()
+  listeners.forEach((l) => l())
+})
+
 export const getSettings = () => current
 
 /** Notifier ce changement de la PR : type de changement coché, et PR non brouillon si `notifyDrafts` est décoché. */
@@ -113,9 +121,7 @@ export function updateSettings(patch: SettingsPatch) {
     ...patch,
     notify: { ...current.notify, ...patch.notify },
   }
-  try {
-    localStorage.setItem(KEY, JSON.stringify(current))
-  } catch {}
+  saveItem(KEY, JSON.stringify(current))
   listeners.forEach((l) => l())
 }
 

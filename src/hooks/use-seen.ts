@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react"
 
+import { onPulled, saveItem } from "@/lib/sync"
 import type { Pr } from "@/lib/types"
 
 /**
@@ -18,11 +19,13 @@ const read = () => {
 }
 
 function write(seen: Record<string, string>) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(seen))
-  } catch {}
+  saveItem(KEY, JSON.stringify(seen))
   listeners.forEach((l) => l())
 }
+
+onPulled((keys) => {
+  if (keys.includes(KEY)) listeners.forEach((l) => l())
+})
 
 const subscribe = (l: () => void) => {
   listeners.add(l)
@@ -74,8 +77,6 @@ export function useSeen(prs: Pr[]) {
 
 /** Réglages > Données : oublie les marques « vu » (comme une première visite). */
 export function resetSeen() {
-  try {
-    localStorage.removeItem(KEY)
-  } catch {}
+  saveItem(KEY, null)
   listeners.forEach((l) => l())
 }

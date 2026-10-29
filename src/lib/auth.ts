@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core"
-import { fetch } from "@tauri-apps/plugin-http"
 import { useSyncExternalStore } from "react"
 
 import {
@@ -13,6 +11,8 @@ import {
   type AuthSource,
 } from "./accounts"
 import { pick, strings } from "./i18n"
+import { fetch, invoke } from "./platform"
+import { saveItem } from "./sync"
 
 const S = strings(
   {
@@ -50,11 +50,8 @@ function set(status: AuthState["status"]) {
   listeners.forEach((l) => l())
 }
 
-const persist = () => {
-  try {
-    localStorage.setItem(ACCOUNTS, JSON.stringify(toPersist(accounts, kept)))
-  } catch {}
-}
+const persist = () =>
+  saveItem(ACCOUNTS, JSON.stringify(toPersist(accounts, kept)))
 
 /** Jeton d'un compte : n'est envoyé qu'à l'hôte de ce compte (src/lib/github.ts). */
 export const tokenOf = (id: string) => tokens.get(id) ?? null
@@ -73,12 +70,7 @@ export function useAuth(): AuthState {
 
 // après une déconnexion, ne pas reprendre en silence le compte du CLI `gh`
 const SKIP_GH = "pr-radar:skip-gh"
-const skipGh = (on: boolean) => {
-  try {
-    if (on) localStorage.setItem(SKIP_GH, "1")
-    else localStorage.removeItem(SKIP_GH)
-  } catch {}
-}
+const skipGh = (on: boolean) => saveItem(SKIP_GH, on ? "1" : null)
 const ghSkipped = () => {
   try {
     return localStorage.getItem(SKIP_GH) === "1"

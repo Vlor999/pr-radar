@@ -1,5 +1,3 @@
-import { fetch } from "@tauri-apps/plugin-http"
-
 import {
   apiUrl,
   byAccount,
@@ -13,6 +11,7 @@ import {
   type AccountError,
 } from "./accounts"
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
+import { fetch } from "./platform"
 import { sweep, type Entry } from "./cache"
 import {
   gqlFailed,

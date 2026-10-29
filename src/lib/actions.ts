@@ -16,6 +16,7 @@ import {
 } from "./github"
 import { forgetQuota } from "./quota"
 import { getRepos, reload, setRepos } from "./store"
+import { pull } from "./sync"
 import type { MergedPr } from "./types"
 
 const message = (e: unknown) =>
@@ -60,8 +61,10 @@ export async function accessibleRepos(): Promise<{
   }
 }
 
-/** Bouton Rafraîchir : ignore le cache et relit GitHub. */
+/** Bouton Rafraîchir et actualisation automatique : ignore le cache et relit GitHub. */
 export async function refreshPrs() {
+  // réglages et repos suivis changés dans l'autre fenêtre (app ou version web)
+  await pull().catch(() => {})
   clearCache()
   await reload({ measure: true })
 }

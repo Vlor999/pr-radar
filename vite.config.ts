@@ -9,9 +9,11 @@ const host = process.env.TAURI_DEV_HOST;
 const src = (p: string) => path.resolve(import.meta.dirname, "./src", p);
 
 // `npm run demo` : l'app dans un navigateur, Tauri, GitHub et Slack remplacés par src/demo/*
+// (`?web` dans l'adresse : aperçu de la version web, src/demo/platform.ts)
 const demoAlias = [
   { find: /^(\.\/|@\/lib\/)github$/, replacement: src("demo/github.ts") },
   { find: /^@\/lib\/slack$/, replacement: src("demo/slack.ts") },
+  { find: /^(\.\/(lib\/)?|@\/lib\/)platform(\.ts)?$/, replacement: src("demo/platform.ts") },
   { find: /^@tauri-apps\/(api\/(core|app)|plugin-.*)$/, replacement: src("demo/tauri.ts") },
 ];
 
