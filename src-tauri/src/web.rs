@@ -106,6 +106,7 @@ pub struct Web {
     generation: AtomicU64,
     error: Mutex<Option<String>>,
     secret: Mutex<Option<String>>,
+    sessions: Mutex<Sessions>,
     /// hôtes GitHub Enterprise autorisés par `allow_host`
     hosts: Arc<Mutex<HashSet<String>>>,
     kv: Mutex<Kv>,
@@ -170,12 +171,29 @@ fn origin_ok(origin: Option<&str>, host: &str) -> bool {
     origin.is_none_or(|o| o == format!("http://{host}"))
 }
 
-/// Cookie de session égal au secret actuel.
-fn cookie_ok<'a>(cookies: impl Iterator<Item = &'a str>, secret: &str) -> bool {
-    cookies
-        .flat_map(|c| c.split(';'))
-        .filter_map(|p| p.trim().split_once('='))
-        .any(|(k, v)| k == COOKIE && same(v.as_bytes(), secret.as_bytes()))
+/// Sessions des navigateurs : valeur aléatoire par échange du secret, jamais le secret lui-même
+/// (les cookies de 127.0.0.1 partent vers tous ses ports). En mémoire : perdues à l'arrêt du serveur.
+#[derive(Default)]
+struct Sessions(HashSet<String>);
+
+impl Sessions {
+    fn issue(&mut self) -> Result<String, String> {
+        let s = new_secret()?;
+        self.0.insert(s.clone());
+        Ok(s)
+    }
+
+    /// Un cookie de session porte une session ouverte.
+    fn valid<'a>(&self, cookies: impl Iterator<Item = &'a str>) -> bool {
+        cookies
+            .flat_map(|c| c.split(';'))
+            .filter_map(|p| p.trim().split_once('='))
+            .any(|(k, v)| k == COOKIE && self.0.iter().any(|s| same(v.as_bytes(), s.as_bytes())))
+    }
+
+    fn revoke_all(&mut self) {
+        self.0.clear();
+    }
 }
 
 /// Commandes ouvertes au navigateur, et comptes du trousseau qu'elles peuvent toucher.
@@ -244,12 +262,11 @@ fn guard(ctx: &Ctx, headers: &HeaderMap, api: bool) -> Result<(), Response> {
         return Err(status(StatusCode::FORBIDDEN));
     }
     if api {
-        let secret = web.secret.lock().unwrap().clone().unwrap_or_default();
         let cookies = headers
             .get_all(header::COOKIE)
             .iter()
             .filter_map(|v| v.to_str().ok());
-        if secret.is_empty() || !cookie_ok(cookies, &secret) {
+        if !web.sessions.lock().unwrap().valid(cookies) {
             return Err(status(StatusCode::UNAUTHORIZED));
         }
     }
@@ -293,7 +310,7 @@ async fn asset(State(ctx): State<Ctx>, method: Method, uri: Uri, headers: Header
     }
 }
 
-/// Échange le secret du lien (`#k=…`) contre le cookie de session.
+/// Échange le secret du lien (`#k=…`) contre un cookie de session.
 async fn auth(State(ctx): State<Ctx>, headers: HeaderMap, body: Bytes) -> Response {
     if let Err(r) = guard(&ctx, &headers, false) {
         return r;
@@ -308,12 +325,15 @@ async fn auth(State(ctx): State<Ctx>, headers: HeaderMap, body: Bytes) -> Respon
     if !same(given.as_bytes(), secret.as_bytes()) {
         return status(StatusCode::UNAUTHORIZED);
     }
+    let Ok(session) = state(&ctx.app).sessions.lock().unwrap().issue() else {
+        return status(StatusCode::INTERNAL_SERVER_ERROR);
+    };
     (
         StatusCode::NO_CONTENT,
         [
             (
                 header::SET_COOKIE,
-                format!("{COOKIE}={secret}; HttpOnly; SameSite=Strict; Path=/"),
+                format!("{COOKIE}={session}; HttpOnly; SameSite=Strict; Path=/"),
             ),
             (header::CACHE_CONTROL, "no-store".into()),
         ],
@@ -535,6 +555,7 @@ fn start(app: &AppHandle, port: u16) -> Result<(), String> {
 fn stop(app: &AppHandle) -> Option<tauri::async_runtime::JoinHandle<()>> {
     let web = state(app);
     web.generation.fetch_add(1, Ordering::SeqCst);
+    web.sessions.lock().unwrap().revoke_all();
     let server = web.server.lock().unwrap().take()?;
     server.task.abort();
     Some(server.task)
@@ -615,7 +636,7 @@ pub async fn web_configure(app: AppHandle, enabled: bool, port: u16) -> Result<S
     web_status(app)
 }
 
-/// Nouveau secret : tous les navigateurs connectés perdent l'accès.
+/// Nouveau secret : toutes les sessions sont fermées, les navigateurs connectés perdent l'accès.
 #[tauri::command]
 pub fn web_rotate_secret(app: AppHandle) -> Result<(), String> {
     let s = new_secret()?;
@@ -623,6 +644,7 @@ pub fn web_rotate_secret(app: AppHandle) -> Result<(), String> {
         .set_password(&s)
         .map_err(|e| e.to_string())?;
     *state(&app).secret.lock().unwrap() = Some(s);
+    state(&app).sessions.lock().unwrap().revoke_all();
     Ok(())
 }
 
@@ -680,16 +702,37 @@ mod tests {
     }
 
     #[test]
-    fn cookie_check() {
-        let ok = |c: &[&str]| cookie_ok(c.iter().copied(), "s3cret");
-        assert!(ok(&["pr_radar_web=s3cret"]));
-        assert!(ok(&["a=1; pr_radar_web=s3cret; b=2"]));
-        assert!(ok(&["a=1", "pr_radar_web=s3cret"]));
-        assert!(!ok(&[]));
-        assert!(!ok(&["pr_radar_web=other"]));
-        assert!(!ok(&["pr_radar_web=s3cre"]));
-        assert!(!ok(&["pr_radar_web="]));
-        assert!(!ok(&["x_pr_radar_web=s3cret"]));
+    fn issued_session_is_accepted() {
+        let mut s = Sessions::default();
+        let id = s.issue().unwrap();
+        let ok = |c: &str| s.valid([c].into_iter());
+        assert!(ok(&format!("pr_radar_web={id}")));
+        assert!(ok(&format!("a=1; pr_radar_web={id}; b=2")));
+        assert!(s.valid(["a=1", &*format!("pr_radar_web={id}")].into_iter()));
+    }
+
+    #[test]
+    fn unknown_session_is_refused() {
+        let mut s = Sessions::default();
+        let id = s.issue().unwrap();
+        let ok = |c: &str| s.valid([c].into_iter());
+        assert!(!s.valid(std::iter::empty()));
+        assert!(!ok("pr_radar_web=other"));
+        assert!(!ok(&format!("pr_radar_web={}", &id[1..])));
+        assert!(!ok("pr_radar_web="));
+        assert!(!ok(&format!("x_pr_radar_web={id}")));
+        assert!(!Sessions::default().valid([&*format!("pr_radar_web={id}")].into_iter()));
+    }
+
+    #[test]
+    fn sessions_are_distinct_and_revoked_together() {
+        let mut s = Sessions::default();
+        let (a, b) = (s.issue().unwrap(), s.issue().unwrap());
+        assert_ne!(a, b);
+        s.revoke_all();
+        for id in [a, b] {
+            assert!(!s.valid([&*format!("pr_radar_web={id}")].into_iter()));
+        }
     }
 
     #[test]
