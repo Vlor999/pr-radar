@@ -1,10 +1,13 @@
 use keyring::{Entry, Error};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, ipc::CapabilityBuilder};
 use tauri_plugin_deep_link::DeepLinkExt;
+
+mod web;
 
 const ID: &str = "io.github.vlor999.prradar";
 /// Compte d'origine (avant le multi-compte) : son entrée du trousseau garde ce nom.
@@ -59,6 +62,10 @@ fn valid_host(host: &str) -> bool {
 fn allow_host(app: AppHandle, host: String) -> Result<(), String> {
     if !valid_host(&host) {
         return Err(format!("invalid host: {host}"));
+    }
+    // déjà autorisé (la version web relit les comptes) : rien à ajouter
+    if !web::allow(&app, &host) {
+        return Ok(());
     }
     let url = |p: &str| serde_json::json!({ "url": format!("https://{host}/api/{p}") });
     app.add_capability(
@@ -251,14 +258,55 @@ fn uninstall_run(app: AppHandle) -> Result<(), String> {
 
 const TRAY: &str = "main";
 
-fn tray_menu(app: &AppHandle, open: &str, quit: &str) -> tauri::Result<Menu<tauri::Wry>> {
-    Menu::with_items(
+/// Libellés du menu, dans la langue de l'app (envoyés par `set_tray`).
+struct TrayLabels {
+    open: String,
+    quit: String,
+    web: String,
+}
+
+impl Default for TrayLabels {
+    fn default() -> Self {
+        Self {
+            open: "Open PR Radar".into(),
+            quit: "Quit".into(),
+            web: "Open in browser".into(),
+        }
+    }
+}
+
+/// « Ouvrir dans le navigateur » : seulement quand la version web tourne.
+fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let state = app.state::<Mutex<TrayLabels>>();
+    let l = state.lock().unwrap();
+    let menu = Menu::with_items(
         app,
-        &[
-            &MenuItem::with_id(app, "open", open, true, None::<&str>)?,
-            &MenuItem::with_id(app, "quit", quit, true, None::<&str>)?,
-        ],
-    )
+        &[&MenuItem::with_id(
+            app,
+            "open",
+            &l.open,
+            true,
+            None::<&str>,
+        )?],
+    )?;
+    if web::running(app) {
+        menu.append(&MenuItem::with_id(app, "web", &l.web, true, None::<&str>)?)?;
+    }
+    menu.append(&MenuItem::with_id(
+        app,
+        "quit",
+        &l.quit,
+        true,
+        None::<&str>,
+    )?)?;
+    Ok(menu)
+}
+
+/// Menu reconstruit (langue, version web démarrée ou arrêtée).
+fn refresh_tray(app: &AppHandle) {
+    if let (Some(tray), Ok(menu)) = (app.tray_by_id(TRAY), tray_menu(app)) {
+        let _ = tray.set_menu(Some(menu));
+    }
 }
 
 fn show_main(app: &AppHandle) {
@@ -275,10 +323,15 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .icon(tauri::include_image!("icons/tray.png"))
         .icon_as_template(true)
         .tooltip("PR Radar")
-        .menu(&tray_menu(app, "Open PR Radar", "Quit")?)
+        .menu(&tray_menu(app)?)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, e| match e.id().as_ref() {
             "open" => show_main(app),
+            "web" => {
+                if let Err(e) = web::open(app) {
+                    eprintln!("web version: {e}");
+                }
+            }
             "quit" => app.exit(0),
             _ => {}
         })
@@ -304,14 +357,15 @@ fn set_tray(
     tooltip: String,
     open: String,
     quit: String,
+    web: String,
 ) -> Result<(), String> {
     let tray = app.tray_by_id(TRAY).ok_or("no tray")?;
     let e = |e: tauri::Error| e.to_string();
     tray.set_title((count > 0).then(|| count.to_string()))
         .map_err(e)?;
     tray.set_tooltip(Some(tooltip)).map_err(e)?;
-    tray.set_menu(Some(tray_menu(&app, &open, &quit).map_err(e)?))
-        .map_err(e)
+    *app.state::<Mutex<TrayLabels>>().lock().unwrap() = TrayLabels { open, quit, web };
+    tray.set_menu(Some(tray_menu(&app).map_err(e)?)).map_err(e)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -327,6 +381,8 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .manage(web::Web::default())
+        .manage(Mutex::new(TrayLabels::default()))
         .setup(|app| {
             // retour de la connexion Slack ; Windows/Linux : arrive par single-instance (feature deep-link)
             let handle = app.handle().clone();
@@ -337,6 +393,8 @@ pub fn run() {
             if let Err(e) = app.deep_link().register_all() {
                 eprintln!("deep link registration failed: {e}");
             }
+            // version web activée : serveur démarré avant le menu (qui propose de l'ouvrir)
+            web::autostart(app.handle());
             // sans barre d'icônes (ex. GNOME sans AppIndicator) l'app démarre quand même
             if let Err(e) = setup_tray(app.handle()) {
                 eprintln!("tray unavailable: {e}");
@@ -361,15 +419,25 @@ pub fn run() {
             gh_token,
             uninstall_plan,
             uninstall_run,
-            set_tray
+            set_tray,
+            web::web_status,
+            web::web_configure,
+            web::web_rotate_secret,
+            web::web_open,
+            web::kv_seed,
+            web::kv_push,
+            web::kv_pull
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|_app, _e| {
+        .run(|app, e| {
+            if let tauri::RunEvent::Exit = e {
+                web::shutdown(app);
+            }
             // clic sur l'icône du Dock alors que la fenêtre est cachée
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { .. } = _e {
-                show_main(_app);
+            if let tauri::RunEvent::Reopen { .. } = e {
+                show_main(app);
             }
         });
 }
