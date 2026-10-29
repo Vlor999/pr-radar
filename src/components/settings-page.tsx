@@ -14,7 +14,7 @@ import {
   Sun,
   Trash2,
 } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,7 +26,15 @@ import {
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { Login } from "@/components/login"
-import { Row, Section, Segmented, Toggle } from "@/components/settings-ui"
+import {
+  Feedback,
+  Row,
+  Section,
+  Segmented,
+  Toggle,
+  useConfirm,
+  useFlash,
+} from "@/components/settings-ui"
 import { GITHUB, type Account } from "@/lib/accounts"
 import { accountAdded, refreshPrs, signOut } from "@/lib/actions"
 import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
@@ -92,7 +100,6 @@ const S = strings(
       raccourcis: "Raccourcis clavier",
       "a-propos": "À propos",
     },
-    done: "Fait",
     failed: "Échec",
     account: {
       description:
@@ -305,7 +312,6 @@ const S = strings(
       raccourcis: "Keyboard shortcuts",
       "a-propos": "About",
     },
-    done: "Done",
     failed: "Failed",
     account: {
       description:
@@ -515,48 +521,6 @@ const reducedMotion = () =>
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLElement &&
   (t.matches("input, textarea, select") || t.isContentEditable)
-
-/** Libellé « Fait » affiché 2 s après une action. */
-function useFlash(): [string | null, (msg?: string) => void] {
-  const t = useStrings(S)
-  const [msg, setMsg] = useState<string | null>(null)
-  const timer = useRef<number>(undefined)
-  useEffect(() => () => clearTimeout(timer.current), [])
-  return [
-    msg,
-    (m = t.done) => {
-      setMsg(m)
-      clearTimeout(timer.current)
-      timer.current = window.setTimeout(() => setMsg(null), 2000)
-    },
-  ]
-}
-
-/** Confirmation en deux clics : le premier arme le bouton pendant 4 s. */
-function useConfirm(): [boolean, (action: () => void) => void] {
-  const [armed, setArmed] = useState(false)
-  const timer = useRef<number>(undefined)
-  useEffect(() => () => clearTimeout(timer.current), [])
-  return [
-    armed,
-    (action) => {
-      clearTimeout(timer.current)
-      if (armed) {
-        setArmed(false)
-        action()
-      } else {
-        setArmed(true)
-        timer.current = window.setTimeout(() => setArmed(false), 4000)
-      }
-    },
-  ]
-}
-
-const Feedback = ({ msg }: { msg: string | null }) => (
-  <span aria-live="polite" className="min-w-8 text-xs text-muted-foreground">
-    {msg}
-  </span>
-)
 
 /* ---------- Sections ---------- */
 

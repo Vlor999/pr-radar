@@ -1,9 +1,13 @@
 import { cn } from "cn"
-import type { ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import { useThumb } from "@/hooks/use-thumb"
+import { strings, useStrings } from "@/lib/i18n"
 
-// Briques des pages plein écran (réglages, serveur MCP) : section, ligne, interrupteur, choix segmenté.
+const S = strings({ done: "Fait" }, { done: "Done" })
+
+// Briques des pages plein écran (réglages, serveur MCP, version web) : section, ligne, interrupteur,
+// choix segmenté, confirmation, retour « Fait ».
 
 export function Section(props: {
   id: string
@@ -134,3 +138,45 @@ export function Segmented<T extends string | number>(props: {
     </div>
   )
 }
+
+/** Libellé « Fait » affiché 2 s après une action. */
+export function useFlash(): [string | null, (msg?: string) => void] {
+  const t = useStrings(S)
+  const [msg, setMsg] = useState<string | null>(null)
+  const timer = useRef<number>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  return [
+    msg,
+    (m = t.done) => {
+      setMsg(m)
+      clearTimeout(timer.current)
+      timer.current = window.setTimeout(() => setMsg(null), 2000)
+    },
+  ]
+}
+
+/** Confirmation en deux clics : le premier arme le bouton pendant 4 s. */
+export function useConfirm(): [boolean, (action: () => void) => void] {
+  const [armed, setArmed] = useState(false)
+  const timer = useRef<number>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  return [
+    armed,
+    (action) => {
+      clearTimeout(timer.current)
+      if (armed) {
+        setArmed(false)
+        action()
+      } else {
+        setArmed(true)
+        timer.current = window.setTimeout(() => setArmed(false), 4000)
+      }
+    },
+  ]
+}
+
+export const Feedback = ({ msg }: { msg: string | null }) => (
+  <span aria-live="polite" className="min-w-8 text-xs text-muted-foreground">
+    {msg}
+  </span>
+)
