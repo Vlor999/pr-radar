@@ -54,7 +54,10 @@ export default function App() {
   }, [])
 
   // serveur MCP local : démarré quel que soit l'état de connexion (écran de connexion, jeton refusé)
-  useEffect(() => void startMcp(), [])
+  // version web : le serveur MCP reste dans l'app (son bouton n'apparaît pas sans `startMcp`)
+  useEffect(() => {
+    if (!isWeb) void startMcp()
+  }, [])
 
   useEffect(() => {
     document.documentElement.lang = currentLang(lang)

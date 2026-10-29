@@ -30,9 +30,10 @@ test("les réglages, comptes, repos et marques « vu » sont partagés", () => {
     assert.equal(isSynced(k), true, k)
 })
 
-test("le thème et la dernière notification restent propres à chaque fenêtre", () => {
+test("le thème, la dernière notification et l'historique MCP restent propres à chaque fenêtre", () => {
   assert.equal(isSynced("pr-radar:theme"), false)
   assert.equal(isSynced("pr-radar:last-notification"), false)
+  assert.equal(isSynced("pr-radar:mcp-history"), false)
 })
 
 test("une clé d'une autre application n'est pas partagée", () => {

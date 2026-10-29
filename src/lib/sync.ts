@@ -7,8 +7,12 @@ import { isWeb, kvPull, kvPush, kvSeed } from "./platform.ts"
 const PREFIX = "pr-radar:"
 /** marques « vu » (src/hooks/use-seen.ts), clé d'avant le préfixe */
 const SEEN = "pr-seen"
-/** propres à chaque fenêtre : thème, dernière notification (envoyée par l'app seule) */
-const LOCAL_ONLY = ["pr-radar:theme", "pr-radar:last-notification"]
+/** propres à chaque fenêtre : thème, dernière notification et historique MCP (tenus par l'app seule) */
+const LOCAL_ONLY = [
+  "pr-radar:theme",
+  "pr-radar:last-notification",
+  "pr-radar:mcp-history",
+]
 
 export const isSynced = (key: string) =>
   (key.startsWith(PREFIX) || key === SEEN) && !LOCAL_ONLY.includes(key)
