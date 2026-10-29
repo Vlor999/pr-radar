@@ -13,6 +13,7 @@ import {
   Eye,
   GitPullRequest,
   PanelLeft,
+  Plug,
   RefreshCw,
   Search,
   Settings as SettingsIcon,
@@ -31,6 +32,7 @@ import { invoke, isWeb } from "@/lib/platform"
 import { useAutoInterval } from "@/lib/quota"
 import { getSettings, useSettings } from "@/lib/settings"
 import { refreshMentions, useSlack } from "@/lib/slack"
+import { useMcp } from "@/lib/mcp"
 import { RepoSection, type OpenState } from "@/components/repo-section"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -95,6 +97,8 @@ const S = strings(
     settingsUpdate: (v: string) => `Réglages (version ${v} disponible)`,
     settingsTitleUpdate: (v: string) => `Réglages · version ${v} disponible`,
     settingsTitle: "Réglages (⌘,)",
+    mcp: "Serveur MCP",
+    mcpOn: "Serveur MCP (actif)",
     view: "Vue",
     fetchFailed: (e: string) => `Récupération GitHub en échec : ${e}`,
     searchPlaceholder: "Repo, titre, branche, #numéro",
@@ -145,6 +149,8 @@ const S = strings(
     settingsUpdate: (v: string) => `Settings (version ${v} available)`,
     settingsTitleUpdate: (v: string) => `Settings · version ${v} available`,
     settingsTitle: "Settings (⌘,)",
+    mcp: "MCP server",
+    mcpOn: "MCP server (on)",
     view: "View",
     fetchFailed: (e: string) => `GitHub fetch failed: ${e}`,
     searchPlaceholder: "Repo, title, branch, #number",
@@ -167,11 +173,14 @@ const S = strings(
   },
 )
 
-// réglages : ouverts à la demande, chargés dans leur propre chunk
+// réglages et serveur MCP : ouverts à la demande, chargés dans leur propre chunk
 const SettingsPage = lazy(() =>
   import("@/components/settings-page").then((m) => ({
     default: m.SettingsPage,
   })),
+)
+const McpPage = lazy(() =>
+  import("@/components/mcp-page").then((m) => ({ default: m.McpPage })),
 )
 
 const TABS = [
@@ -249,13 +258,15 @@ export function PrDashboard({
   const settings = useSettings()
   const [sort, setSort] = useState<string>(() => getSettings().defaultSort)
   const [showSettings, setShowSettings] = useState(false)
+  const [showMcp, setShowMcp] = useState(false)
+  const mcp = useMcp()
   const updateState = useUpdate()
   const update = updateState.status === "available" ? updateState.version : null
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("open")
   // la barre d'onglets disparaît pendant les réglages : re-mesurer à son retour
   const [tabBox, underline] = useThumb<HTMLElement>(
     '[aria-selected="true"]',
-    `${tab}:${showSettings}`,
+    `${tab}:${showSettings}:${showMcp}`,
   )
   usePrNotifications(prs)
   useReviewNotifications(reviews)
@@ -359,6 +370,7 @@ export function PrDashboard({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "," && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
+        setShowMcp(false)
         setShowSettings((v) => !v)
       }
     }
@@ -487,13 +499,35 @@ export function PrDashboard({
             <RefreshCw className={cn(refreshing && "animate-spin")} />
             {refreshing ? t.refreshing : t.refresh}
           </Button>
+          {mcp.info?.supported && (
+            <Button
+              variant={showMcp ? "secondary" : "ghost"}
+              size="icon"
+              aria-label={mcp.running ? t.mcpOn : t.mcp}
+              title={mcp.running ? t.mcpOn : t.mcp}
+              aria-pressed={showMcp}
+              onClick={() => {
+                setShowSettings(false)
+                setShowMcp((v) => !v)
+              }}
+              className="relative"
+            >
+              <Plug />
+              {mcp.running && (
+                <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-emerald-500 ring-2 ring-background" />
+              )}
+            </Button>
+          )}
           <Button
             variant={showSettings ? "secondary" : "ghost"}
             size="icon"
             aria-label={update ? t.settingsUpdate(update) : t.settings}
             title={update ? t.settingsTitleUpdate(update) : t.settingsTitle}
             aria-pressed={showSettings}
-            onClick={() => setShowSettings((v) => !v)}
+            onClick={() => {
+              setShowMcp(false)
+              setShowSettings((v) => !v)
+            }}
             className="relative"
           >
             <SettingsIcon />
@@ -509,6 +543,10 @@ export function PrDashboard({
       {showSettings ? (
         <Suspense fallback={null}>
           <SettingsPage onClose={() => setShowSettings(false)} />
+        </Suspense>
+      ) : showMcp ? (
+        <Suspense fallback={null}>
+          <McpPage onClose={() => setShowMcp(false)} />
         </Suspense>
       ) : (
         <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">

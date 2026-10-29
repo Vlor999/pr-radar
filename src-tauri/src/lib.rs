@@ -7,6 +7,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, ipc::CapabilityBuilder};
 use tauri_plugin_deep_link::DeepLinkExt;
 
+pub mod mcp;
 mod web;
 
 const ID: &str = "io.github.vlor999.prradar";
@@ -383,7 +384,10 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(web::Web::default())
         .manage(Mutex::new(TrayLabels::default()))
+        .manage(mcp::McpState::default())
         .setup(|app| {
+            // serveur MCP : verrou de présence pris au lancement, socket créé seulement si activé
+            mcp::hold_lock(&app.state::<mcp::McpState>());
             // retour de la connexion Slack ; Windows/Linux : arrive par single-instance (feature deep-link)
             let handle = app.handle().clone();
             app.deep_link()
@@ -426,13 +430,19 @@ pub fn run() {
             web::web_open,
             web::kv_seed,
             web::kv_push,
-            web::kv_pull
+            web::kv_pull,
+            mcp::mcp_info,
+            mcp::mcp_enable,
+            mcp::mcp_disable,
+            mcp::mcp_response
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app, e| {
+            // fermeture : serveur web arrêté, le socket MCP disparaît avec l'app
             if let tauri::RunEvent::Exit = e {
                 web::shutdown(app);
+                let _ = mcp::mcp_disable(app.state::<mcp::McpState>());
             }
             // clic sur l'icône du Dock alors que la fenêtre est cachée
             #[cfg(target_os = "macos")]
