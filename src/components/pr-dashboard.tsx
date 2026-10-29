@@ -26,6 +26,7 @@ import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
 import { ReviewList } from "@/components/review-list"
+import { RunningDot } from "@/components/running-dot"
 import { UpdateBanner } from "@/components/update-banner"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
 import { invoke, isWeb } from "@/lib/platform"
@@ -513,9 +514,7 @@ export function PrDashboard({
               className="relative"
             >
               <Plug />
-              {mcp.running && (
-                <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-emerald-500 ring-2 ring-background" />
-              )}
+              {mcp.running && <RunningDot />}
             </Button>
           )}
           <Button
