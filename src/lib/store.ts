@@ -72,6 +72,9 @@ function set(next: Data) {
   listeners.forEach((l) => l())
 }
 
+/** État courant hors React (serveur MCP). */
+export const getData = () => data
+
 export function useData(): Data {
   return useSyncExternalStore(
     (l) => {

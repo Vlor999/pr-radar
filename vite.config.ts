@@ -12,6 +12,7 @@ const src = (p: string) => path.resolve(import.meta.dirname, "./src", p);
 const demoAlias = [
   { find: /^(\.\/|@\/lib\/)github$/, replacement: src("demo/github.ts") },
   { find: /^@\/lib\/slack$/, replacement: src("demo/slack.ts") },
+  { find: /^@\/lib\/mcp$/, replacement: src("demo/mcp.ts") },
   { find: /^@tauri-apps\/(api\/(core|app)|plugin-.*)$/, replacement: src("demo/tauri.ts") },
 ];
 

@@ -177,6 +177,15 @@
         </div>
         <figcaption data-i18n-html="cap6"><strong>To review</strong>PRs waiting for your review get their own tab and a notification. On your own PRs, add reviewers from the card.<span class="sr"> Animation: the To review tab lists two PRs from acme/api, a New badge appears on the first, then dave is added as a reviewer of PR #12 next to chloe, who approved it.</span></figcaption>
       </figure>
+      <figure class="vig">
+        <div class="vm v-thr" aria-hidden="true">
+          <div class="msg"><i class="av" style="background:#2b8fd9">y</i><span data-i18n-html="mcpq"><b>you</b> Which of my PRs can I merge?</span></div>
+          <div class="file">pr-radar · get_prs</div>
+          <div class="hunk"><span>{ "repo": "acme/web", "number": 12,</span><span>  "ci": "SUCCESS", "decision": "APPROVED",</span><span class="ha">  "slack": [{ "where": "#reviews" }] }</span></div>
+          <div class="msg v-sent"><i class="av" style="background:#d9822b">C</i><span data-i18n-html="mcpa"><b>Claude</b> acme/web#12: approved, CI green, already posted in #reviews.</span></div>
+        </div>
+        <figcaption data-i18n-html="cap7"><strong>Local MCP server</strong>Claude Code or Claude Desktop reads your PRs and their Slack mentions straight from the app, without a single extra request. Opt-in, read-only.<span class="sr"> Animation: a question to Claude, the get_prs reply from PR Radar for acme/web#12, then Claude's answer.</span></figcaption>
+      </figure>
     </div>
     <h3 class="more" data-i18n="more">And also</h3>
     <ul class="chips">
@@ -229,6 +238,7 @@
     <h2 data-i18n="privacy">Privacy</h2>
     <p class="lead" data-i18n="pv">PR Radar only talks to GitHub, to your GitHub Enterprise server if you add one, and to Slack if you connect it. No server: tokens live in your OS keychain, Slack tokens are read-only and rotate automatically (they expire every 12 hours), and you can revoke them at any time. Your messages never leave your machine.</p>
     <p data-i18n="pv2">The app also contacts github.com to check for updates (your IP address and app version) and loads avatars from GitHub. Slack messages are searched and read on your machine only; nothing is sent to us or anyone else.</p>
+    <p data-i18n="pv4">The local MCP server is off by default. Once turned on, it answers only on your machine, through a socket that only your user account can open, and in read-only mode: agents read what the app already shows, no tool writes to GitHub or Slack, and nothing leaves your machine.</p>
     <p data-i18n="pv3">This website is hosted by GitHub Pages, which logs visitors' IP addresses. Your browser asks api.github.com for the latest release. No cookies, no analytics: only your language choice is kept in your browser (localStorage). During Slack sign-in, the one-time code briefly passes through a page of this site, which stores nothing; it is unusable without the key kept in the app.</p>
     <p><a href="https://github.com/Vlor999/pr-radar" data-i18n="pvl">Read the code (MIT license)</a></p>
   </div>
@@ -261,6 +271,10 @@
       <details>
         <summary data-i18n="q8">Does my Slack admin need to approve it?</summary>
         <p data-i18n="a8">Yes, if your workspace requires it. Click Connect and Slack offers to request the installation.</p>
+      </details>
+      <details>
+        <summary data-i18n="q9">How do I connect Claude Code?</summary>
+        <p data-i18n-html="a9">Click the plug icon next to the gear and turn the server on. The Setup section gives the command with the real path of the app, for example <code>claude mcp add --scope user pr-radar -- '/Applications/PR Radar.app/Contents/MacOS/pr-radar' --mcp</code>, or the JSON for Claude Desktop. PR Radar must be running. macOS and Linux only for now.</p>
       </details>
     </div>
   </div>

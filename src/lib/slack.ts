@@ -202,6 +202,9 @@ function setState(next: SlackState) {
 
 export const useSlack = () => useSyncExternalStore(subscribe, () => state)
 
+/** État hors React (serveur MCP). */
+export const getSlackState = () => state
+
 /* ---------- API Slack et jetons ---------- */
 
 /**
@@ -610,6 +613,12 @@ function setProgress() {
 
 export const useSlackProgress = () =>
   useSyncExternalStore(subscribe, () => progress)
+
+/** Progression hors React (serveur MCP). */
+export const getSlackProgress = () => progress
+
+/** Mentions en cache d'une PR, non filtrées, et date de lecture (serveur MCP) ; jamais lue : `undefined`. */
+export const cachedMentions = (url: string) => mentions.get(url)
 
 const active = () => {
   const s = getSettings()

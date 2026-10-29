@@ -37,6 +37,8 @@ export type Settings = {
   reviewWho: Who
   /** onglet « À reviewer » : masquer les demandes d'équipe déjà approuvées */
   reviewHideApproved: boolean
+  /** serveur MCP local (socket Unix) ; désactivé par défaut */
+  mcpEnabled: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -59,6 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
   slackChannels: [],
   reviewWho: "all",
   reviewHideApproved: false,
+  mcpEnabled: false,
 }
 
 const KEY = "pr-radar:settings"
@@ -85,6 +88,7 @@ function read(): Settings {
         ? saved.reviewWho!
         : "all",
       reviewHideApproved: saved.reviewHideApproved === true,
+      mcpEnabled: saved.mcpEnabled === true,
       refreshMinutes: refreshMinutesOf(saved.refreshMinutes),
     }
   } catch {
@@ -119,9 +123,13 @@ export function updateSettings(patch: SettingsPatch) {
   listeners.forEach((l) => l())
 }
 
-/** Remet les réglages par défaut, sauf la langue. */
+/** Remet les réglages par défaut, sauf la langue et le serveur MCP (son socket reste ouvert). */
 export function resetSettings() {
-  updateSettings({ ...DEFAULT_SETTINGS, lang: current.lang })
+  updateSettings({
+    ...DEFAULT_SETTINGS,
+    lang: current.lang,
+    mcpEnabled: current.mcpEnabled,
+  })
 }
 
 export function useSettings(): Settings {
