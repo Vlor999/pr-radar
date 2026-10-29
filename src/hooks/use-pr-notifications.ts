@@ -1,7 +1,7 @@
-import { invoke } from "@tauri-apps/api/core"
 import { useEffect, useRef, useSyncExternalStore } from "react"
 
 import { pick, strings } from "@/lib/i18n"
+import { invoke, isWeb } from "@/lib/platform"
 import { newRequests, reviewKey, snapshot, type Reviews } from "@/lib/review"
 import { getSettings, shouldNotify, type Settings } from "@/lib/settings"
 import type { Pr } from "@/lib/types"
@@ -90,6 +90,8 @@ export function usePrNotifications(prs: Pr[]) {
   const previous = useRef<Map<string, Pr> | null>(null)
 
   useEffect(() => {
+    // version web : les notifications viennent de l'app (fenêtre cachée), pas de l'onglet
+    if (isWeb) return
     const current = new Map(prs.map((p) => [`${p.repo}#${p.number}`, p]))
     const before = previous.current
     previous.current = current
@@ -111,6 +113,7 @@ export function useReviewNotifications(known: Reviews) {
   const previous = useRef<ReturnType<typeof snapshot> | null>(null)
 
   useEffect(() => {
+    if (isWeb) return
     const before = previous.current
     previous.current = snapshot(known)
     if (!before) return

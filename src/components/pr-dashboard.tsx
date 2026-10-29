@@ -7,7 +7,6 @@ import {
   useSyncExternalStore,
   useTransition,
 } from "react"
-import { invoke } from "@tauri-apps/api/core"
 import {
   CalendarDays,
   CheckCheck,
@@ -28,6 +27,7 @@ import { RepoSidebar } from "@/components/repo-sidebar"
 import { ReviewList } from "@/components/review-list"
 import { UpdateBanner } from "@/components/update-banner"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
+import { invoke, isWeb } from "@/lib/platform"
 import { useAutoInterval } from "@/lib/quota"
 import { getSettings, useSettings } from "@/lib/settings"
 import { refreshMentions, useSlack } from "@/lib/slack"
@@ -112,6 +112,7 @@ const S = strings(
       tooltip: (n: number) => `PR Radar : ${n} PR à traiter`,
       open: "Ouvrir PR Radar",
       quit: "Quitter",
+      web: "Ouvrir dans le navigateur",
     },
   },
   {
@@ -161,6 +162,7 @@ const S = strings(
         `PR Radar: ${n} PR${n > 1 ? "s" : ""} need action`,
       open: "Open PR Radar",
       quit: "Quit",
+      web: "Open in browser",
     },
   },
 )
@@ -261,20 +263,27 @@ export function PrDashboard({
   // icône de la barre des menus : PR « À traiter » (même filtre que l'onglet)
   const attention = prs.filter(needsAttention).length
   useEffect(() => {
+    if (isWeb) return // icône de l'app : tenue par la fenêtre de l'app
     invoke("set_tray", {
       count: attention,
       tooltip: t.tray.tooltip(attention),
       open: t.tray.open,
       quit: t.tray.quit,
+      web: t.tray.web,
     }).catch(() => {})
   }, [attention, t])
   // déconnexion (le tableau de bord disparaît) : plus de compteur
   useEffect(
     () => () => {
-      const { open, quit } = pick(S).tray
-      invoke("set_tray", { count: 0, tooltip: "PR Radar", open, quit }).catch(
-        () => {},
-      )
+      if (isWeb) return
+      const { open, quit, web } = pick(S).tray
+      invoke("set_tray", {
+        count: 0,
+        tooltip: "PR Radar",
+        open,
+        quit,
+        web,
+      }).catch(() => {})
     },
     [],
   )
@@ -311,11 +320,20 @@ export function PrDashboard({
     settings.refreshMinutes === "auto"
       ? autoMs
       : settings.refreshMinutes * 60_000
+  // version web : pas d'actualisation automatique tant que l'onglet est caché (l'app, elle, continue)
+  const paused = useHidden() && isWeb
   useEffect(() => {
-    if (!intervalMs || refreshing) return
+    if (!intervalMs || refreshing || paused) return
     const id = setTimeout(() => startRefresh(() => refreshPrs()), intervalMs)
     return () => clearTimeout(id)
-  }, [intervalMs, refreshing, fetchedAt])
+  }, [intervalMs, refreshing, fetchedAt, paused])
+
+  // version web, retour sur l'onglet : actualisation si la dernière lecture date de plus d'une période
+  useEffect(() => {
+    if (paused || !isWeb || !intervalMs || refreshing) return
+    if (Date.now() - Date.parse(fetchedAt) > intervalMs)
+      startRefresh(() => refreshPrs())
+  }, [paused]) // seulement au changement de visibilité
 
   useEffect(() => {
     if (!settings.refreshOnFocus || refreshing) return
@@ -673,5 +691,16 @@ function useWide() {
       return () => m.removeEventListener("change", l)
     },
     () => matchMedia(WIDE).matches,
+  )
+}
+
+/** Onglet (ou fenêtre) caché. */
+function useHidden() {
+  return useSyncExternalStore(
+    (l) => {
+      document.addEventListener("visibilitychange", l)
+      return () => document.removeEventListener("visibilitychange", l)
+    },
+    () => document.visibilityState === "hidden",
   )
 }

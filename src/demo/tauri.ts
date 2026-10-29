@@ -1,6 +1,28 @@
 // Démo navigateur (`npm run demo`) : remplace les modules @tauri-apps/* par des faux.
 
-const commands: Record<string, unknown> = {
+/** Version web (réglages) : port 1420 refusé comme déjà utilisé, celui de la démo. */
+const web = {
+  enabled: false,
+  port: 14200,
+  running: false,
+  error: null as string | null,
+}
+const DEMO_PORT = 1420
+
+const commands: Record<
+  string,
+  unknown | ((args: Record<string, unknown>) => unknown)
+> = {
+  web_status: () => ({ ...web }),
+  web_configure: ({ enabled, port }: Record<string, unknown>) => {
+    web.enabled = enabled === true
+    web.port = Number(port)
+    web.error = web.enabled && web.port === DEMO_PORT ? "port-busy" : null
+    web.running = web.enabled && !web.error
+    return { ...web }
+  },
+  // aperçu de la version web : la démo elle-même, sections réservées à l'app masquées
+  web_open: () => void window.open("/?web", "_blank"),
   get_token: "demo",
   gh_token: "demo",
   uninstall_plan: {
@@ -10,9 +32,13 @@ const commands: Record<string, unknown> = {
   },
 }
 
-export async function invoke<T>(cmd: string, args?: unknown): Promise<T> {
+export async function invoke<T>(
+  cmd: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
   console.info("[demo] invoke", cmd, args ?? "")
-  return (commands[cmd] ?? null) as T
+  const c = commands[cmd]
+  return (typeof c === "function" ? c(args ?? {}) : (c ?? null)) as T
 }
 
 export const getVersion = async () => "0.0.0-demo"
