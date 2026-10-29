@@ -65,7 +65,7 @@ fn allow_host(app: AppHandle, host: String) -> Result<(), String> {
         return Err(format!("invalid host: {host}"));
     }
     // déjà autorisé (la version web relit les comptes) : rien à ajouter
-    if !web::allow(&app, &host) {
+    if web::host_allowed(&app, &host) {
         return Ok(());
     }
     let url = |p: &str| serde_json::json!({ "url": format!("https://{host}/api/{p}") });
@@ -74,7 +74,10 @@ fn allow_host(app: AppHandle, host: String) -> Result<(), String> {
             .window("main")
             .permission_scoped("http:default", vec![url("*"), url("**")], vec![]),
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    // seulement après la capacité : un échec laisse un nouvel essai possible
+    web::allow(&app, &host);
+    Ok(())
 }
 
 /// Jeton du CLI GitHub (`gh auth token`) s'il est installé et connecté : connexion sans aucune étape.
@@ -207,6 +210,7 @@ fn uninstall_plan(app: AppHandle) -> UninstallPlan {
 #[tauri::command]
 fn uninstall_run(app: AppHandle) -> Result<(), String> {
     delete_token(DEFAULT_ACCOUNT.into())?;
+    web::forget(&app)?;
     let plan = uninstall_plan(app.clone());
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
     let bundle = plan.app_path.as_deref().map(Path::new);
@@ -426,7 +430,7 @@ pub fn run() {
             set_tray,
             web::web_status,
             web::web_configure,
-            web::web_rotate_secret,
+            web::web_revoke,
             web::web_open,
             web::kv_seed,
             web::kv_push,

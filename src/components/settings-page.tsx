@@ -281,11 +281,11 @@ const S = strings(
       startError: (e: string) => `Impossible de démarrer le serveur : ${e}`,
       open: "Ouvrir dans le navigateur",
       openDescription:
-        "Le lien contient un secret, échangé à l'ouverture contre un cookie de session.",
-      secret: "Secret du lien",
+        "Chaque lien sert une seule fois pendant une minute, échangé à l'ouverture contre une session du navigateur.",
+      secret: "Sessions des navigateurs",
       secretDescription:
-        "Le régénérer déconnecte tous les navigateurs : rouvre ensuite la version web depuis l'app.",
-      rotate: "Régénérer le secret",
+        "Ferme toutes les sessions ouvertes : rouvre ensuite la version web depuis l'app.",
+      rotate: "Déconnecter les navigateurs",
       confirmRotate: "Confirmer",
     },
     nav: "Sections des réglages",
@@ -492,11 +492,11 @@ const S = strings(
       startError: (e: string) => `Could not start the server: ${e}`,
       open: "Open in browser",
       openDescription:
-        "The link holds a secret, exchanged for a session cookie when opened.",
-      secret: "Link secret",
+        "Each link works once for one minute, exchanged for a browser session when opened.",
+      secret: "Browser sessions",
       secretDescription:
-        "Regenerating it signs out every browser: then reopen the web version from the app.",
-      rotate: "Regenerate the secret",
+        "Closes every open session: then reopen the web version from the app.",
+      rotate: "Sign out browsers",
       confirmRotate: "Confirm",
     },
     nav: "Settings sections",
@@ -1473,7 +1473,7 @@ function WebSection() {
           size="sm"
           onClick={() =>
             confirm(() =>
-              invoke("web_rotate_secret").then(
+              invoke("web_revoke").then(
                 () => flashSecret(),
                 (e: unknown) => setError(message(e)),
               ),

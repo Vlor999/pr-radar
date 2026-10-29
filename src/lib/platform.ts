@@ -41,23 +41,33 @@ async function api(path: string, body?: unknown): Promise<Response> {
           body: JSON.stringify(body),
         },
   )
-  if (res.status === 401 && !locked) {
+  // /auth refusé (ticket expiré) : une session déjà ouverte reste valable
+  if (res.status === 401 && path !== "/auth" && !locked) {
     locked = true
     listeners.forEach((l) => l())
   }
   return res
 }
 
-/** Secret du lien ouvert par l'app (`#k=…`), sinon null. */
-export const secretFromHash = (hash: string) =>
+/** Erreur HTTP du serveur de l'app (503 : copie partagée pas encore reçue de l'app). */
+export class HttpError extends Error {
+  status: number
+  constructor(status: number) {
+    super(`web version: HTTP ${status}`)
+    this.status = status
+  }
+}
+
+/** Ticket du lien ouvert par l'app (`#k=…`, une minute, un seul usage), sinon null. */
+export const ticketFromHash = (hash: string) =>
   new URLSearchParams(hash.replace(/^#/, "")).get("k")
 
-/** Lien ouvert depuis l'app : le secret est échangé contre un cookie, puis retiré de l'adresse. */
+/** Lien ouvert depuis l'app : le ticket est échangé contre un cookie de session, puis retiré de l'adresse. */
 export async function connectWeb() {
-  const secret = secretFromHash(location.hash)
-  if (!secret) return
+  const ticket = ticketFromHash(location.hash)
+  if (!ticket) return
   history.replaceState(null, "", location.pathname + location.search)
-  await api("/auth", { secret })
+  await api("/auth", { ticket })
 }
 
 /* ---------- Commandes ---------- */
@@ -135,14 +145,14 @@ export const fetch: (url: string, init?: RequestInit) => Promise<Response> =
 export const kvPull = async (): Promise<Record<string, string>> => {
   if (!isWeb) return invoke<Record<string, string>>("kv_pull")
   const res = await api("/kv")
-  if (!res.ok) throw new Error(`web version: HTTP ${res.status}`)
+  if (!res.ok) throw new HttpError(res.status)
   return (await res.json()) as Record<string, string>
 }
 
 export const kvPush = async (entries: Record<string, string | null>) => {
   if (!isWeb) return invoke<void>("kv_push", { entries })
   const res = await api("/kv", entries)
-  if (!res.ok) throw new Error(`web version: HTTP ${res.status}`)
+  if (!res.ok) throw new HttpError(res.status)
 }
 
 /** Fenêtre de l'app seulement : son stockage devient la copie partagée. */

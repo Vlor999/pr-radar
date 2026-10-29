@@ -4,7 +4,7 @@ import { test } from "node:test"
 import {
   fromProxyResponse,
   isWeb,
-  secretFromHash,
+  ticketFromHash,
   toProxyRequest,
 } from "./platform.ts"
 
@@ -12,13 +12,13 @@ test("hors navigateur (pas de window), l'app n'est pas en version web", () => {
   assert.equal(isWeb, false)
 })
 
-test("le secret est lu dans le fragment du lien ouvert par l'app", () => {
-  assert.equal(secretFromHash("#k=abc123"), "abc123")
+test("le ticket est lu dans le fragment du lien ouvert par l'app", () => {
+  assert.equal(ticketFromHash("#k=abc123"), "abc123")
 })
 
-test("sans secret dans le fragment, rien n'est échangé", () => {
-  assert.equal(secretFromHash(""), null)
-  assert.equal(secretFromHash("#other=1"), null)
+test("sans ticket dans le fragment, rien n'est échangé", () => {
+  assert.equal(ticketFromHash(""), null)
+  assert.equal(ticketFromHash("#other=1"), null)
 })
 
 test("la requête transmise garde méthode, en-têtes et corps texte", () => {

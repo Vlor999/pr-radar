@@ -5,7 +5,14 @@ export { fetch, invoke, openUrl }
 
 export const isWeb = new URLSearchParams(location.search).has("web")
 export const useLocked = () => false
-export const secretFromHash = (_hash: string) => null
+export const ticketFromHash = (_hash: string) => null
+export class HttpError extends Error {
+  status: number
+  constructor(status: number) {
+    super(`HTTP ${status}`)
+    this.status = status
+  }
+}
 export const connectWeb = async () => {}
 export const listen = async () => () => {}
 

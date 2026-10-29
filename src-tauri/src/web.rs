@@ -3,9 +3,10 @@
 //! (requête faite ici, mêmes hôtes que le plugin HTTP) et `/kv` (copie des réglages partagés).
 
 use std::collections::{HashMap, HashSet};
-use std::net::{Ipv4Addr, TcpListener};
+use std::net::{IpAddr, Ipv4Addr, TcpListener};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use axum::Router;
 use axum::body::Bytes;
@@ -23,9 +24,12 @@ pub const DEFAULT_PORT: u16 = 14200;
 /// En dessous : ports réservés au système.
 const MIN_PORT: u16 = 1024;
 const CONFIG_FILE: &str = "web.json";
-/// Entrée du trousseau du secret du lien (aucun compte GitHub ou Slack ne porte ce nom).
+/// Ancienne entrée du trousseau (secret permanent du lien, avant les tickets) : effacée à la désinstallation,
+/// jamais lisible par le navigateur.
 const SECRET_ACCOUNT: &str = "web-secret";
 const COOKIE: &str = "pr_radar_web";
+/// Durée de vie d'un ticket du lien : le temps que le navigateur s'ouvre.
+const TICKET_TTL: Duration = Duration::from_secs(60);
 /// Erreur traduite par l'interface.
 const PORT_BUSY: &str = "port-busy";
 /// CSP de tauri.conf.json, `connect-src` ramené à la même origine (plus d'IPC : tout passe par ce serveur).
@@ -41,6 +45,22 @@ const SLACK_METHODS: [&str; 5] = [
 const MAX_REDIRECTS: usize = 10;
 /// GitHub refuse une requête sans User-Agent (403) ; même valeur que tauri-plugin-http (`<crate>/<version>`).
 const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+const FETCH_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const FETCH_TIMEOUT: Duration = Duration::from_secs(60);
+/// Plus grosse réponse transmise au navigateur (une page GraphQL de PR fait quelques centaines de Ko).
+const FETCH_MAX_BYTES: usize = 20 * 1024 * 1024;
+/// Clés partagées : même règle que `isSynced` (src/lib/sync.ts).
+const KV_PREFIX: &str = "pr-radar:";
+const KV_SEEN: &str = "pr-seen";
+const KV_LOCAL_ONLY: [&str; 3] = [
+    "pr-radar:theme",
+    "pr-radar:last-notification",
+    "pr-radar:mcp-history",
+];
+/// Taille totale de la copie partagée (clés + valeurs), sous le quota de localStorage (~5 Mo).
+const KV_MAX_BYTES: usize = 4 * 1024 * 1024;
+/// Comptes enregistrés (src/lib/auth.ts) : seuls leurs hôtes peuvent être autorisés depuis le navigateur.
+const ACCOUNTS_KEY: &str = "pr-radar:accounts";
 
 /* ---------- Réglage lu au lancement : activé, port ---------- */
 
@@ -85,11 +105,10 @@ fn save_config(app: &AppHandle, c: Config) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/* ---------- État ---------- */
+/* ---------- Copie partagée (KV) ---------- */
 
-struct Server {
-    port: u16,
-    task: tauri::async_runtime::JoinHandle<()>,
+fn kv_key_ok(k: &str) -> bool {
+    (k.starts_with(KV_PREFIX) || k == KV_SEEN) && !KV_LOCAL_ONLY.contains(&k)
 }
 
 #[derive(Default)]
@@ -99,59 +118,101 @@ struct Kv {
     map: HashMap<String, String>,
 }
 
+impl Kv {
+    fn size(map: &HashMap<String, String>) -> usize {
+        map.iter().map(|(k, v)| k.len() + v.len()).sum()
+    }
+
+    /// Écritures (`None` : clé effacée) ; clés non partagées ignorées ; refusées en bloc au-delà de la taille maximale.
+    fn apply(&mut self, entries: HashMap<String, Option<String>>) -> Result<(), String> {
+        let mut next = self.map.clone();
+        for (k, v) in entries.into_iter().filter(|(k, _)| kv_key_ok(k)) {
+            match v {
+                Some(v) => next.insert(k, v),
+                None => next.remove(&k),
+            };
+        }
+        if Self::size(&next) > KV_MAX_BYTES {
+            return Err("shared storage full".into());
+        }
+        self.map = next;
+        Ok(())
+    }
+
+    /// Instantané de la fenêtre de l'app : référence au lancement ; ensuite (rechargement de la fenêtre)
+    /// les valeurs déjà présentes, écrites entre-temps par le navigateur, sont gardées.
+    fn seed(&mut self, entries: HashMap<String, String>) -> Result<(), String> {
+        let mut next = if self.seeded {
+            self.map.clone()
+        } else {
+            HashMap::new()
+        };
+        for (k, v) in entries.into_iter().filter(|(k, _)| kv_key_ok(k)) {
+            next.entry(k).or_insert(v);
+        }
+        if Self::size(&next) > KV_MAX_BYTES {
+            return Err("shared storage full".into());
+        }
+        self.map = next;
+        self.seeded = true;
+        Ok(())
+    }
+
+    fn snapshot(&self) -> Result<HashMap<String, String>, String> {
+        if self.seeded {
+            Ok(self.map.clone())
+        } else {
+            Err("not seeded".into())
+        }
+    }
+}
+
+/* ---------- État ---------- */
+
+struct Server {
+    port: u16,
+    task: tauri::async_runtime::JoinHandle<()>,
+}
+
 #[derive(Default)]
 pub struct Web {
     server: Mutex<Option<Server>>,
+    /// un seul `web_configure` à la fois (arrêt, attente du port, démarrage)
+    configure: tauri::async_runtime::Mutex<()>,
     /// incrémenté à chaque arrêt : une connexion restée ouverte vers l'ancien serveur est refusée
     generation: AtomicU64,
     error: Mutex<Option<String>>,
-    secret: Mutex<Option<String>>,
+    tickets: Mutex<Tickets>,
     sessions: Mutex<Sessions>,
     /// hôtes GitHub Enterprise autorisés par `allow_host`
     hosts: Arc<Mutex<HashSet<String>>>,
     kv: Mutex<Kv>,
-    client: OnceLock<reqwest::Client>,
+    client: OnceLock<Option<reqwest::Client>>,
 }
 
 fn state(app: &AppHandle) -> &Web {
     app.state::<Web>().inner()
 }
 
-/// Ajoute un hôte GitHub Enterprise à ceux que `/fetch` peut joindre ; faux s'il y était déjà.
-pub fn allow(app: &AppHandle, host: &str) -> bool {
-    state(app).hosts.lock().unwrap().insert(host.to_string())
+pub fn host_allowed(app: &AppHandle, host: &str) -> bool {
+    state(app).hosts.lock().unwrap().contains(host)
+}
+
+/// Hôte GitHub Enterprise que `/fetch` peut joindre (après l'ajout de la capacité).
+pub fn allow(app: &AppHandle, host: &str) {
+    state(app).hosts.lock().unwrap().insert(host.to_string());
 }
 
 pub fn running(app: &AppHandle) -> bool {
     state(app).server.lock().unwrap().is_some()
 }
 
-/* ---------- Secret du lien ---------- */
+/* ---------- Tickets du lien, sessions ---------- */
 
-fn new_secret() -> Result<String, String> {
+fn random_hex() -> Result<String, String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|e| e.to_string())?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
-}
-
-/// Secret enregistré au trousseau, créé au premier usage puis gardé.
-fn secret(app: &AppHandle) -> Result<String, String> {
-    let mut cached = state(app).secret.lock().unwrap();
-    if let Some(s) = cached.as_ref() {
-        return Ok(s.clone());
-    }
-    let entry = crate::entry(SECRET_ACCOUNT)?;
-    let s = match entry.get_password() {
-        Ok(s) => s,
-        Err(Error::NoEntry) => {
-            let s = new_secret()?;
-            entry.set_password(&s).map_err(|e| e.to_string())?;
-            s
-        }
-        Err(e) => return Err(e.to_string()),
-    };
-    *cached = Some(s.clone());
-    Ok(s)
 }
 
 /// Comparaison en temps constant (longueurs publiques).
@@ -159,26 +220,40 @@ fn same(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-/* ---------- Contrôles des requêtes ---------- */
+/// Tickets du lien ouvert par l'app : aléatoires, une minute, un seul usage.
+#[derive(Default)]
+struct Tickets(Vec<(String, Instant)>);
 
-/// En-tête Host attendu (anti DNS rebinding) : 127.0.0.1 ou localhost, sur le port du serveur.
-fn host_ok(host: Option<&str>, port: u16) -> bool {
-    host.is_some_and(|h| h == format!("127.0.0.1:{port}") || h == format!("localhost:{port}"))
+impl Tickets {
+    fn issue(&mut self, now: Instant) -> Result<String, String> {
+        self.0.retain(|(_, exp)| *exp > now);
+        let t = random_hex()?;
+        self.0.push((t.clone(), now + TICKET_TTL));
+        Ok(t)
+    }
+
+    /// Vrai si le ticket est connu et pas expiré ; il ne vaut plus rien ensuite.
+    fn take(&mut self, given: &str, now: Instant) -> bool {
+        let found = self
+            .0
+            .iter()
+            .position(|(t, exp)| same(t.as_bytes(), given.as_bytes()) && *exp > now);
+        found.map(|i| self.0.remove(i)).is_some()
+    }
+
+    fn revoke_all(&mut self) {
+        self.0.clear();
+    }
 }
 
-/// Origin (envoyé par le navigateur sur les POST) : absent ou la page elle-même.
-fn origin_ok(origin: Option<&str>, host: &str) -> bool {
-    origin.is_none_or(|o| o == format!("http://{host}"))
-}
-
-/// Sessions des navigateurs : valeur aléatoire par échange du secret, jamais le secret lui-même
-/// (les cookies de 127.0.0.1 partent vers tous ses ports). En mémoire : perdues à l'arrêt du serveur.
+/// Sessions des navigateurs : valeur aléatoire par ticket échangé (les cookies de 127.0.0.1 partent vers
+/// tous ses ports, le ticket n'y est donc jamais). En mémoire : perdues à l'arrêt du serveur.
 #[derive(Default)]
 struct Sessions(HashSet<String>);
 
 impl Sessions {
     fn issue(&mut self) -> Result<String, String> {
-        let s = new_secret()?;
+        let s = random_hex()?;
         self.0.insert(s.clone());
         Ok(s)
     }
@@ -196,6 +271,39 @@ impl Sessions {
     }
 }
 
+/* ---------- Contrôles des requêtes ---------- */
+
+/// En-tête Host attendu (anti DNS rebinding) : 127.0.0.1 ou localhost, sur le port du serveur.
+fn host_ok(host: Option<&str>, port: u16) -> bool {
+    host.is_some_and(|h| h == format!("127.0.0.1:{port}") || h == format!("localhost:{port}"))
+}
+
+/// Origin (envoyé par le navigateur sur les POST) : absent ou la page elle-même.
+fn origin_ok(origin: Option<&str>, host: &str) -> bool {
+    origin.is_none_or(|o| o == format!("http://{host}"))
+}
+
+/// Contrôles d'une requête, dans l'ordre : serveur encore actif, Host et Origin, session (API).
+fn admit(
+    current: bool,
+    port: u16,
+    host: Option<&str>,
+    origin: Option<&str>,
+    api: bool,
+    session: impl FnOnce() -> bool,
+) -> Result<(), StatusCode> {
+    if !current {
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    }
+    if !host_ok(host, port) || !origin_ok(origin, host.unwrap_or_default()) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if api && !session() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(())
+}
+
 /// Commandes ouvertes au navigateur, et comptes du trousseau qu'elles peuvent toucher.
 fn command_allowed(cmd: &str, account: Option<&str>) -> bool {
     match cmd {
@@ -205,6 +313,25 @@ fn command_allowed(cmd: &str, account: Option<&str>) -> bool {
         "set_token" => account.is_some_and(|a| a.starts_with("slack:")),
         _ => false,
     }
+}
+
+/// `allow_host` depuis le navigateur : un nom de domaine public (pas d'IP, de nom sans point, de
+/// localhost), et seulement l'hôte d'un compte déjà enregistré dans l'app.
+fn browser_host_ok(host: &str, accounts: Option<&str>) -> bool {
+    let name = host.split_once(':').map_or(host, |(n, _)| n);
+    let public = name.contains('.')
+        && name.parse::<IpAddr>().is_err()
+        && !name.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+        && name != "localhost"
+        && !name.ends_with(".localhost")
+        && !name.ends_with(".local");
+    let known = accounts
+        .and_then(|a| serde_json::from_str::<Vec<Value>>(a).ok())
+        .is_some_and(|list| {
+            list.iter()
+                .any(|a| a.get("host").and_then(Value::as_str) == Some(host))
+        });
+    public && known
 }
 
 /// Même périmètre que la capacité `http:default` + hôtes ajoutés par `allow_host`.
@@ -233,6 +360,24 @@ fn fetch_allowed(url: &str, hosts: &HashSet<String>) -> bool {
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum Redirect {
+    Follow,
+    Stop,
+    TooMany,
+}
+
+/// Redirection d'une requête de `/fetch` : seulement vers une adresse autorisée elle aussi.
+fn redirect(previous: usize, url: &str, hosts: &HashSet<String>) -> Redirect {
+    if previous >= MAX_REDIRECTS {
+        Redirect::TooMany
+    } else if fetch_allowed(url, hosts) {
+        Redirect::Follow
+    } else {
+        Redirect::Stop
+    }
+}
+
 #[derive(Clone)]
 struct Ctx {
     app: AppHandle,
@@ -244,33 +389,33 @@ fn status(code: StatusCode) -> Response {
     (code, [(header::CACHE_CONTROL, "no-store")]).into_response()
 }
 
-/// Host (toutes les routes), puis cookie (routes de l'API).
 #[allow(clippy::result_large_err)]
 fn guard(ctx: &Ctx, headers: &HeaderMap, api: bool) -> Result<(), Response> {
     let web = state(&ctx.app);
-    if web.generation.load(Ordering::SeqCst) != ctx.generation {
-        // serveur arrêté : la connexion encore ouverte est fermée
-        return Err((
-            StatusCode::SERVICE_UNAVAILABLE,
-            [(header::CONNECTION, "close")],
-        )
-            .into_response());
-    }
     let text = |h| headers.get(h).and_then(|v: &HeaderValue| v.to_str().ok());
-    let host = text(header::HOST);
-    if !host_ok(host, ctx.port) || !origin_ok(text(header::ORIGIN), host.unwrap_or_default()) {
-        return Err(status(StatusCode::FORBIDDEN));
-    }
-    if api {
-        let cookies = headers
-            .get_all(header::COOKIE)
-            .iter()
-            .filter_map(|v| v.to_str().ok());
-        if !web.sessions.lock().unwrap().valid(cookies) {
-            return Err(status(StatusCode::UNAUTHORIZED));
+    let current = web.generation.load(Ordering::SeqCst) == ctx.generation;
+    admit(
+        current,
+        ctx.port,
+        text(header::HOST),
+        text(header::ORIGIN),
+        api,
+        || {
+            let cookies = headers
+                .get_all(header::COOKIE)
+                .iter()
+                .filter_map(|v| v.to_str().ok());
+            web.sessions.lock().unwrap().valid(cookies)
+        },
+    )
+    .map_err(|code| {
+        if code == StatusCode::SERVICE_UNAVAILABLE {
+            // serveur arrêté : la connexion encore ouverte est fermée
+            (code, [(header::CONNECTION, "close")]).into_response()
+        } else {
+            status(code)
         }
-    }
-    Ok(())
+    })
 }
 
 fn json_response(code: StatusCode, v: &Value) -> Response {
@@ -310,22 +455,20 @@ async fn asset(State(ctx): State<Ctx>, method: Method, uri: Uri, headers: Header
     }
 }
 
-/// Échange le secret du lien (`#k=…`) contre un cookie de session.
+/// Échange le ticket du lien (`#k=…`) contre un cookie de session.
 async fn auth(State(ctx): State<Ctx>, headers: HeaderMap, body: Bytes) -> Response {
     if let Err(r) = guard(&ctx, &headers, false) {
         return r;
     }
     let given = serde_json::from_slice::<Value>(&body)
         .ok()
-        .and_then(|v| v.get("secret")?.as_str().map(str::to_owned))
+        .and_then(|v| v.get("ticket")?.as_str().map(str::to_owned))
         .unwrap_or_default();
-    let Ok(secret) = secret(&ctx.app) else {
-        return status(StatusCode::INTERNAL_SERVER_ERROR);
-    };
-    if !same(given.as_bytes(), secret.as_bytes()) {
+    let web = state(&ctx.app);
+    if !web.tickets.lock().unwrap().take(&given, Instant::now()) {
         return status(StatusCode::UNAUTHORIZED);
     }
-    let Ok(session) = state(&ctx.app).sessions.lock().unwrap().issue() else {
+    let Ok(session) = web.sessions.lock().unwrap().issue() else {
         return status(StatusCode::INTERNAL_SERVER_ERROR);
     };
     (
@@ -356,7 +499,14 @@ fn dispatch(app: &AppHandle, cmd: &str, args: &Value) -> Result<Value, String> {
         "get_token" => crate::get_token(arg("account")?).map(|t| json!(t)),
         "set_token" => crate::set_token(arg("account")?, arg("token")?).map(|()| Value::Null),
         "gh_token" => Ok(json!(crate::gh_token())),
-        "allow_host" => crate::allow_host(app.clone(), arg("host")?).map(|()| Value::Null),
+        "allow_host" => {
+            let host = arg("host")?;
+            let accounts = state(app).kv.lock().unwrap().map.get(ACCOUNTS_KEY).cloned();
+            if !browser_host_ok(&host, accounts.as_deref()) {
+                return Err(format!("host not allowed: {host}"));
+            }
+            crate::allow_host(app.clone(), host).map(|()| Value::Null)
+        }
         _ => Err(format!("command not allowed: {cmd}")),
     }
 }
@@ -417,24 +567,27 @@ fn forwarded_headers(given: Vec<(String, String)>) -> Vec<(String, String)> {
     out
 }
 
-fn client(app: &AppHandle) -> &reqwest::Client {
+/// Client de `/fetch`, créé une fois ; `None` si sa création a échoué.
+fn client(app: &AppHandle) -> Option<&reqwest::Client> {
     let web = state(app);
-    web.client.get_or_init(|| {
-        let hosts = web.hosts.clone();
-        reqwest::Client::builder()
-            // redirection : seulement vers une adresse autorisée elle aussi
-            .redirect(reqwest::redirect::Policy::custom(move |a| {
-                if a.previous().len() >= MAX_REDIRECTS {
-                    a.error("too many redirects")
-                } else if fetch_allowed(a.url().as_str(), &hosts.lock().unwrap()) {
-                    a.follow()
-                } else {
-                    a.stop()
-                }
-            }))
-            .build()
-            .unwrap_or_default()
-    })
+    web.client
+        .get_or_init(|| {
+            let hosts = web.hosts.clone();
+            reqwest::Client::builder()
+                .connect_timeout(FETCH_CONNECT_TIMEOUT)
+                .timeout(FETCH_TIMEOUT)
+                .redirect(reqwest::redirect::Policy::custom(move |a| {
+                    let hosts = hosts.lock().unwrap().clone();
+                    match redirect(a.previous().len(), a.url().as_str(), &hosts) {
+                        Redirect::Follow => a.follow(),
+                        Redirect::Stop => a.stop(),
+                        Redirect::TooMany => a.error("too many redirects"),
+                    }
+                }))
+                .build()
+                .ok()
+        })
+        .as_ref()
 }
 
 /// Requête HTTP faite par l'app pour le navigateur (pas de CORS côté GitHub et Slack).
@@ -456,14 +609,17 @@ async fn fetch(State(ctx): State<Ctx>, headers: HeaderMap, body: Bytes) -> Respo
     else {
         return status(StatusCode::BAD_REQUEST);
     };
-    let mut out = client(&ctx.app).request(method, &req.url);
+    let Some(client) = client(&ctx.app) else {
+        return status(StatusCode::INTERNAL_SERVER_ERROR);
+    };
+    let mut out = client.request(method, &req.url);
     for (k, v) in forwarded_headers(req.headers) {
         out = out.header(k, v);
     }
     if let Some(b) = req.body {
         out = out.body(b);
     }
-    let res = match out.send().await {
+    let mut res = match out.send().await {
         Ok(r) => r,
         Err(e) => return json_response(StatusCode::BAD_GATEWAY, &json!(e.to_string())),
     };
@@ -473,23 +629,32 @@ async fn fetch(State(ctx): State<Ctx>, headers: HeaderMap, body: Bytes) -> Respo
         .iter()
         .filter_map(|(k, v)| Some((k.to_string(), v.to_str().ok()?.to_string())))
         .collect();
-    let text = res.text().await.unwrap_or_default();
+    let mut bytes = Vec::new();
+    loop {
+        match res.chunk().await {
+            Ok(Some(c)) if bytes.len() + c.len() <= FETCH_MAX_BYTES => bytes.extend_from_slice(&c),
+            Ok(Some(_)) => {
+                return json_response(StatusCode::BAD_GATEWAY, &json!("response too large"));
+            }
+            Ok(None) => break,
+            Err(e) => return json_response(StatusCode::BAD_GATEWAY, &json!(e.to_string())),
+        }
+    }
     json_response(
         StatusCode::OK,
-        &json!({ "status": code, "headers": headers, "body": text }),
+        &json!({ "status": code, "headers": headers, "body": String::from_utf8_lossy(&bytes) }),
     )
 }
 
-/// Copie des réglages partagés : lecture.
+/// Copie des réglages partagés : lecture (503 tant que l'app n'a pas envoyé son instantané).
 async fn kv_get(State(ctx): State<Ctx>, headers: HeaderMap) -> Response {
     if let Err(r) = guard(&ctx, &headers, true) {
         return r;
     }
-    let kv = state(&ctx.app).kv.lock().unwrap();
-    if !kv.seeded {
-        return status(StatusCode::SERVICE_UNAVAILABLE);
+    match state(&ctx.app).kv.lock().unwrap().snapshot() {
+        Ok(map) => json_response(StatusCode::OK, &json!(map)),
+        Err(_) => status(StatusCode::SERVICE_UNAVAILABLE),
     }
-    json_response(StatusCode::OK, &json!(kv.map))
 }
 
 /// Copie des réglages partagés : écritures du navigateur (`null` : clé effacée).
@@ -500,27 +665,21 @@ async fn kv_post(State(ctx): State<Ctx>, headers: HeaderMap, body: Bytes) -> Res
     let Ok(entries) = serde_json::from_slice::<HashMap<String, Option<String>>>(&body) else {
         return status(StatusCode::BAD_REQUEST);
     };
-    if !state(&ctx.app).kv.lock().unwrap().seeded {
+    let mut kv = state(&ctx.app).kv.lock().unwrap();
+    if !kv.seeded {
         return status(StatusCode::SERVICE_UNAVAILABLE);
     }
-    kv_apply(&ctx.app, entries);
-    status(StatusCode::NO_CONTENT)
-}
-
-fn kv_apply(app: &AppHandle, entries: HashMap<String, Option<String>>) {
-    let mut kv = state(app).kv.lock().unwrap();
-    for (k, v) in entries {
-        match v {
-            Some(v) => kv.map.insert(k, v),
-            None => kv.map.remove(&k),
-        };
+    match kv.apply(entries) {
+        Ok(()) => status(StatusCode::NO_CONTENT),
+        Err(e) => json_response(StatusCode::PAYLOAD_TOO_LARGE, &json!(e)),
     }
 }
 
 /* ---------- Démarrage, arrêt ---------- */
 
 fn start(app: &AppHandle, port: u16) -> Result<(), String> {
-    secret(app)?;
+    // un serveur encore en place (appel direct) est arrêté avant
+    let _ = stop(app);
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port)).map_err(|e| {
         if e.kind() == std::io::ErrorKind::AddrInUse {
             PORT_BUSY.to_string()
@@ -551,11 +710,12 @@ fn start(app: &AppHandle, port: u16) -> Result<(), String> {
     Ok(())
 }
 
-/// Arrête le serveur ; renvoie sa tâche, à attendre pour que le port soit libéré.
+/// Arrête le serveur, ferme sessions et tickets ; renvoie sa tâche, à attendre pour que le port soit libéré.
 fn stop(app: &AppHandle) -> Option<tauri::async_runtime::JoinHandle<()>> {
     let web = state(app);
     web.generation.fetch_add(1, Ordering::SeqCst);
     web.sessions.lock().unwrap().revoke_all();
+    web.tickets.lock().unwrap().revoke_all();
     let server = web.server.lock().unwrap().take()?;
     server.task.abort();
     Some(server.task)
@@ -580,7 +740,18 @@ pub fn shutdown(app: &AppHandle) {
     let _ = stop(app);
 }
 
-/// Ouvre l'interface dans le navigateur du système, avec le secret dans le fragment (jamais envoyé au serveur).
+/// Désinstallation : serveur arrêté, copie partagée vidée, ancienne entrée du trousseau effacée.
+pub fn forget(app: &AppHandle) -> Result<(), String> {
+    let _ = stop(app);
+    *state(app).kv.lock().unwrap() = Kv::default();
+    match crate::entry(SECRET_ACCOUNT)?.delete_credential() {
+        Ok(()) | Err(Error::NoEntry) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Ouvre l'interface dans le navigateur du système, avec un ticket à usage unique dans le fragment
+/// (jamais envoyé au serveur par une requête de page).
 pub fn open(app: &AppHandle) -> Result<(), String> {
     let port = state(app)
         .server
@@ -589,9 +760,9 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
         .as_ref()
         .map(|s| s.port)
         .ok_or("web server not running")?;
-    let secret = secret(app)?;
+    let ticket = state(app).tickets.lock().unwrap().issue(Instant::now())?;
     app.opener()
-        .open_url(format!("http://127.0.0.1:{port}/#k={secret}"), None::<&str>)
+        .open_url(format!("http://127.0.0.1:{port}/#k={ticket}"), None::<&str>)
         .map_err(|e| e.to_string())
 }
 
@@ -624,6 +795,7 @@ pub async fn web_configure(app: AppHandle, enabled: bool, port: u16) -> Result<S
     if port < MIN_PORT {
         return Err(format!("invalid port: {port}"));
     }
+    let _one = state(&app).configure.lock().await;
     save_config(&app, Config { enabled, port })?;
     if let Some(task) = stop(&app) {
         let _ = task.await;
@@ -633,18 +805,15 @@ pub async fn web_configure(app: AppHandle, enabled: bool, port: u16) -> Result<S
         set_error(&app, Some(e));
     }
     crate::refresh_tray(&app);
-    web_status(app)
+    web_status(app.clone())
 }
 
-/// Nouveau secret : toutes les sessions sont fermées, les navigateurs connectés perdent l'accès.
+/// Déconnecte tous les navigateurs : sessions et tickets en cours fermés.
 #[tauri::command]
-pub fn web_rotate_secret(app: AppHandle) -> Result<(), String> {
-    let s = new_secret()?;
-    crate::entry(SECRET_ACCOUNT)?
-        .set_password(&s)
-        .map_err(|e| e.to_string())?;
-    *state(&app).secret.lock().unwrap() = Some(s);
-    state(&app).sessions.lock().unwrap().revoke_all();
+pub fn web_revoke(app: AppHandle) -> Result<(), String> {
+    let web = state(&app);
+    web.sessions.lock().unwrap().revoke_all();
+    web.tickets.lock().unwrap().revoke_all();
     Ok(())
 }
 
@@ -653,24 +822,21 @@ pub fn web_open(app: AppHandle) -> Result<(), String> {
     open(&app)
 }
 
-/// Lancement de la fenêtre : son localStorage devient la copie partagée.
+/// Lancement (ou rechargement) de la fenêtre : son localStorage alimente la copie partagée.
 #[tauri::command]
 pub fn kv_seed(app: AppHandle, entries: HashMap<String, String>) -> Result<(), String> {
-    let mut kv = state(&app).kv.lock().unwrap();
-    kv.map = entries;
-    kv.seeded = true;
-    Ok(())
+    state(&app).kv.lock().unwrap().seed(entries)
 }
 
 #[tauri::command]
 pub fn kv_push(app: AppHandle, entries: HashMap<String, Option<String>>) -> Result<(), String> {
-    kv_apply(&app, entries);
-    Ok(())
+    state(&app).kv.lock().unwrap().apply(entries)
 }
 
+/// Erreur tant que la copie n'a pas reçu l'instantané de la fenêtre : rien n'est appliqué.
 #[tauri::command]
 pub fn kv_pull(app: AppHandle) -> Result<HashMap<String, String>, String> {
-    Ok(state(&app).kv.lock().unwrap().map.clone())
+    state(&app).kv.lock().unwrap().snapshot()
 }
 
 #[cfg(test)]
@@ -699,6 +865,60 @@ mod tests {
         assert!(origin_ok(Some("http://127.0.0.1:14200"), "127.0.0.1:14200"));
         assert!(!origin_ok(Some("http://evil.com"), "127.0.0.1:14200"));
         assert!(!origin_ok(Some("null"), "127.0.0.1:14200"));
+    }
+
+    const HOST: Option<&str> = Some("127.0.0.1:14200");
+
+    #[test]
+    fn admit_order() {
+        let ok = || true;
+        let no = || false;
+        assert_eq!(admit(true, 14200, HOST, None, true, ok), Ok(()));
+        assert_eq!(admit(true, 14200, HOST, None, false, no), Ok(()));
+        assert_eq!(
+            admit(false, 14200, HOST, None, true, ok),
+            Err(StatusCode::SERVICE_UNAVAILABLE)
+        );
+        assert_eq!(
+            admit(true, 14200, Some("evil.com:14200"), None, true, ok),
+            Err(StatusCode::FORBIDDEN)
+        );
+        assert_eq!(
+            admit(true, 14200, HOST, Some("http://evil.com"), true, ok),
+            Err(StatusCode::FORBIDDEN)
+        );
+        assert_eq!(
+            admit(true, 14200, HOST, None, true, no),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+    }
+
+    #[test]
+    fn ticket_is_single_use() {
+        let now = Instant::now();
+        let mut t = Tickets::default();
+        let id = t.issue(now).unwrap();
+        assert!(t.take(&id, now));
+        assert!(!t.take(&id, now));
+    }
+
+    #[test]
+    fn ticket_expires() {
+        let now = Instant::now();
+        let mut t = Tickets::default();
+        let id = t.issue(now).unwrap();
+        assert!(!t.take(&id, now + TICKET_TTL));
+    }
+
+    #[test]
+    fn unknown_or_revoked_ticket_is_refused() {
+        let now = Instant::now();
+        let mut t = Tickets::default();
+        let id = t.issue(now).unwrap();
+        assert!(!t.take("", now));
+        assert!(!t.take(&id[1..], now));
+        t.revoke_all();
+        assert!(!t.take(&id, now));
     }
 
     #[test]
@@ -736,30 +956,8 @@ mod tests {
     }
 
     #[test]
-    fn default_user_agent() {
-        let h = |v: &[(&str, &str)]| {
-            forwarded_headers(
-                v.iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect(),
-            )
-        };
-        assert!(
-            h(&[("Authorization", "Bearer t")]).contains(&("user-agent".into(), USER_AGENT.into()))
-        );
-        assert_eq!(
-            h(&[("User-Agent", "custom")]),
-            vec![("user-agent".to_string(), "custom".to_string())]
-        );
-        assert_eq!(
-            h(&[("Cookie", "a=1"), ("Host", "x"), ("Origin", "o")]),
-            vec![("user-agent".to_string(), USER_AGENT.to_string())]
-        );
-    }
-
-    #[test]
-    fn secrets_differ_and_are_hex() {
-        let (a, b) = (new_secret().unwrap(), new_secret().unwrap());
+    fn random_values_differ_and_are_hex() {
+        let (a, b) = (random_hex().unwrap(), random_hex().unwrap());
         assert_eq!(a.len(), 64);
         assert!(a.bytes().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a, b);
@@ -782,7 +980,7 @@ mod tests {
             "uninstall_plan",
             "set_tray",
             "web_configure",
-            "web_rotate_secret",
+            "web_revoke",
             "kv_seed",
             "plugin:notification|notify",
         ] {
@@ -791,9 +989,61 @@ mod tests {
     }
 
     #[test]
+    fn browser_host_filter() {
+        let accounts = r#"[{"id":"a","host":"ghe.example.com"},{"id":"b","host":"ghe2.example.com:8443"},{"id":"c","host":"10.0.0.1"},{"id":"d","host":"intranet"},{"id":"e","host":"localhost"},{"id":"f","host":"x.localhost"},{"id":"g","host":"nas.local"}]"#;
+        assert!(browser_host_ok("ghe.example.com", Some(accounts)));
+        assert!(browser_host_ok("ghe2.example.com:8443", Some(accounts)));
+        for bad in [
+            "10.0.0.1",
+            "intranet",
+            "localhost",
+            "x.localhost",
+            "nas.local",
+            "other.example.com",
+        ] {
+            assert!(!browser_host_ok(bad, Some(accounts)), "{bad}");
+        }
+        assert!(!browser_host_ok("ghe.example.com", None));
+        assert!(!browser_host_ok("ghe.example.com", Some("not json")));
+        assert!(!browser_host_ok(
+            "192.168.1.10",
+            Some(r#"[{"host":"192.168.1.10"}]"#)
+        ));
+        assert!(!browser_host_ok(
+            "169.254.1.1",
+            Some(r#"[{"host":"169.254.1.1"}]"#)
+        ));
+    }
+
+    #[test]
+    fn default_user_agent() {
+        let h = |v: &[(&str, &str)]| {
+            forwarded_headers(
+                v.iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            )
+        };
+        assert!(
+            h(&[("Authorization", "Bearer t")]).contains(&("user-agent".into(), USER_AGENT.into()))
+        );
+        assert_eq!(
+            h(&[("User-Agent", "custom")]),
+            vec![("user-agent".to_string(), "custom".to_string())]
+        );
+        assert_eq!(
+            h(&[("Cookie", "a=1"), ("Host", "x"), ("Origin", "o")]),
+            vec![("user-agent".to_string(), USER_AGENT.to_string())]
+        );
+    }
+
+    fn hosts() -> HashSet<String> {
+        ["ghe.example.com".into(), "ghe2.example.com:8443".into()].into()
+    }
+
+    #[test]
     fn fetch_allowlist() {
-        let hosts: HashSet<String> =
-            ["ghe.example.com".into(), "ghe2.example.com:8443".into()].into();
+        let hosts = hosts();
         for ok in [
             "https://api.github.com/graphql",
             "https://api.github.com/repos/acme/web",
@@ -824,5 +1074,102 @@ mod tests {
         ] {
             assert!(!fetch_allowed(bad, &hosts), "{bad}");
         }
+    }
+
+    #[test]
+    fn redirect_decision() {
+        let hosts = hosts();
+        assert_eq!(
+            redirect(0, "https://api.github.com/repositories/1", &hosts),
+            Redirect::Follow
+        );
+        assert_eq!(
+            redirect(0, "https://evil.com/api/x", &hosts),
+            Redirect::Stop
+        );
+        assert_eq!(
+            redirect(MAX_REDIRECTS, "https://api.github.com/x", &hosts),
+            Redirect::TooMany
+        );
+    }
+
+    fn entries(v: &[(&str, Option<&str>)]) -> HashMap<String, Option<String>> {
+        v.iter()
+            .map(|(k, v)| (k.to_string(), v.map(str::to_string)))
+            .collect()
+    }
+
+    fn seed(v: &[(&str, &str)]) -> HashMap<String, String> {
+        v.iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn kv_is_unavailable_until_seeded() {
+        assert!(Kv::default().snapshot().is_err());
+        let mut kv = Kv::default();
+        kv.seed(seed(&[("pr-radar:repos", "[]")])).unwrap();
+        assert_eq!(kv.snapshot().unwrap(), seed(&[("pr-radar:repos", "[]")]));
+    }
+
+    #[test]
+    fn kv_apply_writes_deletes_and_filters_keys() {
+        let mut kv = Kv::default();
+        kv.seed(seed(&[("pr-radar:repos", "[]"), ("pr-seen", "{}")]))
+            .unwrap();
+        kv.apply(entries(&[
+            ("pr-radar:repos", Some("[\"a/b\"]")),
+            ("pr-seen", None),
+            ("pr-radar:theme", Some("dark")),
+            ("other", Some("x")),
+        ]))
+        .unwrap();
+        assert_eq!(
+            kv.snapshot().unwrap(),
+            seed(&[("pr-radar:repos", "[\"a/b\"]")])
+        );
+    }
+
+    #[test]
+    fn kv_refuses_writes_past_the_size_limit() {
+        let mut kv = Kv::default();
+        kv.seed(seed(&[("pr-radar:repos", "[]")])).unwrap();
+        let big = "x".repeat(KV_MAX_BYTES);
+        assert!(kv.apply(entries(&[("pr-radar:big", Some(&big))])).is_err());
+        assert_eq!(kv.snapshot().unwrap(), seed(&[("pr-radar:repos", "[]")]));
+    }
+
+    #[test]
+    fn kv_reseed_keeps_values_written_meanwhile() {
+        let mut kv = Kv::default();
+        kv.seed(seed(&[
+            ("pr-radar:settings", "old"),
+            ("pr-radar:repos", "[]"),
+        ]))
+        .unwrap();
+        kv.apply(entries(&[("pr-radar:settings", Some("browser"))]))
+            .unwrap();
+        kv.seed(seed(&[
+            ("pr-radar:settings", "old"),
+            ("pr-radar:accounts", "[]"),
+        ]))
+        .unwrap();
+        assert_eq!(
+            kv.snapshot().unwrap(),
+            seed(&[
+                ("pr-radar:settings", "browser"),
+                ("pr-radar:repos", "[]"),
+                ("pr-radar:accounts", "[]"),
+            ])
+        );
+    }
+
+    #[test]
+    fn kv_first_seed_ignores_local_only_keys() {
+        let mut kv = Kv::default();
+        kv.seed(seed(&[("pr-radar:theme", "dark"), ("pr-seen", "{}")]))
+            .unwrap();
+        assert_eq!(kv.snapshot().unwrap(), seed(&[("pr-seen", "{}")]));
     }
 }
