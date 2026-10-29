@@ -1,5 +1,4 @@
 import { getVersion } from "@tauri-apps/api/app"
-import { invoke } from "@tauri-apps/api/core"
 import { cn } from "cn"
 import {
   ArrowLeft,
@@ -39,6 +38,7 @@ import {
 } from "@/lib/github"
 import { currentLang, locale, strings, useStrings, type Lang } from "@/lib/i18n"
 import { openExternal } from "@/lib/open"
+import { invoke, isWeb } from "@/lib/platform"
 import {
   dropSnapshots,
   LOW,
@@ -68,9 +68,14 @@ const SECTIONS = [
   "affichage",
   "repos",
   "donnees",
+  "web",
   "raccourcis",
   "a-propos",
 ] as const
+
+/** Sections masquées dans la version web (navigateur) : elles pilotent l'app elle-même. */
+const DESKTOP_ONLY: readonly string[] = ["web"]
+const SHOWN = SECTIONS.filter((id) => !(isWeb && DESKTOP_ONLY.includes(id)))
 
 const S = strings(
   {
@@ -83,6 +88,7 @@ const S = strings(
       affichage: "Affichage des PR",
       repos: "Repos suivis",
       donnees: "Données",
+      web: "Version web",
       raccourcis: "Raccourcis clavier",
       "a-propos": "À propos",
     },
@@ -260,6 +266,28 @@ const S = strings(
       privacy: "Confidentialité",
       licenses: "Licences tierces",
     },
+    web: {
+      description:
+        "Ouvre PR Radar dans un onglet du navigateur, servi par l'app sur cette machine uniquement (127.0.0.1). La fenêtre peut ensuite être fermée : l'app reste dans la barre des menus et envoie les notifications.",
+      enable: "Activer la version web",
+      running: (url: string) => `Active sur ${url}`,
+      stopped: "Désactivée",
+      port: "Port",
+      portDescription: "Port local du serveur (1024 à 65535).",
+      apply: "Appliquer",
+      portBusy: (port: number) =>
+        `Le port ${port} est déjà utilisé par une autre application : choisis-en un autre.`,
+      invalidPort: "Port invalide : un nombre entre 1024 et 65535.",
+      startError: (e: string) => `Impossible de démarrer le serveur : ${e}`,
+      open: "Ouvrir dans le navigateur",
+      openDescription:
+        "Chaque lien sert une seule fois pendant une minute, échangé à l'ouverture contre une session du navigateur.",
+      secret: "Sessions des navigateurs",
+      secretDescription:
+        "Ferme toutes les sessions ouvertes : rouvre ensuite la version web depuis l'app.",
+      rotate: "Déconnecter les navigateurs",
+      confirmRotate: "Confirmer",
+    },
     nav: "Sections des réglages",
     back: "Retour",
   },
@@ -273,6 +301,7 @@ const S = strings(
       affichage: "PR display",
       repos: "Tracked repos",
       donnees: "Data",
+      web: "Web version",
       raccourcis: "Keyboard shortcuts",
       "a-propos": "About",
     },
@@ -448,6 +477,28 @@ const S = strings(
       privacy: "Privacy",
       licenses: "Third-party licenses",
     },
+    web: {
+      description:
+        "Opens PR Radar in a browser tab, served by the app on this machine only (127.0.0.1). The window can then be closed: the app stays in the menu bar and sends the notifications.",
+      enable: "Enable the web version",
+      running: (url: string) => `Running at ${url}`,
+      stopped: "Off",
+      port: "Port",
+      portDescription: "Local port of the server (1024 to 65535).",
+      apply: "Apply",
+      portBusy: (port: number) =>
+        `Port ${port} is already used by another application: pick another one.`,
+      invalidPort: "Invalid port: a number between 1024 and 65535.",
+      startError: (e: string) => `Could not start the server: ${e}`,
+      open: "Open in browser",
+      openDescription:
+        "Each link works once for one minute, exchanged for a browser session when opened.",
+      secret: "Browser sessions",
+      secretDescription:
+        "Closes every open session: then reopen the web version from the app.",
+      rotate: "Sign out browsers",
+      confirmRotate: "Confirm",
+    },
     nav: "Settings sections",
     back: "Back",
   },
@@ -522,21 +573,24 @@ function AccountSection() {
       {accounts.map((a) => (
         <AccountRows key={a.id} account={a} />
       ))}
-      <div className="border-t py-3">
-        {adding ? (
-          <Login
-            onDone={(id) => {
-              setAdding(false)
-              if (id) void accountAdded(id)
-            }}
-          />
-        ) : (
-          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-            <Plus data-icon="inline-start" />
-            {t.account.add}
-          </Button>
-        )}
-      </div>
+      {/* version web : comptes ajoutés dans l'app */}
+      {!isWeb && (
+        <div className="border-t py-3">
+          {adding ? (
+            <Login
+              onDone={(id) => {
+                setAdding(false)
+                if (id) void accountAdded(id)
+              }}
+            />
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+              <Plus data-icon="inline-start" />
+              {t.account.add}
+            </Button>
+          )}
+        </div>
+      )}
     </Section>
   )
 }
@@ -618,15 +672,17 @@ function AccountRows({ account }: { account: Account }) {
             <ExternalLink data-icon="inline-end" />
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-destructive hover:text-destructive"
-          onClick={() => void signOut(account.id)}
-        >
-          <LogOut data-icon="inline-start" />
-          {t.account.logout}
-        </Button>
+        {!isWeb && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => void signOut(account.id)}
+          >
+            <LogOut data-icon="inline-start" />
+            {t.account.logout}
+          </Button>
+        )}
       </Row>
     </div>
   )
@@ -699,7 +755,7 @@ function SlackSection() {
             </>
           }
         >
-          {(!team || expired) && (
+          {!isWeb && (!team || expired) && (
             <Button variant="outline" size="sm" onClick={() => void connect()}>
               {busy && (
                 <Loader2
@@ -714,7 +770,7 @@ function SlackSection() {
                   : t.slack.connect}
             </Button>
           )}
-          {team && (
+          {!isWeb && team && (
             <Button
               variant="outline"
               size="sm"
@@ -1058,34 +1114,39 @@ function NotificationsSection() {
       title={t.sections.notifications}
       description={t.notifications.description}
     >
-      <Row
-        label={t.notifications.test}
-        description={
-          test?.state === "sent"
-            ? t.notifications.sent
-            : test?.state === "error"
-              ? t.notifications.error(test.message)
-              : t.notifications.testHint
-        }
-      >
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={test?.state === "sending"}
-          onClick={send}
-        >
-          {t.notifications.sendTest}
-        </Button>
-      </Row>
-      <Row
-        label={t.notifications.last}
-        description={
-          last
-            ? `${last.title} · ${new Date(last.at).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })}`
-            : t.notifications.none
-        }
-      />
-      {SYSTEM_NOTIFICATION_SETTINGS && (
+      {/* version web : les notifications partent de l'app, pas de l'onglet */}
+      {!isWeb && (
+        <>
+          <Row
+            label={t.notifications.test}
+            description={
+              test?.state === "sent"
+                ? t.notifications.sent
+                : test?.state === "error"
+                  ? t.notifications.error(test.message)
+                  : t.notifications.testHint
+            }
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={test?.state === "sending"}
+              onClick={send}
+            >
+              {t.notifications.sendTest}
+            </Button>
+          </Row>
+          <Row
+            label={t.notifications.last}
+            description={
+              last
+                ? `${last.title} · ${new Date(last.at).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })}`
+                : t.notifications.none
+            }
+          />
+        </>
+      )}
+      {!isWeb && SYSTEM_NOTIFICATION_SETTINGS && (
         <Row
           label={t.notifications.system}
           description={t.notifications.systemDescription}
@@ -1278,7 +1339,150 @@ function DataSection() {
           {armed ? t.data.confirmReset : t.data.reset}
         </Button>
       </Row>
-      <UninstallRow />
+      {!isWeb && <UninstallRow />}
+    </Section>
+  )
+}
+
+type WebStatus = {
+  enabled: boolean
+  port: number
+  running: boolean
+  /** `port-busy`, ou message du système */
+  error: string | null
+}
+
+const MIN_PORT = 1024 // en dessous : ports réservés au système
+const MAX_PORT = 65_535
+
+/** Version web locale : serveur de l'app sur 127.0.0.1, ouvert dans le navigateur (src-tauri/src/web.rs). */
+function WebSection() {
+  const t = useStrings(S)
+  const [status, setStatus] = useState<WebStatus | null>(null)
+  const [port, setPort] = useState("")
+  const [error, setError] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [secretMsg, flashSecret] = useFlash()
+  const [armed, confirm] = useConfirm()
+
+  const show = (s: WebStatus) => {
+    setStatus(s)
+    setPort(String(s.port))
+  }
+  useEffect(() => {
+    invoke<WebStatus>("web_status").then(show, (e: unknown) =>
+      setError(message(e)),
+    )
+  }, [])
+
+  const configure = async (enabled: boolean, p: number) => {
+    if (!Number.isInteger(p) || p < MIN_PORT || p > MAX_PORT) {
+      setError(t.web.invalidPort)
+      return
+    }
+    setBusy(true)
+    setError("")
+    try {
+      show(await invoke<WebStatus>("web_configure", { enabled, port: p }))
+    } catch (e) {
+      setError(message(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!status)
+    return (
+      <Section id="web" title={t.sections.web} description={t.web.description}>
+        <p className="py-3 text-sm text-destructive">{error}</p>
+      </Section>
+    )
+  const url = `http://127.0.0.1:${status.port}`
+  const startError =
+    status.error === "port-busy"
+      ? t.web.portBusy(status.port)
+      : status.error && t.web.startError(status.error)
+  return (
+    <Section id="web" title={t.sections.web} description={t.web.description}>
+      <Row
+        label={t.web.enable}
+        labelId="web-enable-label"
+        description={status.running ? t.web.running(url) : t.web.stopped}
+      >
+        <Toggle
+          checked={status.enabled}
+          onChange={(v) => void configure(v, status.port)}
+          labelledBy="web-enable-label"
+        />
+      </Row>
+      <Row
+        label={t.web.port}
+        labelId="web-port-label"
+        description={t.web.portDescription}
+      >
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={MIN_PORT}
+          max={MAX_PORT}
+          value={port}
+          onChange={(e) => setPort(e.target.value)}
+          aria-labelledby="web-port-label"
+          className="w-24 tabular-nums"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy || port === String(status.port)}
+          onClick={() => void configure(status.enabled, Number(port))}
+        >
+          {busy && (
+            <Loader2
+              data-icon="inline-start"
+              className="animate-spin motion-reduce:animate-none"
+            />
+          )}
+          {t.web.apply}
+        </Button>
+      </Row>
+      {(error || startError) && (
+        <p role="alert" className="pb-3 text-xs text-destructive">
+          {error || startError}
+        </p>
+      )}
+      {status.running && (
+        <Row label={t.web.open} description={t.web.openDescription}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void invoke("web_open").catch((e: unknown) =>
+                setError(message(e)),
+              )
+            }
+          >
+            {t.web.open}
+            <ExternalLink data-icon="inline-end" />
+          </Button>
+        </Row>
+      )}
+      <Row label={t.web.secret} description={t.web.secretDescription}>
+        <Feedback msg={secretMsg} />
+        <Button
+          variant={armed ? "destructive" : "outline"}
+          size="sm"
+          onClick={() =>
+            confirm(() =>
+              invoke("web_revoke").then(
+                () => flashSecret(),
+                (e: unknown) => setError(message(e)),
+              ),
+            )
+          }
+        >
+          {armed ? t.web.confirmRotate : t.web.rotate}
+        </Button>
+      </Row>
     </Section>
   )
 }
@@ -1487,7 +1691,8 @@ function AboutSection() {
             <span className="text-muted-foreground">{t.about.restarting}</span>
           )}
         </span>
-        {update.status === "available" ? (
+        {/* version web : les mises à jour se font dans l'app */}
+        {isWeb ? null : update.status === "available" ? (
           <Button size="sm" onClick={() => void installUpdate()}>
             {t.about.install}
           </Button>
@@ -1542,7 +1747,7 @@ function AboutSection() {
 
 export function SettingsPage({ onClose }: { onClose: () => void }) {
   const t = useStrings(S)
-  const [active, setActive] = useState<string>(SECTIONS[0])
+  const [active, setActive] = useState<string>(SHOWN[0])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1560,7 +1765,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
       },
       { rootMargin: "0px 0px -70% 0px" },
     )
-    SECTIONS.forEach((id) => {
+    SHOWN.forEach((id) => {
       const el = document.getElementById(id)
       if (el) obs.observe(el)
     })
@@ -1591,7 +1796,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
           {t.back}
         </Button>
         <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:pb-0">
-          {SECTIONS.map((id) => (
+          {SHOWN.map((id) => (
             <li key={id} className="shrink-0">
               <button
                 type="button"
@@ -1619,6 +1824,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
         <DisplaySection />
         <ReposSection />
         <DataSection />
+        {!isWeb && <WebSection />}
         <ShortcutsSection />
         <AboutSection />
       </div>

@@ -22,6 +22,7 @@ import {
   getSlackState,
 } from "./slack"
 import { getData } from "./store"
+import { saveItem } from "./sync"
 import type { McpCall, McpInfo } from "./types"
 
 /**
@@ -68,11 +69,7 @@ export const useMcp = () => useSyncExternalStore(subscribe, () => state)
 export const useMcpHistory = () =>
   useSyncExternalStore(subscribe, () => history)
 
-const saveHistory = () => {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
-  } catch {}
-}
+const saveHistory = () => saveItem(HISTORY_KEY, JSON.stringify(history))
 
 function record(call: McpCall) {
   history = pushCall(history, call)

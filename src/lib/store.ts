@@ -13,6 +13,7 @@ import {
 import { recordRateLimits } from "./quota"
 import { mergeReviews, type Reviews } from "./review"
 import { getSettings } from "./settings"
+import { saveItem } from "./sync"
 import { buildTree, keepVanished } from "./tree"
 import type { MergedPr, Pr, RepoTree } from "./types"
 
@@ -29,11 +30,8 @@ export function getRepos(): string[] | null {
   }
 }
 
-export function setRepos(repos: string[]) {
-  try {
-    localStorage.setItem(REPOS_KEY, JSON.stringify(repos))
-  } catch {}
-}
+export const setRepos = (repos: string[]) =>
+  saveItem(REPOS_KEY, JSON.stringify(repos))
 
 /* ---------- Données affichées : chargées depuis GitHub, partagées par toute l'interface ---------- */
 

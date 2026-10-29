@@ -16,15 +16,22 @@ import {
 } from "./github"
 import { forgetQuota } from "./quota"
 import { getRepos, reload, setRepos } from "./store"
+import { pull } from "./sync"
 import type { MergedPr } from "./types"
 
 const message = (e: unknown) =>
   e instanceof Error ? e.message.slice(0, 300) : String(e)
 
+/** Liste des repos suivis relue avant d'être réécrite en entier (l'autre fenêtre a pu la changer). */
+const freshRepos = async () => {
+  await pull().catch(() => {})
+  return getRepos() ?? []
+}
+
 export async function addRepo(repo: string): Promise<{ error?: string }> {
   try {
     const name = await resolveRepo(repo.trim())
-    const repos = getRepos() ?? []
+    const repos = await freshRepos()
     if (!repos.some((r) => r.toLowerCase() === name.toLowerCase()))
       setRepos([...repos, name])
   } catch (e) {
@@ -35,16 +42,16 @@ export async function addRepo(repo: string): Promise<{ error?: string }> {
 }
 
 export async function removeRepo(repo: string) {
-  setRepos((getRepos() ?? []).filter((r) => r !== repo))
+  setRepos((await freshRepos()).filter((r) => r !== repo))
   await reload()
 }
 
 /** Case du panneau des repos : suit ou arrête de suivre un repo. */
 export async function setFollowed(repo: string, followed: boolean) {
-  const repos = (getRepos() ?? []).filter(
+  if (followed && !(await listRepos()).includes(repo)) await resolveRepo(repo)
+  const repos = (await freshRepos()).filter(
     (r) => r.toLowerCase() !== repo.toLowerCase(),
   )
-  if (followed && !(await listRepos()).includes(repo)) await resolveRepo(repo)
   setRepos(followed ? [...repos, repo] : repos)
   await reload()
 }
@@ -60,8 +67,10 @@ export async function accessibleRepos(): Promise<{
   }
 }
 
-/** Bouton Rafraîchir : ignore le cache et relit GitHub. */
+/** Bouton Rafraîchir et actualisation automatique : ignore le cache et relit GitHub. */
 export async function refreshPrs() {
+  // réglages et repos suivis changés dans l'autre fenêtre (app ou version web)
+  await pull().catch(() => {})
   clearCache()
   await reload({ measure: true })
 }
@@ -97,9 +106,9 @@ export const comment = (prId: string, body: string, repo: string) =>
 /** Compte ajouté dans les réglages : on suit d'office ses repos où j'ai des PR ouvertes. */
 export async function accountAdded(id: string) {
   clearCache({ all: true })
-  const repos = getRepos()
-  if (repos) {
+  if (getRepos()) {
     const mine = await reposWithMyOpenPrs().catch(() => [] as string[])
+    const repos = await freshRepos()
     setRepos([
       ...new Set([...repos, ...mine.filter((k) => splitKey(k).account === id)]),
     ])

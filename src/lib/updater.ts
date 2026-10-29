@@ -3,6 +3,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater"
 import { useSyncExternalStore } from "react"
 
 import { pick, strings } from "./i18n"
+import { isWeb } from "./platform"
 
 const S = strings(
   { unknownError: "erreur inconnue" },
@@ -44,6 +45,8 @@ const message = (e: unknown) =>
 
 /** Cherche une version plus récente. `quiet` : pas d'erreur affichée (vérification automatique). */
 export async function checkForUpdate({ quiet = false } = {}) {
+  // version web : les mises à jour restent dans l'app
+  if (isWeb) return
   if (state.status === "downloading" || state.status === "ready") return
   set({ status: "checking" })
   try {

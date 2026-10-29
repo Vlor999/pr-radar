@@ -1,4 +1,4 @@
-import { openUrl } from "@tauri-apps/plugin-opener"
+import { openUrl } from "./platform.ts" // extension : chargé aussi par node --test
 
 /** Ouvre une adresse dans le navigateur du système (la fenêtre de l'app n'ouvre pas d'onglets). */
 export function openExternal(url: string) {

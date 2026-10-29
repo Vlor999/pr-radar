@@ -1,7 +1,13 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { DEFAULT_SETTINGS, refreshMinutesOf, shouldNotify } from "./settings.ts"
+import {
+  applyPatch,
+  DEFAULT_SETTINGS,
+  parseSettings,
+  refreshMinutesOf,
+  shouldNotify,
+} from "./settings.ts"
 import type { Pr } from "./types.ts"
 
 const pr = (draft: boolean) => ({ draft }) as Pr
@@ -43,4 +49,15 @@ test("fréquence enregistrée : auto et minutes entières >= 0 gardées", () => 
 test("fréquence invalide (non entière, négative, inconnue) : valeur par défaut", () => {
   for (const v of [2.5, -1, "5", null, undefined])
     assert.equal(refreshMinutesOf(v), DEFAULT_SETTINGS.refreshMinutes)
+})
+
+test("un changement de réglage appliqué aux réglages partagés garde leurs autres champs", () => {
+  const remote = JSON.stringify({ ...DEFAULT_SETTINGS, staleDays: 9 })
+  const s = applyPatch(parseSettings(remote), { mergedDays: 3 })
+  assert.equal(s.staleDays, 9)
+  assert.equal(s.mergedDays, 3)
+})
+
+test("des réglages partagés absents reprennent les valeurs par défaut", () => {
+  assert.deepEqual(parseSettings(null), DEFAULT_SETTINGS)
 })

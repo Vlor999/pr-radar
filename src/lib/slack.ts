@@ -1,16 +1,15 @@
-import { invoke } from "@tauri-apps/api/core"
-import { listen } from "@tauri-apps/api/event"
-import { fetch } from "@tauri-apps/plugin-http"
 import { useSyncExternalStore } from "react"
 
 // extensions : chargé aussi par node --test
 import { openExternal } from "./open.ts"
+import { fetch, invoke, listen } from "./platform.ts"
 import {
   getSettings,
   updateSettings,
   useSettings,
   type Settings,
 } from "./settings.ts"
+import { onPulled, saveItem } from "./sync.ts"
 import type { Pr, SlackConversation, SlackMention } from "./types.ts"
 
 /**
@@ -193,14 +192,20 @@ export const sameState = (a: SlackState, b: SlackState) =>
 function setState(next: SlackState) {
   if (sameState(state, next)) return
   state = next
-  try {
-    if (next.team) localStorage.setItem(TEAM_KEY, JSON.stringify(next.team))
-    else localStorage.removeItem(TEAM_KEY)
-  } catch {}
+  saveItem(TEAM_KEY, next.team ? JSON.stringify(next.team) : null)
   emit()
 }
 
 export const useSlack = () => useSyncExternalStore(subscribe, () => state)
+
+// équipe connectée ou déconnectée dans l'app (version web) : relue, ses jetons aussi
+onPulled((keys) => {
+  if (!keys.includes(TEAM_KEY)) return
+  const team = readTeam()
+  if (team?.id !== state.team?.id) tokens = null
+  state = { ...state, team, expired: false }
+  emit()
+})
 
 /** État hors React (serveur MCP). */
 export const getSlackState = () => state
@@ -308,20 +313,31 @@ const save = (team: Team, t: Tokens) =>
     .then(() => (unsaved = false))
     .catch(() => (unsaved = true))
 
+const stored = async (team: Team) => {
+  const raw = await invoke<string | null>("get_token", {
+    account: account(team),
+  })
+  return raw ? (JSON.parse(raw) as Tokens) : null
+}
+
 async function token(): Promise<string> {
   const team = state.team
   if (!team || state.expired) throw new Error("Slack : not connected")
-  if (!tokens) {
-    const raw = await invoke<string | null>("get_token", {
-      account: account(team),
-    })
-    tokens = raw ? (JSON.parse(raw) as Tokens) : null
-  }
+  if (!tokens) tokens = await stored(team)
   if (!tokens) {
     setState({ ...state, expired: true })
     throw new Error("Slack : not connected")
   }
   if (unsaved) void save(team, tokens)
+  if (
+    needsRefresh(tokens.expiresAt, Date.now()) &&
+    tokens.refresh &&
+    !unsaved
+  ) {
+    // l'autre fenêtre (app ou version web) a pu renouveler les jetons : l'ancien refresh token ne vaut plus rien
+    const saved = await stored(team).catch(() => null)
+    if (saved && !needsRefresh(saved.expiresAt, Date.now())) tokens = saved
+  }
   if (needsRefresh(tokens.expiresAt, Date.now()) && tokens.refresh) {
     const refresh = tokens.refresh
     refreshing ??= call<OAuthUser>("oauth.v2.access", {
