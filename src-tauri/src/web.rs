@@ -39,6 +39,8 @@ const SLACK_METHODS: [&str; 5] = [
     "users.info",
 ];
 const MAX_REDIRECTS: usize = 10;
+/// GitHub refuse une requête sans User-Agent (403) ; même valeur que tauri-plugin-http (`<crate>/<version>`).
+const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 /* ---------- Réglage lu au lancement : activé, port ---------- */
 
@@ -377,6 +379,24 @@ struct FetchRequest {
     body: Option<String>,
 }
 
+/// En-têtes transmis : sans ceux du navigateur ou de la connexion, avec un User-Agent par défaut.
+fn forwarded_headers(given: Vec<(String, String)>) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = given
+        .into_iter()
+        .map(|(k, v)| (k.to_ascii_lowercase(), v))
+        .filter(|(k, _)| {
+            !matches!(
+                k.as_str(),
+                "host" | "cookie" | "origin" | "referer" | "content-length" | "connection"
+            )
+        })
+        .collect();
+    if !out.iter().any(|(k, _)| k == "user-agent") {
+        out.push(("user-agent".into(), USER_AGENT.into()));
+    }
+    out
+}
+
 fn client(app: &AppHandle) -> &reqwest::Client {
     let web = state(app);
     web.client.get_or_init(|| {
@@ -417,14 +437,8 @@ async fn fetch(State(ctx): State<Ctx>, headers: HeaderMap, body: Bytes) -> Respo
         return status(StatusCode::BAD_REQUEST);
     };
     let mut out = client(&ctx.app).request(method, &req.url);
-    for (k, v) in &req.headers {
-        let k = k.to_ascii_lowercase();
-        if !matches!(
-            k.as_str(),
-            "host" | "cookie" | "origin" | "referer" | "content-length" | "connection"
-        ) {
-            out = out.header(k, v);
-        }
+    for (k, v) in forwarded_headers(req.headers) {
+        out = out.header(k, v);
     }
     if let Some(b) = req.body {
         out = out.body(b);
@@ -676,6 +690,28 @@ mod tests {
         assert!(!ok(&["pr_radar_web=s3cre"]));
         assert!(!ok(&["pr_radar_web="]));
         assert!(!ok(&["x_pr_radar_web=s3cret"]));
+    }
+
+    #[test]
+    fn default_user_agent() {
+        let h = |v: &[(&str, &str)]| {
+            forwarded_headers(
+                v.iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            )
+        };
+        assert!(
+            h(&[("Authorization", "Bearer t")]).contains(&("user-agent".into(), USER_AGENT.into()))
+        );
+        assert_eq!(
+            h(&[("User-Agent", "custom")]),
+            vec![("user-agent".to_string(), "custom".to_string())]
+        );
+        assert_eq!(
+            h(&[("Cookie", "a=1"), ("Host", "x"), ("Origin", "o")]),
+            vec![("user-agent".to_string(), USER_AGENT.to_string())]
+        );
     }
 
     #[test]
