@@ -16,6 +16,8 @@
 - New since your last visit
 - Merge calendar: month, week, day
 - Repo picker per organization
+- Local web version: the same interface in a browser tab, served by the app on 127.0.0.1 (opt-in)
+- Local MCP server: Claude Code or Claude Desktop read your PRs and their Slack mentions, read-only (opt-in; macOS and Linux)
 - System notifications
 - Light / dark / auto theme
 - Keyboard shortcuts: `j` `k` `o` `e` `d`
@@ -43,6 +45,27 @@ Two options:
 
 Organization repos may require the organization to approve the OAuth app, or SSO authorization of the token.
 
+## Local web version and MCP server
+
+Both are off by default and run only while the app runs.
+
+**Web version.** Click the globe in the header: the app starts its local server if needed and opens `http://127.0.0.1:14200/` (default port, changeable in Web settings). The chevron next to the globe shows the status and leads to Web settings (port, start and stop, "Sign out browsers"). Account sign-in, Slack connection, updates and uninstall stay in the desktop app.
+
+**MCP server.** Click the plug icon next to the gear and turn the server on. The Setup section gives the command with the real path of the app. Examples (macOS, the path depends on your install):
+
+```sh
+# Claude Code, once
+claude mcp add --scope user pr-radar -- '/Applications/PR Radar.app/Contents/MacOS/pr-radar' --mcp
+```
+
+For Claude Desktop, add this to `claude_desktop_config.json` (Settings › Developer › Edit Config), then restart Claude Desktop:
+
+```json
+{ "mcpServers": { "pr-radar": { "command": "/Applications/PR Radar.app/Contents/MacOS/pr-radar", "args": ["--mcp"] } } }
+```
+
+Any other MCP client: declare `<path to pr-radar> --mcp` as a stdio command. Tools are read-only: `get_prs` (open PRs with CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions, and the "To review" tab) and `get_pr` (unresolved review threads and conversation of one PR). The last 50 calls are listed in the app, without the content of the replies.
+
 ## Privacy
 
 No backend, no telemetry, no analytics. The app only talks to:
@@ -50,6 +73,10 @@ No backend, no telemetry, no analytics. The app only talks to:
 - GitHub: the API with your token, avatars, and update checks on github.com (your IP address and the app version);
 - your GitHub Enterprise server, only if you add one: its API with your token;
 - Slack, only if you connect it: read-only search, tokens in the system keychain. Messages are read on your machine and sent nowhere else.
+
+Local web version, off by default: listens on 127.0.0.1 only, not reachable from other devices. The link opened by the app carries a single-use ticket valid 60 seconds, exchanged for an HttpOnly, SameSite=Strict session cookie set by the local app; sessions live in memory and "Sign out browsers" closes them all. Host and Origin are checked and there is no CORS, so other websites cannot call it. GitHub and Slack requests go through the app, to the same allowed hosts.
+
+Local MCP server, off by default: no network port. The agent starts `pr-radar --mcp` (a stdio shim), which talks to the running app through a Unix socket (mode `0600`, created only when you turn the server on). Read-only: no tool writes to GitHub or Slack, and replies are the state the app already holds, with no extra request.
 
 Settings, followed repos and "seen" marks stay in the app's local storage. The [website](https://vlor999.github.io/pr-radar/) is hosted by GitHub Pages (which logs IP addresses), fetches the latest release from api.github.com in your browser, sets no cookies and only keeps your language choice in `localStorage`.
 
@@ -65,15 +92,17 @@ As of October 2026, based on each product's public features.
 | Native notifications | web only | yes | yes |
 | Merge calendar | no | no | yes |
 | Issues, releases, discussions | yes | yes | PRs only |
+| Open in a browser tab | yes | no | yes (local, served by the app) |
+| MCP server for AI agents | separate [GitHub MCP server](https://github.com/github/github-mcp-server) | no | yes (local, read-only; macOS, Linux) |
 | GitHub Enterprise | yes | yes | yes (personal access token) |
 
 Where the alternatives win:
 
-- **github.com/pulls**: nothing to install, full review UI, GitHub Enterprise.
+- **github.com/pulls**: nothing to install (no local server to run), full review UI, GitHub Enterprise.
 - **Gitify**: your whole notification inbox (issues, releases, discussions) in the menu bar, GitHub Enterprise support.
 - **PR Marmot**: a native desktop app, with signed builds for Apple silicon Macs (Linux and Intel Macs via a source build).
 
-PR Radar is for following PR stacks across repos and answering review threads without opening the browser, on any desktop OS.
+PR Radar is for following PR stacks across repos and answering review threads without opening the browser, on any desktop OS, with a local browser tab and a read-only MCP server for your agents.
 
 ## Development
 
