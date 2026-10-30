@@ -4,6 +4,7 @@ import { Check, CircleCheck, ExternalLink, Loader2, Send } from "lucide-react"
 import { cn } from "cn"
 
 import { Avatar } from "@/components/avatar"
+import { Shortcut } from "@/components/shortcut"
 import { comment, reply, resolve } from "@/lib/actions"
 import { strings, useStrings } from "@/lib/i18n"
 import { isExternalHref } from "@/lib/links"
@@ -348,7 +349,14 @@ function ReplyForm({
           >
             {sending ? <Loader2 className="animate-spin" /> : <Send />}
             {t.reply}
-            <kbd className="font-sans text-xs opacity-70">⌘↵</kbd>
+            <Shortcut
+              keys={["mod", "enter"]}
+              // sur le vert : cabochons teintés de la couleur du texte ; bouton neutre : ceux de la palette
+              className={cn(
+                draft.trim() &&
+                  "[&_[data-slot=kbd]]:bg-primary-foreground/20 [&_[data-slot=kbd]]:text-primary-foreground",
+              )}
+            />
           </Button>
         </div>
       </div>
