@@ -129,9 +129,9 @@ const basename = (path: string) => path.slice(path.lastIndexOf("/") + 1)
  * puis les statuts de commit en dernier ; suites et jobs au-delà des bornes de la requête comptés à part. */
 export function toCiView(raw: RawChecks): CiView {
   const commit = raw.repository?.pullRequest?.commits.nodes[0]?.commit
-  if (!commit) return { workflows: [], hiddenWorkflows: 0 }
+  if (!commit) return { workflows: [], moreChecks: false }
   const fetched = commit.checkSuites?.nodes ?? []
-  const hiddenWorkflows = (commit.checkSuites?.totalCount ?? 0) - fetched.length
+  const moreChecks = (commit.checkSuites?.totalCount ?? 0) > fetched.length
   const suites = fetched
     .filter((s): s is RawSuite => !!s && s.checkRuns.nodes.length > 0)
     .map((s): CiWorkflow => {
@@ -153,7 +153,7 @@ export function toCiView(raw: RawChecks): CiView {
       }
     })
   const contexts = commit.status?.contexts ?? []
-  if (!contexts.length) return { workflows: suites, hiddenWorkflows }
+  if (!contexts.length) return { workflows: suites, moreChecks }
   const statuses: CiWorkflow = {
     key: "statuses",
     name: null,
@@ -169,7 +169,7 @@ export function toCiView(raw: RawChecks): CiView {
       url: openable(c.targetUrl),
     })),
   }
-  return { workflows: [...suites, statuses], hiddenWorkflows }
+  return { workflows: [...suites, statuses], moreChecks }
 }
 
 /** « Relancer les jobs en échec » : un workflow Actions terminé avec au moins un job en échec. */

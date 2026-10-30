@@ -168,7 +168,7 @@ test("les statuts de commit forment une dernière boîte sans durée", () => {
 test("une PR introuvable donne une vue vide", () => {
   assert.deepEqual(toCiView({ repository: { pullRequest: null } }), {
     workflows: [],
-    hiddenWorkflows: 0,
+    moreChecks: false,
   })
 })
 
@@ -234,8 +234,8 @@ test("une relance refusée sans message donne le code HTTP", () => {
   assert.match(rerunError(500), /HTTP 500/)
 })
 
-test("les suites et jobs au-delà des bornes de la requête sont comptés", () => {
-  const { workflows, hiddenWorkflows } = toCiView(
+test("les jobs au-delà de la borne de la requête sont comptés", () => {
+  const { workflows, moreChecks } = toCiView(
     raw({
       checkSuites: {
         totalCount: 25,
@@ -250,8 +250,34 @@ test("les suites et jobs au-delà des bornes de la requête sont comptés", () =
       },
     }),
   )
-  assert.equal(hiddenWorkflows, 24)
+  assert.equal(moreChecks, true)
   assert.equal(workflows[0].hiddenJobs, 78)
+})
+
+test("des suites vides non lues ne sont pas comptées comme des workflows : seulement « d'autres checks »", () => {
+  const view = toCiView(
+    raw({
+      checkSuites: {
+        totalCount: 21,
+        nodes: [
+          {
+            id: "CS_1",
+            app: { name: "Netlify" },
+            workflowRun: null,
+            checkRuns: { totalCount: 0, nodes: [] },
+          },
+        ],
+      },
+    }),
+  )
+  assert.deepEqual(view, { workflows: [], moreChecks: true })
+})
+
+test("toutes les suites lues : pas d'autres checks", () => {
+  const { moreChecks } = toCiView(
+    raw({ checkSuites: { totalCount: 0, nodes: [] } }),
+  )
+  assert.equal(moreChecks, false)
 })
 
 test("un lien de job hors https n'est pas gardé (la ligne n'est pas un lien)", () => {

@@ -178,5 +178,6 @@ export type CiWorkflow = {
   hiddenJobs: number
 }
 
-/** Vue CI d'une PR ; `hiddenWorkflows` : check suites au-delà de la borne de la requête. */
-export type CiView = { workflows: CiWorkflow[]; hiddenWorkflows: number }
+/** Vue CI d'une PR ; `moreChecks` : check suites au-delà de la borne de la requête (nombre inconnu de workflows :
+ * des apps n'y déclarent qu'une suite vide, masquée). */
+export type CiView = { workflows: CiWorkflow[]; moreChecks: boolean }

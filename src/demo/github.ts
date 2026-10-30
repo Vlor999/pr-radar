@@ -572,7 +572,7 @@ export const fetchChecks = async (
 ): Promise<CiView> => {
   await new Promise((done) => setTimeout(done, CHECKS_MS))
   console.info("[demo] checks", repo, number)
-  return { workflows: checksFor(number, rollup), hiddenWorkflows: 0 }
+  return { workflows: checksFor(number, rollup), moreChecks: false }
 }
 
 export const rerunFailedJobs = async (repo: string, runId: number) => {

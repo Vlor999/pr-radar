@@ -33,8 +33,7 @@ const S = strings(
     openJob: "Ouvrir le job sur GitHub",
     hiddenJobs: (n: number) =>
       `${n} job${n > 1 ? "s" : ""} non affiché${n > 1 ? "s" : ""}`,
-    hiddenWorkflows: (n: number) =>
-      `${n} workflow${n > 1 ? "s" : ""} non affiché${n > 1 ? "s" : ""}`,
+    moreChecks: "Autres checks sur GitHub",
     openChecks: "Ouvrir sur GitHub",
     state: {
       success: "Réussi",
@@ -56,8 +55,7 @@ const S = strings(
     rerunDone: "Jobs re-run",
     openJob: "Open the job on GitHub",
     hiddenJobs: (n: number) => `${n} more job${n > 1 ? "s" : ""} not shown`,
-    hiddenWorkflows: (n: number) =>
-      `${n} more workflow${n > 1 ? "s" : ""} not shown`,
+    moreChecks: "More checks on GitHub",
     openChecks: "Open on GitHub",
     state: {
       success: "Succeeded",
@@ -96,7 +94,7 @@ const ICON: Record<CiState, { Icon: LucideIcon; className: string }> = {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-/** Suites ou jobs au-delà des bornes de la requête : leur nombre, et la page des checks de la PR sur GitHub. */
+/** Jobs au-delà de la borne de la requête : leur nombre, et la page des checks de la PR sur GitHub. */
 const Hidden = ({ text, url }: { text: string; url: string }) => {
   const t = useStrings(S)
   return (
@@ -161,7 +159,7 @@ export function CiGraph({ pr }: { pr: PrNode }) {
             {t.loading}
           </p>
         )
-      ) : !view.workflows.length && !view.hiddenWorkflows ? (
+      ) : !view.workflows.length && !view.moreChecks ? (
         <p className="text-xs text-muted-foreground">{t.empty}</p>
       ) : (
         <div className="flex flex-wrap gap-2">
@@ -177,11 +175,15 @@ export function CiGraph({ pr }: { pr: PrNode }) {
           ))}
         </div>
       )}
-      {!!view?.hiddenWorkflows && (
-        <Hidden
-          text={t.hiddenWorkflows(view.hiddenWorkflows)}
-          url={checksUrl}
-        />
+      {view?.moreChecks && (
+        <a
+          href={checksUrl}
+          target="_blank"
+          rel="noopener"
+          className="self-start px-1 text-xs text-primary hover:underline"
+        >
+          {t.moreChecks}
+        </a>
       )}
     </section>
   )
