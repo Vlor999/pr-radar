@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/collapsible"
 import { ready, syncBranch } from "@/lib/actions"
 import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
-import { DONE_ICON, pause, wait } from "@/lib/motion"
+import { DONE_ICON, DONE_MS, pause, wait } from "@/lib/motion"
 import { useSettings } from "@/lib/settings"
 import { useMentions } from "@/lib/slack"
 import { slackParts, spoofedHost } from "@/lib/slack-text"
@@ -125,8 +125,6 @@ const S = strings(
   },
 )
 
-/** coche de succès d'une action affichée avant que son bouton se rétracte */
-const DONE_MS = 700
 /** rétractation du bouton, puis repli de la ligne (durée de CollapsibleContent, duration-200) */
 const EXIT_MS = 200
 
