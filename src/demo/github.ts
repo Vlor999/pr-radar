@@ -7,9 +7,18 @@ import {
   type AccountError,
 } from "@/lib/accounts"
 import { allAccounts } from "@/lib/auth"
+import { rerunError } from "@/lib/checks"
 import { trackQuota, type Quota } from "@/lib/quota"
 import type { Reviewer } from "@/lib/reviewers"
-import type { MergedPr, Pr, ReviewPr, Thread } from "@/lib/types"
+import type {
+  CiJob,
+  CiState,
+  CiWorkflow,
+  MergedPr,
+  Pr,
+  ReviewPr,
+  Thread,
+} from "@/lib/types"
 
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
@@ -446,4 +455,114 @@ export const requestReviewer = async (
   const p = PRS.find((p) => `${p.repo}#${p.number}` === prId)
   p?.requested.push({ who: userId.slice(2) })
   console.info("[demo] request review", prId, userId, repo)
+}
+
+/* ---------- Vue CI (carte dépliée) ---------- */
+
+/** latence de la requête des jobs : laisse voir le chargement de la vue CI */
+const CHECKS_MS = 600
+const minsAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
+/** job lancé il y a `startMin` minutes, durée `s` secondes ; `s` null : encore en cours */
+const job = (
+  name: string,
+  state: CiState,
+  startMin: number | null = null,
+  s: number | null = null,
+): CiJob => ({
+  name,
+  state,
+  startedAt: startMin === null ? null : minsAgo(startMin),
+  completedAt:
+    startMin === null || s === null
+      ? null
+      : new Date(Date.parse(minsAgo(startMin)) + s * 1000).toISOString(),
+  url: `https://github.com/acme/web/actions/runs/1/job/${encodeURIComponent(name)}`,
+})
+const workflow = (
+  key: string,
+  name: string,
+  file: string,
+  runId: number,
+  jobs: CiJob[],
+): CiWorkflow => ({ key, name, file, event: "pull_request", runId, jobs })
+const statuses = (jobs: CiJob[]): CiWorkflow => ({
+  key: "statuses",
+  name: null,
+  file: null,
+  event: null,
+  runId: null,
+  jobs,
+})
+
+/** workflow run de acme/api#91 (seule PR en échec) relancé (ses jobs en échec repartent) ; celui de CodeQL refuse la relance */
+const RERUN_OK = 9101
+const RERUN_REFUSED = 9102
+const rerunAt = new Map<number, number>()
+
+const checksFor = (number: number, ci: string | null): CiWorkflow[] => {
+  if (number === 91) {
+    const since = rerunAt.get(RERUN_OK)
+    const again = (name: string): CiJob =>
+      since
+        ? {
+            ...job(name, "running"),
+            startedAt: new Date(since).toISOString(),
+          }
+        : job(name, "failure", 12, 74)
+    return [
+      workflow("ci", "CI", "ci.yml", RERUN_OK, [
+        job("lint", "success", 12, 41),
+        again("test (node 22)"),
+        job("test (node 20)", "success", 12, 95),
+        job("build", "cancelled", 12, 80),
+        job("deploy-preview", "skipped", 10, 0),
+      ]),
+      workflow("codeql", "CodeQL", "codeql.yml", RERUN_REFUSED, [
+        job("analyze (javascript)", "failure", 12, 203),
+      ]),
+    ]
+  }
+  if (ci === "PENDING")
+    return [
+      workflow("ci", "CI", "ci.yml", 4181, [
+        job("lint", "success", 3, 38),
+        job("test", "running", 2),
+        job("e2e", "queued"),
+        job("source-branch", "skipped", 3, 0),
+      ]),
+      statuses([job("ci/circleci: build", "running")]),
+    ]
+  return [
+    workflow("ci", "CI", "ci.yml", 1, [
+      job("check", "success", 40, 91),
+      job("source-branch", "skipped", 40, 0),
+    ]),
+    workflow("pages", "Deploy site", "pages.yml", 2, [
+      job("build", "success", 40, 52),
+      job("deploy", "neutral", 39, 12),
+    ]),
+    statuses([job("netlify/deploy-preview", "success")]),
+  ]
+}
+
+export const fetchChecks = async (
+  repo: string,
+  number: number,
+  rollup: string | null,
+): Promise<CiWorkflow[]> => {
+  await new Promise((done) => setTimeout(done, CHECKS_MS))
+  console.info("[demo] checks", repo, number)
+  return checksFor(number, rollup)
+}
+
+export const rerunFailedJobs = async (repo: string, runId: number) => {
+  await latency()
+  if (runId === RERUN_REFUSED)
+    throw new Error(
+      rerunError(403, "Resource not accessible by personal access token"),
+    )
+  rerunAt.set(runId, Date.now())
+  const p = PRS.find((p) => p.repo === repo && p.ci === "FAILURE")
+  if (p) p.ci = "PENDING"
+  console.info("[demo] rerun failed jobs", repo, runId)
 }

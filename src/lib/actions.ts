@@ -13,6 +13,7 @@ import {
   markReady,
   replyToThread,
   requestReviewer,
+  rerunFailedJobs,
   resolveRepo,
   resolveThread,
   updateBranch,
@@ -145,6 +146,13 @@ export const syncBranch = (
   repo: string,
   settle?: () => Promise<void>,
 ) => act(prId, () => updateBranch(prId, repo), settle)
+
+/** Relance les jobs en échec d'un workflow run de la PR ; la vue CI se relit avec la PR. */
+export const rerunFailed = (
+  repo: string,
+  runId: number,
+  settle?: () => Promise<void>,
+) => act(String(runId), () => rerunFailedJobs(repo, runId), settle)
 
 /** Compte ajouté dans les réglages : on suit d'office ses repos où j'ai des PR ouvertes. */
 export async function accountAdded(id: string) {
