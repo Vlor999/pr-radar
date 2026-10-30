@@ -273,8 +273,9 @@ struct TrayLabels {
     open: String,
     quit: String,
     web: String,
-    pause_hour: String,
-    pause_tomorrow: String,
+    /// choix de pause : seulement quand le tableau de bord est affiché (il écoute `tray-pause`)
+    pause_hour: Option<String>,
+    pause_tomorrow: Option<String>,
     /// « Ne pas déranger » en cours : état affiché (non cliquable), sinon None
     paused: Option<String>,
     /// pause manuelle en cours : « Reprendre » à la place des choix de pause
@@ -287,8 +288,8 @@ impl Default for TrayLabels {
             open: "Open PR Radar".into(),
             quit: "Quit".into(),
             web: "Open in browser".into(),
-            pause_hour: "Pause notifications for 1 hour".into(),
-            pause_tomorrow: "Pause notifications until tomorrow".into(),
+            pause_hour: None,
+            pause_tomorrow: None,
             paused: None,
             resume: None,
         }
@@ -296,7 +297,7 @@ impl Default for TrayLabels {
 }
 
 /// « Ouvrir dans le navigateur » : seulement quand la version web tourne.
-/// « Ne pas déranger » : état, puis « Reprendre » (pause manuelle) ou les deux choix de pause.
+/// « Ne pas déranger » (tableau de bord affiché) : état, puis « Reprendre » (pause manuelle) ou les deux choix de pause.
 fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let state = app.state::<Mutex<TrayLabels>>();
     let l = state.lock().unwrap();
@@ -307,15 +308,27 @@ fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     if web::running(app) {
         menu.append(&item("web", &l.web, true)?)?;
     }
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    let mut dnd = Vec::new();
     if let Some(paused) = &l.paused {
-        menu.append(&item("paused", paused, false)?)?;
+        dnd.push(item("paused", paused, false)?);
     }
     match &l.resume {
-        Some(resume) => menu.append(&item("resume", resume, true)?)?,
+        Some(resume) => dnd.push(item("resume", resume, true)?),
         None => {
-            menu.append(&item("pause-hour", &l.pause_hour, true)?)?;
-            menu.append(&item("pause-tomorrow", &l.pause_tomorrow, true)?)?;
+            for (id, text) in [
+                ("pause-hour", &l.pause_hour),
+                ("pause-tomorrow", &l.pause_tomorrow),
+            ] {
+                if let Some(text) = text {
+                    dnd.push(item(id, text, true)?);
+                }
+            }
+        }
+    }
+    if !dnd.is_empty() {
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
+        for i in &dnd {
+            menu.append(i)?;
         }
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;

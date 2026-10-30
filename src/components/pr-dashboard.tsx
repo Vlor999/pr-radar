@@ -191,19 +191,22 @@ const S = strings(
   },
 )
 
-/** Libellés du menu de l'icône (src-tauri `TrayLabels`) : état de la pause, puis « Reprendre » ou les choix de pause. */
+/**
+ * Libellés du menu de l'icône (src-tauri `TrayLabels`). `dnd` null : sans « Ne pas déranger »,
+ * hors du tableau de bord (personne n'écoute `tray-pause`). Sinon état de la pause, puis
+ * « Reprendre » ou les choix de pause.
+ */
 const trayLabels = (
   tray: (typeof S)["fr"]["tray"],
-  paused: string | null,
-  manual: boolean,
+  dnd: { paused: string | null; manual: boolean } | null,
 ) => ({
   open: tray.open,
   quit: tray.quit,
   web: tray.web,
-  pauseHour: tray.pauseHour,
-  pauseTomorrow: tray.pauseTomorrow,
-  paused,
-  resume: manual ? tray.resume : null,
+  pauseHour: dnd && tray.pauseHour,
+  pauseTomorrow: dnd && tray.pauseTomorrow,
+  paused: dnd?.paused ?? null,
+  resume: dnd?.manual ? tray.resume : null,
 })
 
 // réglages, serveur MCP et version web : ouverts à la demande, chargés dans leur propre chunk
@@ -322,7 +325,10 @@ export function PrDashboard({
     invoke("set_tray", {
       count: attention,
       tooltip: t.tray.tooltip(attention),
-      labels: trayLabels(t.tray, pausedText, quiet.manual),
+      labels: trayLabels(t.tray, {
+        paused: pausedText,
+        manual: quiet.manual,
+      }),
     }).catch(() => {})
   }, [attention, t, pausedText, quiet.manual])
   // choix « Ne pas déranger » du menu de l'icône
@@ -334,14 +340,14 @@ export function PrDashboard({
     )
     return () => void off.then((f) => f())
   }, [])
-  // déconnexion (le tableau de bord disparaît) : plus de compteur
+  // déconnexion (le tableau de bord disparaît) : plus de compteur ni de choix de pause
   useEffect(
     () => () => {
       if (isWeb) return
       invoke("set_tray", {
         count: 0,
         tooltip: "PR Radar",
-        labels: trayLabels(pick(S).tray, null, false),
+        labels: trayLabels(pick(S).tray, null),
       }).catch(() => {})
     },
     [],
