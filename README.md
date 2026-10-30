@@ -40,7 +40,7 @@ Two options:
 
 1. **Sign in with GitHub** (device flow): no server, the token is stored in the system keychain.
 2. **Personal access token**:
-   - fine-grained: read access to Pull requests + Contents/Metadata, and write access to Pull requests to reply;
+   - fine-grained: read access to Pull requests + Contents/Metadata, write access to Pull requests to reply, resolve threads and mark drafts ready, and write access to Contents to update a PR branch;
    - or classic with the `repo` scope.
 
 Organization repos may require the organization to approve the OAuth app, or SSO authorization of the token.

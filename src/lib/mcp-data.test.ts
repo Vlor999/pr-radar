@@ -30,6 +30,7 @@ const pr = (number: number, extra: Partial<Pr> = {}): Pr => ({
   draft: false,
   decision: null,
   conflicting: false,
+  canUpdateBranch: false,
   ci: "SUCCESS",
   comments: 0,
   unresolved: 0,

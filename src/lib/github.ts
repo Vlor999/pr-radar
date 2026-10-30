@@ -120,6 +120,7 @@ type RawPr = RawConversation & {
   isDraft: boolean
   updatedAt: string
   mergeable: string
+  viewerCanUpdateBranch: boolean
   reviewDecision: Decision
   headRefName: string
   baseRefName: string
@@ -230,6 +231,7 @@ function toPr(p: RawPr, login: string, account: string): Pr {
     draft: p.isDraft,
     decision: p.reviewDecision,
     conflicting: p.mergeable === "CONFLICTING",
+    canUpdateBranch: p.viewerCanUpdateBranch,
     ci: p.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null,
     comments:
       others(p.comments.nodes) +
@@ -490,6 +492,33 @@ export async function commentOnPr(prId: string, body: string, repo: string) {
     conn(a),
     "mutation($id: ID!, $body: String!) { addComment(input: { subjectId: $id, body: $body }) { commentEdge { node { id } } } }",
     { id: prId, body },
+  )
+}
+
+/** Marque un fil de review comme résolu. */
+export async function resolveThread(threadId: string, repo: string) {
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($id: ID!) { resolveReviewThread(input: { threadId: $id }) { thread { id } } }",
+    { id: threadId },
+  )
+}
+
+/** Sort une PR du mode draft. */
+export async function markReady(prId: string, repo: string) {
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { id } } }",
+    { id: prId },
+  )
+}
+
+/** Merge la branche de base dans la branche de la PR (bouton « Update branch » de GitHub). */
+export async function updateBranch(prId: string, repo: string) {
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($id: ID!) { updatePullRequestBranch(input: { pullRequestId: $id }) { pullRequest { id } } }",
+    { id: prId },
   )
 }
 

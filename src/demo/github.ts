@@ -79,6 +79,7 @@ const pr = (p: Partial<Pr> & Pick<Pr, "repo" | "number" | "title">): Pr => ({
   draft: false,
   decision: "REVIEW_REQUIRED",
   conflicting: false,
+  canUpdateBranch: false,
   ci: "SUCCESS",
   comments: 0,
   unresolved: 0,
@@ -171,6 +172,7 @@ const PRS: Pr[] = [
     repo: "globex/billing",
     number: 7,
     title: "Export CSV des factures",
+    canUpdateBranch: true, // branche en retard sur main : bouton « Mettre à jour la branche »
     // commentaire général seul, sans fil sur un fichier
     comments: 1,
     conversation: [
@@ -302,6 +304,33 @@ export const replyToThread = async (
 }
 export const commentOnPr = async (prId: string, body: string, repo: string) => {
   console.info("[demo] comment", prId, body, repo)
+}
+
+const findPr = (prId: string) => PRS.find((p) => p.id === prId)
+/** latence d'une mutation GitHub : laisse voir l'état « en cours » des boutons */
+const MUTATION_MS = 800
+const latency = () => new Promise((done) => setTimeout(done, MUTATION_MS))
+export const resolveThread = async (threadId: string, repo: string) => {
+  await latency()
+  // le fil disparaît de la carte au rechargement qui suit
+  const p = PRS.find((p) => p.threads.some((t) => t.id === threadId))
+  if (p) {
+    p.threads = p.threads.filter((t) => t.id !== threadId)
+    p.unresolved = p.threads.length
+  }
+  console.info("[demo] resolve", threadId, repo)
+}
+export const markReady = async (prId: string, repo: string) => {
+  await latency()
+  const p = findPr(prId)
+  if (p) p.draft = false
+  console.info("[demo] ready", prId, repo)
+}
+export const updateBranch = async (prId: string, repo: string) => {
+  await latency()
+  const p = findPr(prId)
+  if (p) p.canUpdateBranch = false
+  console.info("[demo] update branch", prId, repo)
 }
 
 // quota qui baisse de 120 points par actualisation : le mode auto affiche ~3 min dès la 2e actualisation

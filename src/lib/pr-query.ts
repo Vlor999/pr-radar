@@ -9,7 +9,7 @@ query($q: String!, $after: String) {
   search(query: $q, type: ISSUE, first: ${PAGE_SIZE}, after: $after) {
     pageInfo { hasNextPage endCursor }
     nodes { ... on PullRequest {
-      id number title url isDraft updatedAt mergeable reviewDecision headRefName baseRefName additions deletions changedFiles
+      id number title url isDraft updatedAt mergeable viewerCanUpdateBranch reviewDecision headRefName baseRefName additions deletions changedFiles
       repository { nameWithOwner }
       comments(first: 100) { nodes { author { login } } }
       conversation: comments(last: 10) { nodes { author { login } bodyHTML url createdAt } }

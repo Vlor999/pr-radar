@@ -53,6 +53,7 @@ import {
   type Profile,
 } from "@/lib/github"
 import { currentLang, locale, strings, useStrings, type Lang } from "@/lib/i18n"
+import { reducedMotion } from "@/lib/motion"
 import { openExternal } from "@/lib/open"
 import { invoke, isWeb } from "@/lib/platform"
 import {
@@ -536,9 +537,6 @@ const S = strings(
 const CHECK_MS = 1_500
 const DOWNLOAD_URL = "https://vlor999.github.io/pr-radar/"
 const REPO_URL = "https://github.com/Vlor999/pr-radar"
-
-const reducedMotion = () =>
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLElement &&

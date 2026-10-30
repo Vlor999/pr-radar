@@ -1,25 +1,32 @@
 import {
   ChevronRight,
+  CircleCheck,
   Clock,
   ExternalLink,
   GitMerge,
+  GitPullRequest,
   GitPullRequestArrow,
   Layers,
+  Loader2,
   MessageSquare,
+  RefreshCw,
 } from "lucide-react"
 import { cn } from "cn"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useTransition } from "react"
 
 import { AddReviewer } from "@/components/add-reviewer"
 import { Avatar } from "@/components/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { ready, syncBranch } from "@/lib/actions"
 import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
+import { DONE_ICON, pause, wait } from "@/lib/motion"
 import { useSettings } from "@/lib/settings"
 import { useMentions } from "@/lib/slack"
 import { slackParts, spoofedHost } from "@/lib/slack-text"
@@ -69,6 +76,11 @@ const S = strings(
     slackTitle: "Lien posté sur Slack",
     slackMentions: "Mentions Slack",
     openInSlack: "Ouvrir dans Slack",
+    markReady: "Prête pour review",
+    markedReady: "Ouverte à la review",
+    updateBranch: "Mettre à jour la branche",
+    branchUpdated: "Branche à jour",
+    updateBranchTitle: (base: string) => `Merge ${base} dans la branche`,
   },
   {
     status: {
@@ -105,8 +117,18 @@ const S = strings(
     slackTitle: "Link posted on Slack",
     slackMentions: "Slack mentions",
     openInSlack: "Open in Slack",
+    markReady: "Ready for review",
+    markedReady: "Open for review",
+    updateBranch: "Update branch",
+    branchUpdated: "Branch up to date",
+    updateBranchTitle: (base: string) => `Merge ${base} into the branch`,
   },
 )
+
+/** coche de succès d'une action affichée avant que son bouton se rétracte */
+const DONE_MS = 700
+/** rétractation du bouton, puis repli de la ligne (durée de CollapsibleContent, duration-200) */
+const EXIT_MS = 200
 
 const STATUS: Record<string, "default" | "destructive" | "outline"> = {
   APPROVED: "default",
@@ -333,6 +355,7 @@ export function PrCard({
                 {pr.reviews.length + pr.requested.length === 0 && t.noReviewer}
               </li>
             </ul>
+            {(pr.draft || pr.canUpdateBranch) && <PrActions pr={pr} />}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <MessageSquare className="size-3.5" />
@@ -358,6 +381,110 @@ export function PrCard({
         </CollapsibleContent>
       </Collapsible>
     </Card>
+  )
+}
+
+type PrAction = "ready" | "update"
+
+/** Actions d'écriture sur la PR : sortir du draft, mettre la branche à jour ; erreur de GitHub affichée dessous.
+ * Succès : coche, puis le bouton se rétracte (la ligne se replie s'il était le dernier) avant la relecture. */
+function PrActions({ pr }: { pr: PrNode }) {
+  const t = useStrings(S)
+  const [error, setError] = useState("")
+  const [pending, start] = useTransition()
+  const [running, setRunning] = useState<PrAction>()
+  const [done, setDone] = useState<PrAction>()
+  const [gone, setGone] = useState<PrAction[]>([])
+  const shown = [
+    pr.draft && ("ready" as const),
+    pr.canUpdateBranch && ("update" as const),
+  ].filter((a): a is PrAction => !!a)
+  const open = shown.some((a) => !gone.includes(a))
+
+  const run = (which: PrAction) =>
+    start(async () => {
+      setRunning(which)
+      const res = await (which === "ready" ? ready : syncBranch)(
+        pr.id,
+        pr.repo,
+        async () => {
+          setDone(which)
+          await wait(DONE_MS)
+          setGone((g) => [...g, which])
+          await pause(EXIT_MS)
+        },
+      )
+      setError(res.error ?? "")
+      // relecture faite : le bouton suit de nouveau les données (GitHub peut encore proposer l'action,
+      // ou la reproposer à une actualisation suivante)
+      setDone(undefined)
+      setGone((g) => g.filter((a) => a !== which))
+    })
+
+  const button = (
+    which: PrAction,
+    Icon: typeof RefreshCw,
+    label: string,
+    doneLabel: string,
+    title?: string,
+  ) => (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={pending}
+      title={title}
+      onClick={() => run(which)}
+      className={cn(
+        // largeur animée (transition-all du bouton) ; -mr-2 rattrape le gap-2 de la ligne
+        "max-w-72 overflow-hidden motion-reduce:transition-none",
+        done === which && "disabled:opacity-100",
+        gone.includes(which) && "-mr-2 max-w-0 border-0 px-0 opacity-0",
+      )}
+    >
+      {done === which ? (
+        <CircleCheck className={DONE_ICON} />
+      ) : pending && running === which ? (
+        // mise à jour : l'icône de la branche tourne ; sinon le spinner des autres actions
+        which === "update" ? (
+          <RefreshCw className="animate-spin" />
+        ) : (
+          <Loader2 className="animate-spin" />
+        )
+      ) : (
+        <Icon />
+      )}
+      {done === which ? doneLabel : label}
+    </Button>
+  )
+
+  return (
+    // repli de la ligne : -mt-3 rattrape le gap-3 du contenu de la carte
+    <div
+      className={cn(
+        "transition-[margin] duration-200 motion-reduce:transition-none",
+        !open && "-mt-3",
+      )}
+    >
+      <Collapsible open={open}>
+        <CollapsibleContent className="overflow-visible data-[ending-style]:overflow-hidden">
+          <div className="flex flex-col gap-2 border-t pt-3">
+            <div className="flex flex-wrap gap-2">
+              {pr.draft &&
+                button("ready", GitPullRequest, t.markReady, t.markedReady)}
+              {pr.canUpdateBranch &&
+                button(
+                  "update",
+                  RefreshCw,
+                  t.updateBranch,
+                  t.branchUpdated,
+                  t.updateBranchTitle(pr.base),
+                )}
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   )
 }
 
