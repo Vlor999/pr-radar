@@ -136,8 +136,9 @@ export function CiGraph({ pr }: { pr: PrNode }) {
     let live = true
     fetchChecks(pr.repo, pr.number, pr.sha, pr.ci)
       .then((v) => {
-        lastViews.set(prKey, { at, view: v })
+        // réponse dépassée (autre commit, état agrégé ou démontage) : n'écrase pas une vue plus récente
         if (!live) return
+        lastViews.set(prKey, { at, view: v })
         setRead((n) => n + 1)
         setError("")
       })
