@@ -5,6 +5,13 @@ import type { Who } from "./review"
 import { normalZone, parseHm } from "./quiet.ts"
 import { onPulled, saveItem } from "./sync.ts" // extension : chargé aussi par node --test
 
+// PR d'un autre (assignée, mentionné, impliqué) : son état de review et sa CI regardent son auteur, pas moi
+const AUTHOR_ONLY: (keyof Settings["notify"])[] = [
+  "approved",
+  "changesRequested",
+  "ciFailed",
+]
+
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
 export type Settings = {
   /** minutes entre deux actualisations automatiques ; 0 = manuelle ; "auto" = selon le quota GitHub */
@@ -148,9 +155,12 @@ export const getSettings = () => current
 /** Notifier ce changement de la PR : type de changement coché, et PR non brouillon si `notifyDrafts` est décoché. */
 export const shouldNotify = (
   s: Settings,
-  pr: { draft: boolean },
+  pr: { draft: boolean; involved?: unknown },
   kind: keyof Settings["notify"],
-) => s.notify[kind] && (s.notifyDrafts || !pr.draft)
+) =>
+  s.notify[kind] &&
+  (s.notifyDrafts || !pr.draft) &&
+  !(pr.involved && AUTHOR_ONLY.includes(kind))
 
 export type SettingsPatch = Partial<Omit<Settings, "notify">> & {
   notify?: Partial<Settings["notify"]>
