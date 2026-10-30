@@ -2,7 +2,7 @@ import { Fragment } from "react"
 import { Command, CornerDownLeft } from "lucide-react"
 import { cn } from "cn"
 
-import { Kbd, KbdGroup } from "@/components/ui/kbd"
+import { Kbd } from "@/components/ui/kbd"
 import { strings, useStrings } from "@/lib/i18n"
 
 const S = strings(
@@ -21,7 +21,7 @@ export type ShortcutKey = "mod" | "enter" | "esc" | (string & {})
 /** Une combinaison (`["mod", "k"]`) ou des alternatives (`[["j"], ["k"]]`, affichées « j / k »). */
 export type ShortcutKeys = ShortcutKey[] | ShortcutKey[][]
 
-/** Touches d'un raccourci : une touche par cabochon, même hauteur, glyphe centré. */
+/** Touches d'un raccourci : une combinaison par cabochon (⌘↵ sur un seul fond), glyphes centrés ; les alternatives restent séparées. */
 export function Shortcut({
   keys,
   className,
@@ -40,25 +40,20 @@ export function Shortcut({
               /
             </span>
           )}
-          <KbdGroup>
-            {combo.map((k, j) => (
-              <Kbd key={j}>
-                {k === "mod" ? (
-                  IS_MAC ? (
-                    <Command aria-label={t.cmd} />
-                  ) : (
-                    t.ctrl
-                  )
-                ) : k === "enter" ? (
-                  <CornerDownLeft aria-label={t.enter} />
-                ) : k === "esc" ? (
-                  t.esc
-                ) : (
-                  k
-                )}
-              </Kbd>
-            ))}
-          </KbdGroup>
+          {/* une combinaison = un seul fond ; chaque touche est son propre élément flex (écart gap-1 du Kbd) */}
+          <Kbd>
+            {combo.map((k, j) =>
+              k === "mod" && IS_MAC ? (
+                <Command key={j} aria-label={t.cmd} />
+              ) : k === "enter" ? (
+                <CornerDownLeft key={j} aria-label={t.enter} />
+              ) : (
+                <span key={j}>
+                  {k === "mod" ? t.ctrl : k === "esc" ? t.esc : k}
+                </span>
+              ),
+            )}
+          </Kbd>
         </Fragment>
       ))}
     </span>
