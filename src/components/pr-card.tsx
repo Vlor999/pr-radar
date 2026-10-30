@@ -16,6 +16,7 @@ import { useEffect, useState, useTransition } from "react"
 
 import { AddReviewer } from "@/components/add-reviewer"
 import { Avatar } from "@/components/avatar"
+import { CiGraph } from "@/components/ci-graph"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -354,6 +355,8 @@ export function PrCard({
               </li>
             </ul>
             {(pr.draft || pr.canUpdateBranch) && <PrActions pr={pr} />}
+            {/* sans CI (aucun check ni statut) : pas de requête */}
+            {pr.ci && <CiGraph pr={pr} />}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <MessageSquare className="size-3.5" />

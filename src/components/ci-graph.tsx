@@ -1,0 +1,256 @@
+import {
+  CircleCheck,
+  CircleDashed,
+  CircleMinus,
+  CircleSlash,
+  CircleX,
+  Loader2,
+  OctagonX,
+  RotateCcw,
+  type LucideIcon,
+} from "lucide-react"
+import { cn } from "cn"
+import { useEffect, useState, useTransition } from "react"
+
+import { Button } from "@/components/ui/button"
+import { rerunFailed } from "@/lib/actions"
+import { canRerun, formatDuration, jobDurationMs } from "@/lib/checks"
+import { fetchChecks } from "@/lib/github"
+import { strings, useStrings } from "@/lib/i18n"
+import { DONE_ICON, DONE_MS, wait } from "@/lib/motion"
+import type { CiState, CiWorkflow, PrNode } from "@/lib/types"
+
+const S = strings(
+  {
+    title: "CI",
+    loading: "Chargement des jobs…",
+    error: (msg: string) => `Jobs indisponibles : ${msg}`,
+    empty: "Aucun job sur le dernier commit",
+    statuses: "Statuts de commit",
+    rerun: "Relancer les jobs en échec",
+    rerunDone: "Jobs relancés",
+    openJob: "Ouvrir le job sur GitHub",
+    state: {
+      success: "Réussi",
+      failure: "Échec",
+      running: "En cours",
+      queued: "En attente",
+      skipped: "Ignoré",
+      cancelled: "Annulé",
+      neutral: "Neutre",
+    } as Record<CiState, string>,
+  },
+  {
+    title: "CI",
+    loading: "Loading jobs…",
+    error: (msg: string) => `Jobs unavailable: ${msg}`,
+    empty: "No job on the last commit",
+    statuses: "Commit statuses",
+    rerun: "Re-run failed jobs",
+    rerunDone: "Jobs re-run",
+    openJob: "Open the job on GitHub",
+    state: {
+      success: "Succeeded",
+      failure: "Failed",
+      running: "In progress",
+      queued: "Queued",
+      skipped: "Skipped",
+      cancelled: "Cancelled",
+      neutral: "Neutral",
+    },
+  },
+)
+
+/** durée affichée d'un job en cours, mise à jour chaque seconde */
+const TICK_MS = 1000
+
+const ICON: Record<CiState, { Icon: LucideIcon; className: string }> = {
+  success: {
+    Icon: CircleCheck,
+    className: "text-green-600 dark:text-green-400",
+  },
+  failure: { Icon: CircleX, className: "text-destructive" },
+  running: {
+    Icon: Loader2,
+    className:
+      "animate-spin text-amber-600 motion-reduce:animate-none dark:text-amber-400",
+  },
+  queued: {
+    Icon: CircleDashed,
+    className: "text-amber-600 dark:text-amber-400",
+  },
+  skipped: { Icon: CircleSlash, className: "text-muted-foreground" },
+  cancelled: { Icon: OctagonX, className: "text-muted-foreground" },
+  neutral: { Icon: CircleMinus, className: "text-muted-foreground" },
+}
+
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
+/** Vue CI de la carte dépliée : une boîte par workflow, une ligne par job. Montée seulement carte ouverte
+ * (le panneau repliable démonte son contenu) : la requête part au dépliage, relue quand l'état de la CI change. */
+export function CiGraph({ pr }: { pr: PrNode }) {
+  const t = useStrings(S)
+  const [workflows, setWorkflows] = useState<CiWorkflow[]>()
+  const [error, setError] = useState("")
+  // relance réussie : relit la vue même si l'état agrégé de la CI n'a pas encore bougé
+  const [version, setVersion] = useState(0)
+  const [now, setNow] = useState(Date.now)
+
+  useEffect(() => {
+    let live = true
+    fetchChecks(pr.repo, pr.number, pr.ci)
+      .then((w) => {
+        if (!live) return
+        setWorkflows(w)
+        setError("")
+      })
+      .catch((e: unknown) => live && setError(message(e)))
+    return () => {
+      live = false
+    }
+  }, [pr.repo, pr.number, pr.ci, version])
+
+  const running = !!workflows?.some((w) =>
+    w.jobs.some((j) => j.state === "running"),
+  )
+  useEffect(() => {
+    if (!running) return
+    const id = setInterval(() => setNow(Date.now()), TICK_MS)
+    return () => clearInterval(id)
+  }, [running])
+
+  return (
+    <section aria-label={t.title} className="flex flex-col gap-2 border-t pt-3">
+      {error && !workflows ? (
+        <p className="text-xs text-destructive">{t.error(error)}</p>
+      ) : !workflows ? (
+        <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+          {t.loading}
+        </p>
+      ) : !workflows.length ? (
+        <p className="text-xs text-muted-foreground">{t.empty}</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {workflows.map((w) => (
+            // clé avec les états des jobs : une boîte relancée repart de zéro quand ses jobs changent
+            <WorkflowBox
+              key={`${w.key}:${w.jobs.map((j) => j.state).join()}`}
+              pr={pr}
+              w={w}
+              now={now}
+              onRerun={() => setVersion((v) => v + 1)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function WorkflowBox({
+  pr,
+  w,
+  now,
+  onRerun,
+}: {
+  pr: PrNode
+  w: CiWorkflow
+  now: number
+  onRerun: () => void
+}) {
+  const t = useStrings(S)
+  const [pending, start] = useTransition()
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState("")
+
+  const rerun = () =>
+    start(async () => {
+      const res = await rerunFailed(pr.repo, w.runId!, async () => {
+        setDone(true)
+        await wait(DONE_MS)
+      })
+      setError(res.error ?? "")
+      if (!res.error) onRerun()
+    })
+
+  return (
+    <div className="flex min-w-56 flex-1 flex-col gap-1 rounded-lg border bg-muted/30 p-2">
+      <div className="flex flex-wrap items-baseline gap-x-2 px-1">
+        <span className="truncate text-xs font-medium">
+          {w.name ?? t.statuses}
+          {w.file && w.file !== w.name && (
+            <span className="font-normal text-muted-foreground">
+              {" "}
+              · {w.file}
+            </span>
+          )}
+        </span>
+        {w.event && (
+          <span className="font-mono text-[0.7rem] text-muted-foreground">
+            on: {w.event}
+          </span>
+        )}
+      </div>
+      <ul className="flex flex-col">
+        {w.jobs.map((j, i) => {
+          const { Icon, className } = ICON[j.state]
+          const ms = jobDurationMs(j, now)
+          const row = (
+            <>
+              <Icon
+                className={cn("size-3.5 shrink-0", className)}
+                aria-label={t.state[j.state]}
+              />
+              <span className="min-w-0 flex-1 truncate">{j.name}</span>
+              {ms !== null && (
+                <span className="shrink-0 text-muted-foreground tabular-nums">
+                  {formatDuration(ms)}
+                </span>
+              )}
+            </>
+          )
+          const rowClass =
+            "flex items-center gap-1.5 rounded-md px-1 py-0.5 text-xs"
+          return (
+            <li key={`${j.name}-${i}`} title={t.state[j.state]}>
+              {j.url ? (
+                // liens http(s) ouverts dans le navigateur du système (routeLinksToBrowser, open.ts)
+                <a
+                  href={j.url}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={`${j.name} — ${t.openJob}`}
+                  className={cn(rowClass, "hover:bg-muted")}
+                >
+                  {row}
+                </a>
+              ) : (
+                <div className={rowClass}>{row}</div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {(canRerun(w) || done) && (
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={pending || done}
+          onClick={rerun}
+          className={cn("self-start", done && "disabled:opacity-100")}
+        >
+          {done ? (
+            <CircleCheck className={DONE_ICON} />
+          ) : pending ? (
+            <Loader2 className="animate-spin" />
+          ) : (
+            <RotateCcw />
+          )}
+          {done ? t.rerunDone : t.rerun}
+        </Button>
+      )}
+      {error && <p className="px-1 text-xs text-destructive">{error}</p>}
+    </div>
+  )
+}
