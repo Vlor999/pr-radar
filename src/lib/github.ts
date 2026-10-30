@@ -495,6 +495,33 @@ export async function commentOnPr(prId: string, body: string, repo: string) {
   )
 }
 
+/** Marque un fil de review comme résolu. */
+export async function resolveThread(threadId: string, repo: string) {
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($id: ID!) { resolveReviewThread(input: { threadId: $id }) { thread { id } } }",
+    { id: threadId },
+  )
+}
+
+/** Sort une PR du mode draft. */
+export async function markReady(prId: string, repo: string) {
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { id } } }",
+    { id: prId },
+  )
+}
+
+/** Merge la branche de base dans la branche de la PR (bouton « Update branch » de GitHub). */
+export async function updateBranch(prId: string, repo: string) {
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($id: ID!) { updatePullRequestBranch(input: { pullRequestId: $id }) { pullRequest { id } } }",
+    { id: prId },
+  )
+}
+
 /** Quota GraphQL d'un compte (`GET /rate_limit`, gratuit : ne compte pas dans la limite) ; null si absent ou en échec. */
 export async function rateLimit(a: Account): Promise<Quota | null> {
   try {

@@ -306,6 +306,33 @@ export const commentOnPr = async (prId: string, body: string, repo: string) => {
   console.info("[demo] comment", prId, body, repo)
 }
 
+const findPr = (prId: string) => PRS.find((p) => p.id === prId)
+/** latence d'une mutation GitHub : laisse voir l'état « en cours » des boutons */
+const MUTATION_MS = 800
+const latency = () => new Promise((done) => setTimeout(done, MUTATION_MS))
+export const resolveThread = async (threadId: string, repo: string) => {
+  await latency()
+  // le fil disparaît de la carte au rechargement qui suit
+  const p = PRS.find((p) => p.threads.some((t) => t.id === threadId))
+  if (p) {
+    p.threads = p.threads.filter((t) => t.id !== threadId)
+    p.unresolved = p.threads.length
+  }
+  console.info("[demo] resolve", threadId, repo)
+}
+export const markReady = async (prId: string, repo: string) => {
+  await latency()
+  const p = findPr(prId)
+  if (p) p.draft = false
+  console.info("[demo] ready", prId, repo)
+}
+export const updateBranch = async (prId: string, repo: string) => {
+  await latency()
+  const p = findPr(prId)
+  if (p) p.canUpdateBranch = false
+  console.info("[demo] update branch", prId, repo)
+}
+
 // quota qui baisse de 120 points par actualisation : le mode auto affiche ~3 min dès la 2e actualisation
 let demoRemaining = 3120
 const demoReset = Date.now() + 45 * 60_000
