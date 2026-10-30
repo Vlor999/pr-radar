@@ -3,6 +3,7 @@ import { test } from "node:test"
 
 import {
   canRerun,
+  checksTtlMs,
   contextState,
   formatDuration,
   jobDurationMs,
@@ -311,4 +312,10 @@ test("un lien de job hors https n'est pas gardé (la ligne n'est pas un lien)", 
     box.jobs.map((j) => j.url),
     [null, null, "https://ci.example.com/2"],
   )
+})
+
+test("une CI terminée reste en cache plus longtemps qu'une CI en cours", () => {
+  assert.ok(checksTtlMs("SUCCESS") > checksTtlMs("PENDING"))
+  assert.equal(checksTtlMs("FAILURE"), checksTtlMs("ERROR"))
+  assert.equal(checksTtlMs("EXPECTED"), checksTtlMs(null))
 })

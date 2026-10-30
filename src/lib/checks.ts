@@ -17,6 +17,11 @@ const FAILED = new Set([
   "ACTION_REQUIRED",
 ])
 
+// CI terminée (état agrégé final) : ses jobs ne changent plus pour ce commit, sauf relance, qui relit (clearCache)
+const CI_DONE_TTL_MS = 10 * 60_000
+// CI en cours : comme la liste des PR, les jobs avancent
+const CI_RUNNING_TTL_MS = 60_000
+const FINAL_ROLLUPS = new Set(["SUCCESS", "FAILURE", "ERROR"])
 // message de GitHub d'un refus de droit (jeton fine-grained sans Actions, scope manquant), pas d'une limite ou de SSO
 const PERMISSION_MESSAGE = /scope|permission|not accessible/i
 
@@ -171,6 +176,10 @@ export function toCiView(raw: RawChecks): CiView {
   }
   return { workflows: [...suites, statuses], moreChecks }
 }
+
+/** Durée de cache de la vue CI selon l'état agrégé de la PR (PENDING, EXPECTED : en cours). */
+export const checksTtlMs = (rollup: string | null) =>
+  rollup && FINAL_ROLLUPS.has(rollup) ? CI_DONE_TTL_MS : CI_RUNNING_TTL_MS
 
 /** « Relancer les jobs en échec » : un workflow Actions terminé avec au moins un job en échec. */
 export const canRerun = (w: CiWorkflow) =>

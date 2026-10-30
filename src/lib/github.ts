@@ -13,7 +13,13 @@ import {
 import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
 import { fetch } from "./platform"
 import { sweep, type Entry } from "./cache"
-import { CHECKS_QUERY, rerunError, toCiView, type RawChecks } from "./checks"
+import {
+  CHECKS_QUERY,
+  checksTtlMs,
+  rerunError,
+  toCiView,
+  type RawChecks,
+} from "./checks"
 import {
   gqlFailed,
   gqlMessage,
@@ -679,7 +685,7 @@ export function fetchChecks(
 ): Promise<CiView> {
   return cached(
     `checks:${repo}#${number}@${sha}|${rollup}`,
-    CACHE_TTL_MS,
+    checksTtlMs(rollup),
     async () => {
       const [owner, name] = splitKey(repo).name.split("/")
       return toCiView(
