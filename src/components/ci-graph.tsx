@@ -152,13 +152,15 @@ export function CiGraph({ pr }: { pr: PrNode }) {
 
   return (
     <section aria-label={t.title} className="flex flex-col gap-2 border-t pt-3">
-      {error && !view ? (
-        <p className="text-xs text-destructive">{t.error(error)}</p>
-      ) : !view ? (
-        <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
-          {t.loading}
-        </p>
+      {/* relecture en échec : l'erreur au-dessus des jobs déjà affichés, gardés */}
+      {error && <p className="text-xs text-destructive">{t.error(error)}</p>}
+      {!view ? (
+        !error && (
+          <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+            {t.loading}
+          </p>
+        )
       ) : !view.workflows.length && !view.hiddenWorkflows ? (
         <p className="text-xs text-muted-foreground">{t.empty}</p>
       ) : (
