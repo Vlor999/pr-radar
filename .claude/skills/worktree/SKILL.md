@@ -28,8 +28,7 @@ git worktree add .claude/worktrees/<feature-slug> -b <branch> origin/dev
 cd .claude/worktrees/<feature-slug> && npm ci
 ```
 
-Work only inside this worktree. Run git and gh from inside it (`cd .claude/worktrees/<feature-slug> && git …`),
-not with `git -C`: the allow rules of `.claude/settings.json` match the command as written.
+Work only inside this worktree.
 
 ## 3. Implement
 

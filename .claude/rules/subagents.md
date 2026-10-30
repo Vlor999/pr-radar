@@ -30,8 +30,6 @@ description: "Protocol for implementation and review subagents on PR Radar: mode
 4. Visible change: after the PR, the orchestrator runs `npm run demo` (skill `demo`) and gets the user's validation before merge.
 5. Final report: PR URL, decisions taken, work left.
 
-Run git and gh from inside the worktree (`cd <worktree> && git push -u origin <branch>`), not `git -C <path> …`: the allow rules of `.claude/settings.json` match the command as written. The deny rules also match message and body text: a commit message or PR body that names `--no-verify`, `-n`, `--reviewer` or `--add-reviewer` is denied, so reword it instead of naming the flag.
-
 ## After review
 
 - A subagent does not launch agents: the orchestrator runs the review loop of `mr-review` (§ Orchestrated loop): one delegated read-only reviewer per PR.
