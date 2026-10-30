@@ -274,7 +274,10 @@ const has = (repos: string[]) => (r: string) =>
   repos.some((x) => x.toLowerCase() === r.toLowerCase())
 
 export const viewerLogin = async (_token: string, _host?: string) => "me"
-export const clearCache = () => {}
+// PR dont les jobs ont déjà été lus : pas de latence ensuite, comme le cache de src/lib/github.ts ; une
+// actualisation (clearCache) la remet
+const checksRead = new Set<string>()
+export const clearCache = () => checksRead.clear()
 export const fetchPrs = async (repos: string[]) => {
   // quota bas pour montrer la notification et la ligne des réglages
   trackQuota(
@@ -461,7 +464,7 @@ export const requestReviewer = async (
 
 /* ---------- Vue CI (ouverte depuis la pastille CI) ---------- */
 
-/** latence de la requête des jobs : laisse voir le chargement de la vue CI */
+/** latence de la première lecture des jobs d'une PR : laisse voir le chargement de la vue CI */
 const CHECKS_MS = 600
 const minsAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
 /** job lancé il y a `startMin` minutes, durée `s` secondes ; `s` null : encore en cours */
@@ -570,7 +573,11 @@ export const fetchChecks = async (
   _sha: string | null,
   rollup: string | null,
 ): Promise<CiView> => {
-  await new Promise((done) => setTimeout(done, CHECKS_MS))
+  const key = `${repo}#${number}`
+  if (!checksRead.has(key)) {
+    await new Promise((done) => setTimeout(done, CHECKS_MS))
+    checksRead.add(key)
+  }
   console.info("[demo] checks", repo, number)
   return { workflows: checksFor(number, rollup), moreChecks: false }
 }
