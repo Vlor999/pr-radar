@@ -177,7 +177,7 @@ export const normalizeUrl = (url: string) =>
     .replace(/\/+$/, "")
     .toLowerCase()
 
-/** `get_pr` : une de mes PR ouvertes, fils non résolus et conversation en texte. */
+/** `get_pr` : une PR ouverte de l'arbre (à moi, ou d'un autre qui me concerne), fils non résolus et conversation en texte. */
 export const prPayload = (
   ctx: McpContext,
   url: string,
@@ -193,8 +193,8 @@ export const prPayload = (
     return {
       ok: false,
       error: reviews.some((r) => normalizeUrl(r.url) === key)
-        ? `PR waiting for your review: get_pr only covers your own open PRs (details of the review queue are not loaded). Use get_prs for its summary.`
-        : `PR not found among your open PRs in PR Radar: ${url}`,
+        ? `PR waiting for your review: get_pr only covers the open PRs of the "Open PRs" tree, yours and those where you are assigned, mentioned or involved (details of the review queue are not loaded). Use get_prs for its summary.`
+        : `PR not found among the open PRs loaded in PR Radar (yours, or where you are assigned, mentioned or involved): ${url}`,
     }
   const comment = (c: Thread["comments"][number] | Note) => ({
     author: c.author,

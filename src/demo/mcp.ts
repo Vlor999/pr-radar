@@ -46,7 +46,7 @@ const HISTORY: McpCall[] = [
     ms: 2,
     ok: false,
     error:
-      "PR not found among your open PRs in PR Radar: https://github.com/acme/api/pull/999",
+      "PR not found among the open PRs loaded in PR Radar (yours, or where you are assigned, mentioned or involved): https://github.com/acme/api/pull/999",
     bytes: 0,
   },
   {

@@ -54,9 +54,9 @@ const S = strings(
       description:
         "Lecture seule : aucun outil n'écrit sur GitHub ni Slack. Les données sont celles affichées, sans requête supplémentaire.",
       getPrs:
-        "Mes PR ouvertes (CI, décision, conflits, reviewers, taille, fils non résolus, stack, mentions Slack) et l'onglet « À reviewer ».",
+        "Mes PR ouvertes (CI, décision, conflits, reviewers, taille, fils non résolus, stack, mentions Slack), celles des autres où je suis assigné, mentionné ou impliqué (champ `involved`) et l'onglet « À reviewer ».",
       getPr:
-        "Une de mes PR : fils de review non résolus et conversation, en texte.",
+        "Une PR de l'arbre (à moi ou qui me concerne) : fils de review non résolus et conversation, en texte.",
     },
     history: {
       title: "Historique",
@@ -108,9 +108,9 @@ const S = strings(
       description:
         "Read-only: no tool writes to GitHub or Slack. Data is what the app shows, with no extra request.",
       getPrs:
-        "My open PRs (CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions) and the “To review” tab.",
+        "My open PRs (CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions), other people's PRs where I am assigned, mentioned or involved (`involved` field), and the “To review” tab.",
       getPr:
-        "One of my PRs: unresolved review threads and conversation, as text.",
+        "One PR of the tree (mine or one involving me): unresolved review threads and conversation, as text.",
     },
     history: {
       title: "History",
