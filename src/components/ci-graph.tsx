@@ -214,7 +214,7 @@ function WorkflowBox({
           return (
             <li key={`${j.name}-${i}`} title={t.state[j.state]}>
               {j.url ? (
-                // liens http(s) ouverts dans le navigateur du système (routeLinksToBrowser, open.ts)
+                // liens https (filtrés par toCiView) ouverts dans le navigateur du système (routeLinksToBrowser, open.ts)
                 <a
                   href={j.url}
                   target="_blank"

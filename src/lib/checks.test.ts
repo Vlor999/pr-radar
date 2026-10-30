@@ -210,3 +210,27 @@ test("un refus 403 de la relance nomme le droit Actions manquant", () => {
   assert.match(rerunError(403, "Resource not accessible"), /Actions/)
   assert.doesNotMatch(rerunError(422, "Run is not completed"), /Actions/)
 })
+
+test("un lien de job hors https n'est pas gardé (la ligne n'est pas un lien)", () => {
+  const ctx = (targetUrl: string) => ({
+    context: "ci/x",
+    state: "SUCCESS",
+    targetUrl,
+    createdAt: "2026-10-30T10:00:00Z",
+  })
+  const [box] = toCiView(
+    raw({
+      status: {
+        contexts: [
+          ctx("javascript:alert(1)"),
+          ctx("http://ci.example.com/1"),
+          ctx("https://ci.example.com/2"),
+        ],
+      },
+    }),
+  )
+  assert.deepEqual(
+    box.jobs.map((j) => j.url),
+    [null, null, "https://ci.example.com/2"],
+  )
+})

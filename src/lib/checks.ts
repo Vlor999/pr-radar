@@ -1,5 +1,6 @@
 /** Vue CI d'une PR (workflows, jobs, statuts de commit) : logique pure, sans Tauri. */
 import { pick, strings } from "./i18n.ts" // extension : chargé aussi par node --test
+import { isExternalHref } from "./links.ts"
 import type { CiJob, CiState, CiWorkflow } from "./types.ts"
 
 // Bornes demandées : le coût GraphQL et la limite de 500 000 nœuds par appel suivent les `first`, pas les
@@ -109,6 +110,11 @@ export const contextState = (state: string): CiState =>
       ? "failure"
       : "running" // PENDING, EXPECTED
 
+/** Lien d'un job : https seulement (`targetUrl` d'un statut est libre, posé par n'importe quel outil ;
+ * l'opener n'ouvre que `https://`), sinon la ligne n'est pas un lien. */
+const openable = (url: string | null) =>
+  url && isExternalHref(url) ? url : null
+
 const basename = (path: string) => path.slice(path.lastIndexOf("/") + 1)
 
 /** Boîtes de la vue CI : une par check suite qui a des jobs (les apps sans check run, comme GitHub, sont masquées),
@@ -131,7 +137,7 @@ export function toCiView(raw: RawChecks): CiWorkflow[] {
           state: runState(r.status, r.conclusion),
           startedAt: r.startedAt,
           completedAt: r.completedAt,
-          url: r.detailsUrl,
+          url: openable(r.detailsUrl),
         })),
       }
     })
@@ -150,7 +156,7 @@ export function toCiView(raw: RawChecks): CiWorkflow[] {
         state: contextState(c.state),
         startedAt: null, // un statut n'a qu'une date de création : pas de durée
         completedAt: null,
-        url: c.targetUrl,
+        url: openable(c.targetUrl),
       })),
     },
   ]
