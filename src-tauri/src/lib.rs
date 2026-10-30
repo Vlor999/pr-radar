@@ -2,7 +2,7 @@ use keyring::{Entry, Error};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, ipc::CapabilityBuilder};
 use tauri_plugin_autostart::ManagerExt;
@@ -267,10 +267,18 @@ fn uninstall_run(app: AppHandle) -> Result<(), String> {
 const TRAY: &str = "main";
 
 /// Libellés du menu, dans la langue de l'app (envoyés par `set_tray`).
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct TrayLabels {
     open: String,
     quit: String,
     web: String,
+    pause_hour: String,
+    pause_tomorrow: String,
+    /// « Ne pas déranger » en cours : état affiché (non cliquable), sinon None
+    paused: Option<String>,
+    /// pause manuelle en cours : « Reprendre » à la place des choix de pause
+    resume: Option<String>,
 }
 
 impl Default for TrayLabels {
@@ -279,34 +287,39 @@ impl Default for TrayLabels {
             open: "Open PR Radar".into(),
             quit: "Quit".into(),
             web: "Open in browser".into(),
+            pause_hour: "Pause notifications for 1 hour".into(),
+            pause_tomorrow: "Pause notifications until tomorrow".into(),
+            paused: None,
+            resume: None,
         }
     }
 }
 
 /// « Ouvrir dans le navigateur » : seulement quand la version web tourne.
+/// « Ne pas déranger » : état, puis « Reprendre » (pause manuelle) ou les deux choix de pause.
 fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let state = app.state::<Mutex<TrayLabels>>();
     let l = state.lock().unwrap();
-    let menu = Menu::with_items(
-        app,
-        &[&MenuItem::with_id(
-            app,
-            "open",
-            &l.open,
-            true,
-            None::<&str>,
-        )?],
-    )?;
+    let item = |id: &str, text: &str, enabled: bool| {
+        MenuItem::with_id(app, id, text, enabled, None::<&str>)
+    };
+    let menu = Menu::with_items(app, &[&item("open", &l.open, true)?])?;
     if web::running(app) {
-        menu.append(&MenuItem::with_id(app, "web", &l.web, true, None::<&str>)?)?;
+        menu.append(&item("web", &l.web, true)?)?;
     }
-    menu.append(&MenuItem::with_id(
-        app,
-        "quit",
-        &l.quit,
-        true,
-        None::<&str>,
-    )?)?;
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    if let Some(paused) = &l.paused {
+        menu.append(&item("paused", paused, false)?)?;
+    }
+    match &l.resume {
+        Some(resume) => menu.append(&item("resume", resume, true)?)?,
+        None => {
+            menu.append(&item("pause-hour", &l.pause_hour, true)?)?;
+            menu.append(&item("pause-tomorrow", &l.pause_tomorrow, true)?)?;
+        }
+    }
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&item("quit", &l.quit, true)?)?;
     Ok(menu)
 }
 
@@ -340,6 +353,16 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                     eprintln!("web version: {e}");
                 }
             }
+            // la pause est un réglage de l'interface : elle l'enregistre (et le partage avec la version web)
+            "pause-hour" => {
+                let _ = app.emit("tray-pause", "hour");
+            }
+            "pause-tomorrow" => {
+                let _ = app.emit("tray-pause", "tomorrow");
+            }
+            "resume" => {
+                let _ = app.emit("tray-pause", "resume");
+            }
             "quit" => app.exit(0),
             _ => {}
         })
@@ -357,22 +380,21 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Compteur (titre à côté de l'icône sur macOS, infobulle partout) et libellés du menu dans la langue de l'app.
+/// Compteur (titre à côté de l'icône sur macOS, infobulle partout), libellés du menu dans la langue de l'app
+/// et état « Ne pas déranger ».
 #[tauri::command]
 fn set_tray(
     app: AppHandle,
     count: usize,
     tooltip: String,
-    open: String,
-    quit: String,
-    web: String,
+    labels: TrayLabels,
 ) -> Result<(), String> {
     let tray = app.tray_by_id(TRAY).ok_or("no tray")?;
     let e = |e: tauri::Error| e.to_string();
     tray.set_title((count > 0).then(|| count.to_string()))
         .map_err(e)?;
     tray.set_tooltip(Some(tooltip)).map_err(e)?;
-    *app.state::<Mutex<TrayLabels>>().lock().unwrap() = TrayLabels { open, quit, web };
+    *app.state::<Mutex<TrayLabels>>().lock().unwrap() = labels;
     tray.set_menu(Some(tray_menu(&app).map_err(e)?)).map_err(e)
 }
 
