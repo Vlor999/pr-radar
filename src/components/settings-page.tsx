@@ -1,4 +1,9 @@
 import { getVersion } from "@tauri-apps/api/app"
+import {
+  disable as disableAutostart,
+  enable as enableAutostart,
+  isEnabled as isAutostartEnabled,
+} from "@tauri-apps/plugin-autostart"
 import { cn } from "cn"
 import {
   ArrowLeft,
@@ -24,6 +29,7 @@ import {
   testNotification,
   useLastNotification,
 } from "@/hooks/use-pr-notifications"
+import { formatUntil, pause, resume, useQuiet } from "@/hooks/use-quiet"
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { Login } from "@/components/login"
@@ -55,6 +61,7 @@ import {
   useAutoInterval,
   useQuota,
 } from "@/lib/quota"
+import { parseHm, systemZone } from "@/lib/quiet"
 import { resetSettings, updateSettings, useSettings } from "@/lib/settings"
 import { checkForUpdate, installUpdate, useUpdate } from "@/lib/updater"
 import { getRepos, reload, setRepos } from "@/lib/store"
@@ -173,6 +180,11 @@ const S = strings(
       quotaUnknown: "Inconnu avant la première actualisation",
       reloadAll: "Relire tout maintenant",
       reloadNow: "Actualiser maintenant",
+      launch: "Lancer à l'ouverture de session",
+      launchDescription:
+        "PR Radar démarre avec la session, pour ne manquer aucune notification.",
+      launchError: (message: string) =>
+        `Réglage du système impossible : ${message}`,
     },
     notifications: {
       description:
@@ -195,6 +207,24 @@ const S = strings(
       reviewRequested: "Review demandée",
       drafts: "PR brouillon",
       draftsDescription: "Notifier aussi les changements des PR en brouillon.",
+      dnd: "Ne pas déranger",
+      dndOff:
+        "Met en pause les notifications de PR Radar (le test passe toujours).",
+      dndUntil: (until: string) => `En pause jusqu'à ${until}`,
+      pauseHour: "1 heure",
+      pauseTomorrow: "Jusqu'à demain",
+      resume: "Reprendre",
+      quietHours: "Plage quotidienne",
+      quietHoursDescription:
+        "Aucune notification chaque jour entre ces heures (peut passer minuit).",
+      quietStart: "Début de la plage",
+      quietEnd: "Fin de la plage",
+      timeZone: "Fuseau horaire",
+      timeZoneDescription: "Heures de la plage et de « Jusqu'à demain » (8 h).",
+      systemZone: (zone: string) => `Système (${zone})`,
+      focus: "Modes Concentration",
+      focusDescription:
+        "Un mode Concentration de macOS coupe déjà les notifications de PR Radar, sauf si l'app y est autorisée.",
     },
     display: {
       description: "Tri et repères de la vue des PR.",
@@ -370,6 +400,11 @@ const S = strings(
       quotaUnknown: "Unknown until the first refresh",
       reloadAll: "Reload everything now",
       reloadNow: "Refresh now",
+      launch: "Launch at login",
+      launchDescription:
+        "PR Radar starts with your session, so no notification is missed.",
+      launchError: (message: string) =>
+        `Could not change the system setting: ${message}`,
     },
     notifications: {
       description:
@@ -392,6 +427,23 @@ const S = strings(
       reviewRequested: "Review requested",
       drafts: "Draft PRs",
       draftsDescription: "Also notify about changes on draft PRs.",
+      dnd: "Do not disturb",
+      dndOff: "Pauses PR Radar notifications (the test still goes through).",
+      dndUntil: (until: string) => `Paused until ${until}`,
+      pauseHour: "1 hour",
+      pauseTomorrow: "Until tomorrow",
+      resume: "Resume",
+      quietHours: "Daily quiet hours",
+      quietHoursDescription:
+        "No notification every day between these times (may cross midnight).",
+      quietStart: "Quiet hours start",
+      quietEnd: "Quiet hours end",
+      timeZone: "Time zone",
+      timeZoneDescription: "Used for quiet hours and “Until tomorrow” (8 AM).",
+      systemZone: (zone: string) => `System (${zone})`,
+      focus: "Focus modes",
+      focusDescription:
+        "A macOS Focus already silences PR Radar notifications unless the app is allowed in that Focus.",
     },
     display: {
       description: "Sorting and cues for the PR view.",
@@ -924,6 +976,7 @@ function RefreshSection() {
       title={t.sections.actualisation}
       description={t.refresh.description}
     >
+      {!isWeb && <LaunchAtLoginRow />}
       <Row label={t.refresh.frequency} labelId="refresh-label">
         {/* appearance-none : sinon le navigateur impose son propre style (pilule sombre) */}
         <div className="relative">
@@ -1022,12 +1075,155 @@ const NOTIFY = [
   "reviewRequested",
 ] as const
 
+const IS_MAC = navigator.userAgent.includes("Mac")
+/** fuseaux IANA connus du moteur JS (choix du fuseau de la plage quotidienne) */
+const TIME_ZONES = Intl.supportedValuesOf("timeZone")
+
 // sur ordinateur, c'est le système qui autorise ou bloque : on renvoie vers ses réglages
-const SYSTEM_NOTIFICATION_SETTINGS = navigator.userAgent.includes("Mac")
+const SYSTEM_NOTIFICATION_SETTINGS = IS_MAC
   ? "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
   : navigator.userAgent.includes("Windows")
     ? "ms-settings:notifications"
     : null
+
+/** Lancement à l'ouverture de session : l'état est celui du système, relu en revenant sur la fenêtre. */
+function LaunchAtLoginRow() {
+  const t = useStrings(S)
+  const [on, setOn] = useState<boolean | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const read = () =>
+    isAutostartEnabled().then(setOn, (e: unknown) => setError(String(e)))
+  useEffect(() => {
+    void read()
+    const onFocus = () => void read()
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [])
+  const change = (v: boolean) => {
+    setError(null)
+    ;(v ? enableAutostart() : disableAutostart())
+      .catch((e: unknown) => setError(String(e)))
+      .finally(() => void read())
+  }
+  return (
+    <Row
+      label={t.refresh.launch}
+      description={
+        error ? t.refresh.launchError(error) : t.refresh.launchDescription
+      }
+      labelId="launch-label"
+    >
+      {on !== null && (
+        <Toggle labelledBy="launch-label" checked={on} onChange={change} />
+      )}
+    </Row>
+  )
+}
+
+/** « Ne pas déranger » : pause manuelle (1 h, jusqu'à demain) et plage quotidienne. */
+function DoNotDisturbRows() {
+  const s = useSettings()
+  const t = useStrings(S)
+  const quiet = useQuiet()
+  const setHours = (patch: Partial<typeof s.quietHours>) =>
+    updateSettings({ quietHours: { ...s.quietHours, ...patch } })
+  const time = (
+    id: string,
+    label: string,
+    value: string,
+    key: "start" | "end",
+  ) => (
+    <input
+      id={id}
+      type="time"
+      aria-label={label}
+      value={value}
+      onChange={(e) => {
+        if (parseHm(e.target.value) !== null)
+          setHours({ [key]: e.target.value })
+      }}
+      className="h-8 rounded-lg border bg-background px-2 text-sm tabular-nums outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+    />
+  )
+  return (
+    <>
+      <Row
+        label={t.notifications.dnd}
+        description={
+          quiet.until
+            ? t.notifications.dndUntil(formatUntil(quiet.until, quiet.zone))
+            : t.notifications.dndOff
+        }
+      >
+        {quiet.manual ? (
+          <Button variant="outline" size="sm" onClick={resume}>
+            {t.notifications.resume}
+          </Button>
+        ) : (
+          <>
+            <Button variant="outline" size="sm" onClick={() => pause("hour")}>
+              {t.notifications.pauseHour}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => pause("tomorrow")}
+            >
+              {t.notifications.pauseTomorrow}
+            </Button>
+          </>
+        )}
+      </Row>
+      <Row
+        label={t.notifications.quietHours}
+        description={t.notifications.quietHoursDescription}
+        labelId="quiet-hours"
+      >
+        {time(
+          "quiet-start",
+          t.notifications.quietStart,
+          s.quietHours.start,
+          "start",
+        )}
+        <span className="text-muted-foreground">–</span>
+        {time("quiet-end", t.notifications.quietEnd, s.quietHours.end, "end")}
+        <Toggle
+          labelledBy="quiet-hours"
+          checked={s.quietHours.enabled}
+          onChange={(enabled) => setHours({ enabled })}
+        />
+      </Row>
+      <Row
+        label={t.notifications.timeZone}
+        description={t.notifications.timeZoneDescription}
+        labelId="quiet-zone"
+      >
+        <div className="relative">
+          <select
+            aria-labelledby="quiet-zone"
+            value={s.quietTimeZone ?? ""}
+            onChange={(e) =>
+              updateSettings({ quietTimeZone: e.target.value || null })
+            }
+            className="h-8 max-w-64 appearance-none rounded-lg border bg-background pr-7 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+          >
+            <option value="">{t.notifications.systemZone(systemZone())}</option>
+            {/* fuseau partagé que ce moteur ne liste pas (ex. "UTC") : ajouté pour rester affiché */}
+            {(s.quietTimeZone && !TIME_ZONES.includes(s.quietTimeZone)
+              ? [s.quietTimeZone, ...TIME_ZONES]
+              : TIME_ZONES
+            ).map((z) => (
+              <option key={z} value={z}>
+                {z}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        </div>
+      </Row>
+    </>
+  )
+}
 
 function NotificationsSection() {
   const s = useSettings()
@@ -1095,6 +1291,13 @@ function NotificationsSection() {
           </Button>
         </Row>
       )}
+      {!isWeb && IS_MAC && (
+        <Row
+          label={t.notifications.focus}
+          description={t.notifications.focusDescription}
+        />
+      )}
+      <DoNotDisturbRows />
       {NOTIFY.map((key) => (
         <Row key={key} label={t.notifications[key]} labelId={`notify-${key}`}>
           <Toggle

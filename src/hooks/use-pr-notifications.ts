@@ -2,6 +2,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react"
 
 import { pick, strings } from "@/lib/i18n"
 import { invoke, isWeb } from "@/lib/platform"
+import { notificationsAllowed } from "@/lib/quiet"
 import { newRequests, reviewKey, snapshot, type Reviews } from "@/lib/review"
 import { getSettings, shouldNotify, type Settings } from "@/lib/settings"
 import type { Pr } from "@/lib/types"
@@ -44,7 +45,7 @@ const readLast = () => {
 }
 
 /** Envoie une notification système ; rejette avec l'erreur du système si elle échoue. */
-export async function notify(title: string, body: string) {
+async function send(title: string, body: string) {
   await invoke("plugin:notification|notify", { options: { title, body } })
   try {
     localStorage.setItem(
@@ -53,6 +54,11 @@ export async function notify(title: string, body: string) {
     )
   } catch {}
   listeners.forEach((l) => l())
+}
+
+/** Notification de PR Radar, sauf pendant « Ne pas déranger » (pause ou plage quotidienne) : elle est perdue. */
+export async function notify(title: string, body: string) {
+  if (notificationsAllowed(getSettings(), new Date())) await send(title, body)
 }
 
 /** Dernière notification envoyée par l'app (réglages : preuve que le mécanisme tourne). */
@@ -133,5 +139,5 @@ export function useReviewNotifications(known: Reviews) {
 
 /** Bouton « Envoyer une notification de test » des réglages. */
 export function testNotification() {
-  return notify("PR Radar", pick(S).testBody)
+  return send("PR Radar", pick(S).testBody)
 }

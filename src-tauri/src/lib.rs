@@ -2,9 +2,10 @@ use keyring::{Entry, Error};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, ipc::CapabilityBuilder};
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
 
 pub mod mcp;
@@ -211,6 +212,8 @@ fn uninstall_plan(app: AppHandle) -> UninstallPlan {
 fn uninstall_run(app: AppHandle) -> Result<(), String> {
     delete_token(DEFAULT_ACCOUNT.into())?;
     web::forget(&app)?;
+    // best effort : sinon le système chercherait à chaque session une app supprimée
+    let _ = app.autolaunch().disable();
     let plan = uninstall_plan(app.clone());
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
     let bundle = plan.app_path.as_deref().map(Path::new);
@@ -264,10 +267,19 @@ fn uninstall_run(app: AppHandle) -> Result<(), String> {
 const TRAY: &str = "main";
 
 /// Libellés du menu, dans la langue de l'app (envoyés par `set_tray`).
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct TrayLabels {
     open: String,
     quit: String,
     web: String,
+    /// choix de pause : seulement quand le tableau de bord est affiché (il écoute `tray-pause`)
+    pause_hour: Option<String>,
+    pause_tomorrow: Option<String>,
+    /// « Ne pas déranger » en cours : état affiché (non cliquable), sinon None
+    paused: Option<String>,
+    /// pause manuelle en cours : « Reprendre » à la place des choix de pause
+    resume: Option<String>,
 }
 
 impl Default for TrayLabels {
@@ -276,34 +288,51 @@ impl Default for TrayLabels {
             open: "Open PR Radar".into(),
             quit: "Quit".into(),
             web: "Open in browser".into(),
+            pause_hour: None,
+            pause_tomorrow: None,
+            paused: None,
+            resume: None,
         }
     }
 }
 
 /// « Ouvrir dans le navigateur » : seulement quand la version web tourne.
+/// « Ne pas déranger » (tableau de bord affiché) : état, puis « Reprendre » (pause manuelle) ou les deux choix de pause.
 fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let state = app.state::<Mutex<TrayLabels>>();
     let l = state.lock().unwrap();
-    let menu = Menu::with_items(
-        app,
-        &[&MenuItem::with_id(
-            app,
-            "open",
-            &l.open,
-            true,
-            None::<&str>,
-        )?],
-    )?;
+    let item = |id: &str, text: &str, enabled: bool| {
+        MenuItem::with_id(app, id, text, enabled, None::<&str>)
+    };
+    let menu = Menu::with_items(app, &[&item("open", &l.open, true)?])?;
     if web::running(app) {
-        menu.append(&MenuItem::with_id(app, "web", &l.web, true, None::<&str>)?)?;
+        menu.append(&item("web", &l.web, true)?)?;
     }
-    menu.append(&MenuItem::with_id(
-        app,
-        "quit",
-        &l.quit,
-        true,
-        None::<&str>,
-    )?)?;
+    let mut dnd = Vec::new();
+    if let Some(paused) = &l.paused {
+        dnd.push(item("paused", paused, false)?);
+    }
+    match &l.resume {
+        Some(resume) => dnd.push(item("resume", resume, true)?),
+        None => {
+            for (id, text) in [
+                ("pause-hour", &l.pause_hour),
+                ("pause-tomorrow", &l.pause_tomorrow),
+            ] {
+                if let Some(text) = text {
+                    dnd.push(item(id, text, true)?);
+                }
+            }
+        }
+    }
+    if !dnd.is_empty() {
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
+        for i in &dnd {
+            menu.append(i)?;
+        }
+    }
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&item("quit", &l.quit, true)?)?;
     Ok(menu)
 }
 
@@ -337,6 +366,16 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                     eprintln!("web version: {e}");
                 }
             }
+            // la pause est un réglage de l'interface : elle l'enregistre (et le partage avec la version web)
+            "pause-hour" => {
+                let _ = app.emit("tray-pause", "hour");
+            }
+            "pause-tomorrow" => {
+                let _ = app.emit("tray-pause", "tomorrow");
+            }
+            "resume" => {
+                let _ = app.emit("tray-pause", "resume");
+            }
             "quit" => app.exit(0),
             _ => {}
         })
@@ -354,22 +393,21 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Compteur (titre à côté de l'icône sur macOS, infobulle partout) et libellés du menu dans la langue de l'app.
+/// Compteur (titre à côté de l'icône sur macOS, infobulle partout), libellés du menu dans la langue de l'app
+/// et état « Ne pas déranger ».
 #[tauri::command]
 fn set_tray(
     app: AppHandle,
     count: usize,
     tooltip: String,
-    open: String,
-    quit: String,
-    web: String,
+    labels: TrayLabels,
 ) -> Result<(), String> {
     let tray = app.tray_by_id(TRAY).ok_or("no tray")?;
     let e = |e: tauri::Error| e.to_string();
     tray.set_title((count > 0).then(|| count.to_string()))
         .map_err(e)?;
     tray.set_tooltip(Some(tooltip)).map_err(e)?;
-    *app.state::<Mutex<TrayLabels>>().lock().unwrap() = TrayLabels { open, quit, web };
+    *app.state::<Mutex<TrayLabels>>().lock().unwrap() = labels;
     tray.set_menu(Some(tray_menu(&app).map_err(e)?)).map_err(e)
 }
 
@@ -386,6 +424,8 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // lancement à l'ouverture de session : l'état vit dans le système (LaunchAgent, registre, .desktop)
+        .plugin(tauri_plugin_autostart::Builder::new().build())
         .manage(web::Web::default())
         .manage(Mutex::new(TrayLabels::default()))
         .manage(mcp::McpState::default())

@@ -32,7 +32,7 @@ import { UpdateBanner } from "@/components/update-banner"
 import { RunningDot } from "@/components/running-dot"
 import { WebMenu } from "@/components/web-menu"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
-import { invoke, isWeb } from "@/lib/platform"
+import { invoke, isWeb, listen } from "@/lib/platform"
 import { useAutoInterval } from "@/lib/quota"
 import { getSettings, useSettings } from "@/lib/settings"
 import { refreshMentions, useSlack } from "@/lib/slack"
@@ -53,6 +53,7 @@ import {
   usePrNotifications,
   useReviewNotifications,
 } from "@/hooks/use-pr-notifications"
+import { formatUntil, pause, resume, useQuiet } from "@/hooks/use-quiet"
 import { useSeen } from "@/hooks/use-seen"
 import { useThumb } from "@/hooks/use-thumb"
 import {
@@ -124,6 +125,10 @@ const S = strings(
       open: "Ouvrir PR Radar",
       quit: "Quitter",
       web: "Ouvrir dans le navigateur",
+      pauseHour: "Pause des notifications pendant 1 heure",
+      pauseTomorrow: "Pause des notifications jusqu'à demain",
+      paused: (until: string) => `Notifications en pause jusqu'à ${until}`,
+      resume: "Reprendre les notifications",
     },
   },
   {
@@ -178,9 +183,31 @@ const S = strings(
       open: "Open PR Radar",
       quit: "Quit",
       web: "Open in browser",
+      pauseHour: "Pause notifications for 1 hour",
+      pauseTomorrow: "Pause notifications until tomorrow",
+      paused: (until: string) => `Notifications paused until ${until}`,
+      resume: "Resume notifications",
     },
   },
 )
+
+/**
+ * Libellés du menu de l'icône (src-tauri `TrayLabels`). `dnd` null : sans « Ne pas déranger »,
+ * hors du tableau de bord (personne n'écoute `tray-pause`). Sinon état de la pause, puis
+ * « Reprendre » ou les choix de pause.
+ */
+const trayLabels = (
+  tray: (typeof S)["fr"]["tray"],
+  dnd: { paused: string | null; manual: boolean } | null,
+) => ({
+  open: tray.open,
+  quit: tray.quit,
+  web: tray.web,
+  pauseHour: dnd && tray.pauseHour,
+  pauseTomorrow: dnd && tray.pauseTomorrow,
+  paused: dnd?.paused ?? null,
+  resume: dnd?.manual ? tray.resume : null,
+})
 
 // réglages, serveur MCP et version web : ouverts à la demande, chargés dans leur propre chunk
 const SettingsPage = lazy(() =>
@@ -290,27 +317,37 @@ export function PrDashboard({
   const toReview = reviewCount(reviews.reviews)
   // icône de la barre des menus : PR « À traiter » (même filtre que l'onglet)
   const attention = prs.filter(needsAttention).length
+  const quiet = useQuiet()
+  const pausedText =
+    quiet.until && t.tray.paused(formatUntil(quiet.until, quiet.zone))
   useEffect(() => {
     if (isWeb) return // icône de l'app : tenue par la fenêtre de l'app
     invoke("set_tray", {
       count: attention,
       tooltip: t.tray.tooltip(attention),
-      open: t.tray.open,
-      quit: t.tray.quit,
-      web: t.tray.web,
+      labels: trayLabels(t.tray, {
+        paused: pausedText,
+        manual: quiet.manual,
+      }),
     }).catch(() => {})
-  }, [attention, t])
-  // déconnexion (le tableau de bord disparaît) : plus de compteur
+  }, [attention, t, pausedText, quiet.manual])
+  // choix « Ne pas déranger » du menu de l'icône
+  useEffect(() => {
+    const off = listen<string>("tray-pause", ({ payload }) =>
+      payload === "resume"
+        ? resume()
+        : pause(payload === "tomorrow" ? "tomorrow" : "hour"),
+    )
+    return () => void off.then((f) => f())
+  }, [])
+  // déconnexion (le tableau de bord disparaît) : plus de compteur ni de choix de pause
   useEffect(
     () => () => {
       if (isWeb) return
-      const { open, quit, web } = pick(S).tray
       invoke("set_tray", {
         count: 0,
         tooltip: "PR Radar",
-        open,
-        quit,
-        web,
+        labels: trayLabels(pick(S).tray, null),
       }).catch(() => {})
     },
     [],

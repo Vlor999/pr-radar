@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react"
 
 import type { Lang } from "./i18n"
 import type { Who } from "./review"
+import { normalZone, parseHm } from "./quiet.ts"
 import { onPulled, saveItem } from "./sync.ts" // extension : chargé aussi par node --test
 
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
@@ -40,6 +41,12 @@ export type Settings = {
   reviewHideApproved: boolean
   /** serveur MCP local (socket Unix) ; désactivé par défaut */
   mcpEnabled: boolean
+  /** ne pas déranger : notifications suspendues jusqu'à cette date (ms) ; null = pas de pause */
+  pauseUntil: number | null
+  /** ne pas déranger chaque jour, de `start` à `end` ("HH:MM", heure locale, peut passer minuit) */
+  quietHours: { enabled: boolean; start: string; end: string }
+  /** fuseau IANA de la plage et de « jusqu'à demain » ; null = celui du système */
+  quietTimeZone: string | null
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -63,6 +70,9 @@ export const DEFAULT_SETTINGS: Settings = {
   reviewWho: "all",
   reviewHideApproved: false,
   mcpEnabled: false,
+  pauseUntil: null,
+  quietHours: { enabled: false, start: "22:00", end: "08:00" },
+  quietTimeZone: null,
 }
 
 const KEY = "pr-radar:settings"
@@ -72,6 +82,19 @@ export const refreshMinutesOf = (v: unknown): Settings["refreshMinutes"] =>
   v === "auto" || (Number.isInteger(v) && (v as number) >= 0)
     ? (v as Settings["refreshMinutes"])
     : DEFAULT_SETTINGS.refreshMinutes
+
+/** Plage enregistrée : heures "HH:MM" valides, sinon celles par défaut. */
+const quietHoursOf = (v: unknown): Settings["quietHours"] => {
+  const d = DEFAULT_SETTINGS.quietHours
+  const q = (v ?? {}) as Partial<Settings["quietHours"]>
+  const hm = (x: unknown, fallback: string) =>
+    typeof x === "string" && parseHm(x) !== null ? x : fallback
+  return {
+    enabled: q.enabled === true,
+    start: hm(q.start, d.start),
+    end: hm(q.end, d.end),
+  }
+}
 const listeners = new Set<() => void>()
 
 /** Réglages enregistrés (JSON), complétés par les valeurs par défaut. */
@@ -89,6 +112,13 @@ export function parseSettings(raw: string | null): Settings {
         : "all",
       reviewHideApproved: saved.reviewHideApproved === true,
       mcpEnabled: saved.mcpEnabled === true,
+      pauseUntil: Number.isFinite(saved.pauseUntil) ? saved.pauseUntil! : null,
+      quietHours: quietHoursOf(saved.quietHours),
+      // nom canonique : celui que le choix du fuseau des réglages sait afficher
+      quietTimeZone:
+        typeof saved.quietTimeZone === "string"
+          ? normalZone(saved.quietTimeZone)
+          : null,
       refreshMinutes: refreshMinutesOf(saved.refreshMinutes),
     }
   } catch {
