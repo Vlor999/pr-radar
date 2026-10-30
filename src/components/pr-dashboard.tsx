@@ -7,16 +7,18 @@ import {
   useSyncExternalStore,
   useTransition,
 } from "react"
-import { invoke } from "@tauri-apps/api/core"
 import {
   CalendarDays,
   CheckCheck,
   Eye,
   GitPullRequest,
   PanelLeft,
+  Plug,
   RefreshCw,
   Search,
   Settings as SettingsIcon,
+  TriangleAlert,
+  X,
 } from "lucide-react"
 import { cn } from "cn"
 
@@ -27,10 +29,15 @@ import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
 import { ReviewList } from "@/components/review-list"
 import { UpdateBanner } from "@/components/update-banner"
+import { RunningDot } from "@/components/running-dot"
+import { WebMenu } from "@/components/web-menu"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
+import { invoke, isWeb } from "@/lib/platform"
 import { useAutoInterval } from "@/lib/quota"
 import { getSettings, useSettings } from "@/lib/settings"
 import { refreshMentions, useSlack } from "@/lib/slack"
+import { useMcp } from "@/lib/mcp"
+import { openWeb, startErrorText, toggleWeb, WEB_ERRORS } from "@/lib/web"
 import { RepoSection, type OpenState } from "@/components/repo-section"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -58,7 +65,7 @@ import {
   sortTree,
 } from "@/lib/tree"
 import { reviewCount, type Reviews } from "@/lib/review"
-import type { Pr, PrNode, RepoTree } from "@/lib/types"
+import type { Pr, PrNode, RepoTree, WebStatus } from "@/lib/types"
 
 const S = strings(
   {
@@ -95,6 +102,10 @@ const S = strings(
     settingsUpdate: (v: string) => `Réglages (version ${v} disponible)`,
     settingsTitleUpdate: (v: string) => `Réglages · version ${v} disponible`,
     settingsTitle: "Réglages (⌘,)",
+    mcp: "Serveur MCP",
+    mcpOn: "Serveur MCP (actif)",
+    webSettings: "Réglages de la version web",
+    dismiss: "Fermer",
     view: "Vue",
     fetchFailed: (e: string) => `Récupération GitHub en échec : ${e}`,
     searchPlaceholder: "Repo, titre, branche, #numéro",
@@ -112,6 +123,7 @@ const S = strings(
       tooltip: (n: number) => `PR Radar : ${n} PR à traiter`,
       open: "Ouvrir PR Radar",
       quit: "Quitter",
+      web: "Ouvrir dans le navigateur",
     },
   },
   {
@@ -144,6 +156,10 @@ const S = strings(
     settingsUpdate: (v: string) => `Settings (version ${v} available)`,
     settingsTitleUpdate: (v: string) => `Settings · version ${v} available`,
     settingsTitle: "Settings (⌘,)",
+    mcp: "MCP server",
+    mcpOn: "MCP server (on)",
+    webSettings: "Web version settings",
+    dismiss: "Dismiss",
     view: "View",
     fetchFailed: (e: string) => `GitHub fetch failed: ${e}`,
     searchPlaceholder: "Repo, title, branch, #number",
@@ -161,15 +177,22 @@ const S = strings(
         `PR Radar: ${n} PR${n > 1 ? "s" : ""} need action`,
       open: "Open PR Radar",
       quit: "Quit",
+      web: "Open in browser",
     },
   },
 )
 
-// réglages : ouverts à la demande, chargés dans leur propre chunk
+// réglages, serveur MCP et version web : ouverts à la demande, chargés dans leur propre chunk
 const SettingsPage = lazy(() =>
   import("@/components/settings-page").then((m) => ({
     default: m.SettingsPage,
   })),
+)
+const McpPage = lazy(() =>
+  import("@/components/mcp-page").then((m) => ({ default: m.McpPage })),
+)
+const WebPage = lazy(() =>
+  import("@/components/web-page").then((m) => ({ default: m.WebPage })),
 )
 
 const TABS = [
@@ -246,14 +269,21 @@ export function PrDashboard({
   const [filter, setFilter] = useState<keyof typeof S.fr.filters>("all")
   const settings = useSettings()
   const [sort, setSort] = useState<string>(() => getSettings().defaultSort)
-  const [showSettings, setShowSettings] = useState(false)
+  // page plein écran affichée à la place du tableau de bord
+  const [page, setPage] = useState<"settings" | "mcp" | "web" | null>(null)
+  const toggle = (p: NonNullable<typeof page>) =>
+    setPage((v) => (v === p ? null : p))
+  const [webError, setWebError] = useState<string | null>(null)
+  const [webBusy, setWebBusy] = useState(false)
+  const webErrors = useStrings(WEB_ERRORS)
+  const mcp = useMcp()
   const updateState = useUpdate()
   const update = updateState.status === "available" ? updateState.version : null
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("open")
   // la barre d'onglets disparaît pendant les réglages : re-mesurer à son retour
   const [tabBox, underline] = useThumb<HTMLElement>(
     '[aria-selected="true"]',
-    `${tab}:${showSettings}`,
+    `${tab}:${page}`,
   )
   usePrNotifications(prs)
   useReviewNotifications(reviews)
@@ -261,20 +291,27 @@ export function PrDashboard({
   // icône de la barre des menus : PR « À traiter » (même filtre que l'onglet)
   const attention = prs.filter(needsAttention).length
   useEffect(() => {
+    if (isWeb) return // icône de l'app : tenue par la fenêtre de l'app
     invoke("set_tray", {
       count: attention,
       tooltip: t.tray.tooltip(attention),
       open: t.tray.open,
       quit: t.tray.quit,
+      web: t.tray.web,
     }).catch(() => {})
   }, [attention, t])
   // déconnexion (le tableau de bord disparaît) : plus de compteur
   useEffect(
     () => () => {
-      const { open, quit } = pick(S).tray
-      invoke("set_tray", { count: 0, tooltip: "PR Radar", open, quit }).catch(
-        () => {},
-      )
+      if (isWeb) return
+      const { open, quit, web } = pick(S).tray
+      invoke("set_tray", {
+        count: 0,
+        tooltip: "PR Radar",
+        open,
+        quit,
+        web,
+      }).catch(() => {})
     },
     [],
   )
@@ -311,11 +348,20 @@ export function PrDashboard({
     settings.refreshMinutes === "auto"
       ? autoMs
       : settings.refreshMinutes * 60_000
+  // version web : pas d'actualisation automatique tant que l'onglet est caché (l'app, elle, continue)
+  const paused = useHidden() && isWeb
   useEffect(() => {
-    if (!intervalMs || refreshing) return
+    if (!intervalMs || refreshing || paused) return
     const id = setTimeout(() => startRefresh(() => refreshPrs()), intervalMs)
     return () => clearTimeout(id)
-  }, [intervalMs, refreshing, fetchedAt])
+  }, [intervalMs, refreshing, fetchedAt, paused])
+
+  // version web, retour sur l'onglet : actualisation si la dernière lecture date de plus d'une période
+  useEffect(() => {
+    if (paused || !isWeb || !intervalMs || refreshing) return
+    if (Date.now() - Date.parse(fetchedAt) > intervalMs)
+      startRefresh(() => refreshPrs())
+  }, [paused]) // seulement au changement de visibilité
 
   useEffect(() => {
     if (!settings.refreshOnFocus || refreshing) return
@@ -341,12 +387,27 @@ export function PrDashboard({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "," && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        setShowSettings((v) => !v)
+        toggle("settings")
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [])
+
+  // version web (globe : démarrée si besoin puis ouverte ; bulle : démarrée / arrêtée) ;
+  // erreur de démarrage affichée sous l'en-tête
+  const runWeb = async (action: () => Promise<WebStatus>) => {
+    setWebBusy(true)
+    setWebError(null)
+    try {
+      const status = await action()
+      if (!status.running) setWebError(startErrorText(webErrors, status))
+    } catch (e) {
+      setWebError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setWebBusy(false)
+    }
+  }
 
   const cmp = SORTS.find((s) => s.id === sort)?.cmp
   const nodes = useMemo(
@@ -469,13 +530,36 @@ export function PrDashboard({
             <RefreshCw className={cn(refreshing && "animate-spin")} />
             {refreshing ? t.refreshing : t.refresh}
           </Button>
+          {mcp.info?.supported && (
+            <Button
+              variant={page === "mcp" ? "secondary" : "ghost"}
+              size="icon"
+              aria-label={mcp.running ? t.mcpOn : t.mcp}
+              title={mcp.running ? t.mcpOn : t.mcp}
+              aria-pressed={page === "mcp"}
+              onClick={() => toggle("mcp")}
+              className="relative"
+            >
+              <Plug />
+              {mcp.running && <RunningDot />}
+            </Button>
+          )}
+          {!isWeb && (
+            <WebMenu
+              label={t.tray.web}
+              busy={webBusy}
+              onOpen={() => void runWeb(openWeb)}
+              onToggle={() => void runWeb(toggleWeb)}
+              onSettings={() => setPage("web")}
+            />
+          )}
           <Button
-            variant={showSettings ? "secondary" : "ghost"}
+            variant={page === "settings" ? "secondary" : "ghost"}
             size="icon"
             aria-label={update ? t.settingsUpdate(update) : t.settings}
             title={update ? t.settingsTitleUpdate(update) : t.settingsTitle}
-            aria-pressed={showSettings}
-            onClick={() => setShowSettings((v) => !v)}
+            aria-pressed={page === "settings"}
+            onClick={() => toggle("settings")}
             className="relative"
           >
             <SettingsIcon />
@@ -488,9 +572,49 @@ export function PrDashboard({
 
       <UpdateBanner />
 
-      {showSettings ? (
+      {webError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm duration-300 animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none"
+        >
+          <TriangleAlert className="size-4 shrink-0 text-destructive" />
+          <span className="min-w-0 flex-1">{webError}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setWebError(null)
+              setPage("web")
+            }}
+          >
+            {t.webSettings}
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t.dismiss}
+            title={t.dismiss}
+            onClick={() => setWebError(null)}
+          >
+            <X />
+          </Button>
+        </div>
+      )}
+
+      {page === "settings" ? (
         <Suspense fallback={null}>
-          <SettingsPage onClose={() => setShowSettings(false)} />
+          <SettingsPage
+            onClose={() => setPage(null)}
+            onOpenWeb={() => setPage("web")}
+          />
+        </Suspense>
+      ) : page === "mcp" ? (
+        <Suspense fallback={null}>
+          <McpPage onClose={() => setPage(null)} />
+        </Suspense>
+      ) : page === "web" ? (
+        <Suspense fallback={null}>
+          <WebPage onClose={() => setPage(null)} />
         </Suspense>
       ) : (
         <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -673,5 +797,16 @@ function useWide() {
       return () => m.removeEventListener("change", l)
     },
     () => matchMedia(WIDE).matches,
+  )
+}
+
+/** Onglet (ou fenêtre) caché. */
+function useHidden() {
+  return useSyncExternalStore(
+    (l) => {
+      document.addEventListener("visibilitychange", l)
+      return () => document.removeEventListener("visibilitychange", l)
+    },
+    () => document.visibilityState === "hidden",
   )
 }

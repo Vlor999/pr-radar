@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react"
 
 import type { Lang } from "./i18n"
 import type { Who } from "./review"
+import { onPulled, saveItem } from "./sync.ts" // extension : chargé aussi par node --test
 
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
 export type Settings = {
@@ -37,6 +38,8 @@ export type Settings = {
   reviewWho: Who
   /** onglet « À reviewer » : masquer les demandes d'équipe déjà approuvées */
   reviewHideApproved: boolean
+  /** serveur MCP local (socket Unix) ; désactivé par défaut */
+  mcpEnabled: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -59,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   slackChannels: [],
   reviewWho: "all",
   reviewHideApproved: false,
+  mcpEnabled: false,
 }
 
 const KEY = "pr-radar:settings"
@@ -70,11 +74,10 @@ export const refreshMinutesOf = (v: unknown): Settings["refreshMinutes"] =>
     : DEFAULT_SETTINGS.refreshMinutes
 const listeners = new Set<() => void>()
 
-function read(): Settings {
+/** Réglages enregistrés (JSON), complétés par les valeurs par défaut. */
+export function parseSettings(raw: string | null): Settings {
   try {
-    const saved = JSON.parse(
-      localStorage.getItem(KEY) ?? "{}",
-    ) as Partial<Settings>
+    const saved = JSON.parse(raw ?? "{}") as Partial<Settings>
     return {
       ...DEFAULT_SETTINGS,
       ...saved,
@@ -85,6 +88,7 @@ function read(): Settings {
         ? saved.reviewWho!
         : "all",
       reviewHideApproved: saved.reviewHideApproved === true,
+      mcpEnabled: saved.mcpEnabled === true,
       refreshMinutes: refreshMinutesOf(saved.refreshMinutes),
     }
   } catch {
@@ -92,7 +96,22 @@ function read(): Settings {
   }
 }
 
+function read(): Settings {
+  try {
+    return parseSettings(localStorage.getItem(KEY))
+  } catch {
+    return DEFAULT_SETTINGS
+  }
+}
+
 let current = read()
+
+// réglages changés dans l'autre fenêtre (app ou version web)
+onPulled((keys) => {
+  if (!keys.includes(KEY)) return
+  current = read()
+  listeners.forEach((l) => l())
+})
 
 export const getSettings = () => current
 
@@ -107,21 +126,28 @@ export type SettingsPatch = Partial<Omit<Settings, "notify">> & {
   notify?: Partial<Settings["notify"]>
 }
 
+export const applyPatch = (s: Settings, patch: SettingsPatch): Settings => ({
+  ...s,
+  ...patch,
+  notify: { ...s.notify, ...patch.notify },
+})
+
 export function updateSettings(patch: SettingsPatch) {
-  current = {
-    ...current,
-    ...patch,
-    notify: { ...current.notify, ...patch.notify },
-  }
-  try {
-    localStorage.setItem(KEY, JSON.stringify(current))
-  } catch {}
+  current = applyPatch(current, patch)
+  // envoi recalculé sur les réglages partagés relus juste avant : un champ changé dans l'autre fenêtre est gardé
+  saveItem(KEY, JSON.stringify(current), (remote) =>
+    JSON.stringify(applyPatch(parseSettings(remote), patch)),
+  )
   listeners.forEach((l) => l())
 }
 
-/** Remet les réglages par défaut, sauf la langue. */
+/** Remet les réglages par défaut, sauf la langue et le serveur MCP (son socket reste ouvert). */
 export function resetSettings() {
-  updateSettings({ ...DEFAULT_SETTINGS, lang: current.lang })
+  updateSettings({
+    ...DEFAULT_SETTINGS,
+    lang: current.lang,
+    mcpEnabled: current.mcpEnabled,
+  })
 }
 
 export function useSettings(): Settings {

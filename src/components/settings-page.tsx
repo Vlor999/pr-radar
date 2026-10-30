@@ -1,10 +1,10 @@
 import { getVersion } from "@tauri-apps/api/app"
-import { invoke } from "@tauri-apps/api/core"
 import { cn } from "cn"
 import {
   ArrowLeft,
   Check,
   ChevronDown,
+  ChevronRight,
   ExternalLink,
   Loader2,
   LogOut,
@@ -15,7 +15,7 @@ import {
   Sun,
   Trash2,
 } from "lucide-react"
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,8 +26,16 @@ import {
 } from "@/hooks/use-pr-notifications"
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
-import { useThumb } from "@/hooks/use-thumb"
 import { Login } from "@/components/login"
+import {
+  Feedback,
+  Row,
+  Section,
+  Segmented,
+  Toggle,
+  useConfirm,
+  useFlash,
+} from "@/components/settings-ui"
 import { GITHUB, type Account } from "@/lib/accounts"
 import { accountAdded, refreshPrs, signOut } from "@/lib/actions"
 import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
@@ -39,6 +47,7 @@ import {
 } from "@/lib/github"
 import { currentLang, locale, strings, useStrings, type Lang } from "@/lib/i18n"
 import { openExternal } from "@/lib/open"
+import { invoke, isWeb } from "@/lib/platform"
 import {
   dropSnapshots,
   LOW,
@@ -68,9 +77,14 @@ const SECTIONS = [
   "affichage",
   "repos",
   "donnees",
+  "web",
   "raccourcis",
   "a-propos",
 ] as const
+
+/** Sections masquées dans la version web (navigateur) : elles pilotent l'app elle-même. */
+const DESKTOP_ONLY: readonly string[] = ["web"]
+const SHOWN = SECTIONS.filter((id) => !(isWeb && DESKTOP_ONLY.includes(id)))
 
 const S = strings(
   {
@@ -83,10 +97,10 @@ const S = strings(
       affichage: "Affichage des PR",
       repos: "Repos suivis",
       donnees: "Données",
+      web: "Version web",
       raccourcis: "Raccourcis clavier",
       "a-propos": "À propos",
     },
-    done: "Fait",
     failed: "Échec",
     account: {
       description:
@@ -260,6 +274,13 @@ const S = strings(
       privacy: "Confidentialité",
       licenses: "Licences tierces",
     },
+    web: {
+      description:
+        "PR Radar dans un onglet du navigateur, servi par l'app sur cette machine uniquement.",
+      settings: "Réglages de la version web",
+      settingsDescription: "Activation, port et sessions des navigateurs.",
+      open: "Ouvrir",
+    },
     nav: "Sections des réglages",
     back: "Retour",
   },
@@ -273,10 +294,10 @@ const S = strings(
       affichage: "PR display",
       repos: "Tracked repos",
       donnees: "Data",
+      web: "Web version",
       raccourcis: "Keyboard shortcuts",
       "a-propos": "About",
     },
-    done: "Done",
     failed: "Failed",
     account: {
       description:
@@ -448,6 +469,13 @@ const S = strings(
       privacy: "Privacy",
       licenses: "Third-party licenses",
     },
+    web: {
+      description:
+        "PR Radar in a browser tab, served by the app on this machine only.",
+      settings: "Web version settings",
+      settingsDescription: "On/off, port and browser sessions.",
+      open: "Open",
+    },
     nav: "Settings sections",
     back: "Back",
   },
@@ -465,180 +493,6 @@ const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLElement &&
   (t.matches("input, textarea, select") || t.isContentEditable)
 
-/* ---------- Briques ---------- */
-
-function Section(props: {
-  id: string
-  title: string
-  description: string
-  children: ReactNode
-}) {
-  return (
-    <section
-      id={props.id}
-      aria-labelledby={`${props.id}-title`}
-      className="scroll-mt-4"
-    >
-      <h2 id={`${props.id}-title`} className="text-base font-semibold">
-        {props.title}
-      </h2>
-      <p className="mt-0.5 text-sm text-muted-foreground">
-        {props.description}
-      </p>
-      <div className="mt-3 rounded-2xl border bg-card px-4">
-        {props.children}
-      </div>
-    </section>
-  )
-}
-
-function Row(props: {
-  label: ReactNode
-  description?: ReactNode
-  labelId?: string
-  children?: ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-2 border-t py-3 first:border-t-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-      <div className="min-w-0">
-        <div id={props.labelId} className="text-sm font-medium">
-          {props.label}
-        </div>
-        {props.description && (
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            {props.description}
-          </div>
-        )}
-      </div>
-      {props.children && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {props.children}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Toggle(props: {
-  checked: boolean
-  onChange: (v: boolean) => void
-  labelledBy: string
-  muted?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={props.checked}
-      aria-labelledby={props.labelledBy}
-      onClick={() => props.onChange(!props.checked)}
-      className={cn(
-        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/30 motion-reduce:transition-none",
-        props.checked ? "bg-primary" : "bg-input",
-        props.muted && "opacity-50",
-      )}
-    >
-      <span
-        className={cn(
-          "size-4 rounded-full bg-background shadow-sm transition-transform motion-reduce:transition-none",
-          props.checked ? "translate-x-4" : "translate-x-0.5",
-        )}
-      />
-    </button>
-  )
-}
-
-function Segmented<T extends string | number>(props: {
-  value: T
-  options: { value: T; label: string; icon?: ReactNode }[]
-  onChange: (v: T) => void
-  labelledBy: string
-}) {
-  const [box, thumb] = useThumb<HTMLDivElement>(
-    '[aria-checked="true"]',
-    props.value,
-  )
-  return (
-    <div
-      ref={box}
-      role="radiogroup"
-      aria-labelledby={props.labelledBy}
-      className="relative inline-flex flex-wrap rounded-lg border bg-muted p-0.5"
-    >
-      {thumb && (
-        <span
-          aria-hidden
-          style={thumb}
-          className="absolute rounded-md bg-background shadow-sm transition-[left,top,width,height] duration-200 ease-out motion-reduce:transition-none"
-        />
-      )}
-      {props.options.map((o) => {
-        const active = o.value === props.value
-        return (
-          <button
-            key={String(o.value)}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => props.onChange(o.value)}
-            className={cn(
-              "relative inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/30 motion-reduce:transition-none [&_svg]:size-3.5",
-              active
-                ? "font-medium text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {o.icon}
-            {o.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/** Libellé « Fait » affiché 2 s après une action. */
-function useFlash(): [string | null, (msg?: string) => void] {
-  const t = useStrings(S)
-  const [msg, setMsg] = useState<string | null>(null)
-  const timer = useRef<number>(undefined)
-  useEffect(() => () => clearTimeout(timer.current), [])
-  return [
-    msg,
-    (m = t.done) => {
-      setMsg(m)
-      clearTimeout(timer.current)
-      timer.current = window.setTimeout(() => setMsg(null), 2000)
-    },
-  ]
-}
-
-/** Confirmation en deux clics : le premier arme le bouton pendant 4 s. */
-function useConfirm(): [boolean, (action: () => void) => void] {
-  const [armed, setArmed] = useState(false)
-  const timer = useRef<number>(undefined)
-  useEffect(() => () => clearTimeout(timer.current), [])
-  return [
-    armed,
-    (action) => {
-      clearTimeout(timer.current)
-      if (armed) {
-        setArmed(false)
-        action()
-      } else {
-        setArmed(true)
-        timer.current = window.setTimeout(() => setArmed(false), 4000)
-      }
-    },
-  ]
-}
-
-const Feedback = ({ msg }: { msg: string | null }) => (
-  <span aria-live="polite" className="min-w-8 text-xs text-muted-foreground">
-    {msg}
-  </span>
-)
-
 /* ---------- Sections ---------- */
 
 function AccountSection() {
@@ -654,21 +508,24 @@ function AccountSection() {
       {accounts.map((a) => (
         <AccountRows key={a.id} account={a} />
       ))}
-      <div className="border-t py-3">
-        {adding ? (
-          <Login
-            onDone={(id) => {
-              setAdding(false)
-              if (id) void accountAdded(id)
-            }}
-          />
-        ) : (
-          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-            <Plus data-icon="inline-start" />
-            {t.account.add}
-          </Button>
-        )}
-      </div>
+      {/* version web : comptes ajoutés dans l'app */}
+      {!isWeb && (
+        <div className="border-t py-3">
+          {adding ? (
+            <Login
+              onDone={(id) => {
+                setAdding(false)
+                if (id) void accountAdded(id)
+              }}
+            />
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+              <Plus data-icon="inline-start" />
+              {t.account.add}
+            </Button>
+          )}
+        </div>
+      )}
     </Section>
   )
 }
@@ -750,15 +607,17 @@ function AccountRows({ account }: { account: Account }) {
             <ExternalLink data-icon="inline-end" />
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-destructive hover:text-destructive"
-          onClick={() => void signOut(account.id)}
-        >
-          <LogOut data-icon="inline-start" />
-          {t.account.logout}
-        </Button>
+        {!isWeb && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => void signOut(account.id)}
+          >
+            <LogOut data-icon="inline-start" />
+            {t.account.logout}
+          </Button>
+        )}
       </Row>
     </div>
   )
@@ -831,7 +690,7 @@ function SlackSection() {
             </>
           }
         >
-          {(!team || expired) && (
+          {!isWeb && (!team || expired) && (
             <Button variant="outline" size="sm" onClick={() => void connect()}>
               {busy && (
                 <Loader2
@@ -846,7 +705,7 @@ function SlackSection() {
                   : t.slack.connect}
             </Button>
           )}
-          {team && (
+          {!isWeb && team && (
             <Button
               variant="outline"
               size="sm"
@@ -1190,34 +1049,39 @@ function NotificationsSection() {
       title={t.sections.notifications}
       description={t.notifications.description}
     >
-      <Row
-        label={t.notifications.test}
-        description={
-          test?.state === "sent"
-            ? t.notifications.sent
-            : test?.state === "error"
-              ? t.notifications.error(test.message)
-              : t.notifications.testHint
-        }
-      >
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={test?.state === "sending"}
-          onClick={send}
-        >
-          {t.notifications.sendTest}
-        </Button>
-      </Row>
-      <Row
-        label={t.notifications.last}
-        description={
-          last
-            ? `${last.title} · ${new Date(last.at).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })}`
-            : t.notifications.none
-        }
-      />
-      {SYSTEM_NOTIFICATION_SETTINGS && (
+      {/* version web : les notifications partent de l'app, pas de l'onglet */}
+      {!isWeb && (
+        <>
+          <Row
+            label={t.notifications.test}
+            description={
+              test?.state === "sent"
+                ? t.notifications.sent
+                : test?.state === "error"
+                  ? t.notifications.error(test.message)
+                  : t.notifications.testHint
+            }
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={test?.state === "sending"}
+              onClick={send}
+            >
+              {t.notifications.sendTest}
+            </Button>
+          </Row>
+          <Row
+            label={t.notifications.last}
+            description={
+              last
+                ? `${last.title} · ${new Date(last.at).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })}`
+                : t.notifications.none
+            }
+          />
+        </>
+      )}
+      {!isWeb && SYSTEM_NOTIFICATION_SETTINGS && (
         <Row
           label={t.notifications.system}
           description={t.notifications.systemDescription}
@@ -1410,7 +1274,22 @@ function DataSection() {
           {armed ? t.data.confirmReset : t.data.reset}
         </Button>
       </Row>
-      <UninstallRow />
+      {!isWeb && <UninstallRow />}
+    </Section>
+  )
+}
+
+/** Version web : réglages sur leur propre page (src/components/web-page.tsx). */
+function WebSection({ onOpen }: { onOpen: () => void }) {
+  const t = useStrings(S)
+  return (
+    <Section id="web" title={t.sections.web} description={t.web.description}>
+      <Row label={t.web.settings} description={t.web.settingsDescription}>
+        <Button variant="outline" size="sm" onClick={onOpen}>
+          {t.web.open}
+          <ChevronRight data-icon="inline-end" />
+        </Button>
+      </Row>
     </Section>
   )
 }
@@ -1619,7 +1498,8 @@ function AboutSection() {
             <span className="text-muted-foreground">{t.about.restarting}</span>
           )}
         </span>
-        {update.status === "available" ? (
+        {/* version web : les mises à jour se font dans l'app */}
+        {isWeb ? null : update.status === "available" ? (
           <Button size="sm" onClick={() => void installUpdate()}>
             {t.about.install}
           </Button>
@@ -1672,9 +1552,16 @@ function AboutSection() {
 
 /* ---------- Page ---------- */
 
-export function SettingsPage({ onClose }: { onClose: () => void }) {
+export function SettingsPage({
+  onClose,
+  onOpenWeb,
+}: {
+  onClose: () => void
+  /** page de la version web */
+  onOpenWeb: () => void
+}) {
   const t = useStrings(S)
-  const [active, setActive] = useState<string>(SECTIONS[0])
+  const [active, setActive] = useState<string>(SHOWN[0])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1692,7 +1579,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
       },
       { rootMargin: "0px 0px -70% 0px" },
     )
-    SECTIONS.forEach((id) => {
+    SHOWN.forEach((id) => {
       const el = document.getElementById(id)
       if (el) obs.observe(el)
     })
@@ -1723,7 +1610,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
           {t.back}
         </Button>
         <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:pb-0">
-          {SECTIONS.map((id) => (
+          {SHOWN.map((id) => (
             <li key={id} className="shrink-0">
               <button
                 type="button"
@@ -1751,6 +1638,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
         <DisplaySection />
         <ReposSection />
         <DataSection />
+        {!isWeb && <WebSection onOpen={onOpenWeb} />}
         <ShortcutsSection />
         <AboutSection />
       </div>

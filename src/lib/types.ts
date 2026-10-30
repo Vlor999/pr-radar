@@ -100,3 +100,37 @@ export type ReviewPr = {
   /** date de la dernière demande qui me vise (moi ou une équipe demandée) */
   since: string
 }
+
+/* ---------- Serveur MCP local ---------- */
+
+/** Infos du binaire et du socket (commande Rust `mcp_info`). */
+export type McpInfo = {
+  /** binaire à lancer avec `--mcp` */
+  exe: string
+  socket: string | null
+  /** false sous Windows : icône et page masquées */
+  supported: boolean
+}
+
+/** Un appel reçu par le serveur MCP. Jamais le contenu de la réponse. */
+export type McpCall = {
+  at: string
+  /** `clientInfo.name` annoncé par l'agent à l'`initialize` */
+  client: string
+  tool: string
+  args: unknown
+  ms: number
+  ok: boolean
+  error?: string
+  /** taille de la réponse en octets */
+  bytes: number
+}
+
+/** Version web locale : statut du serveur de l'app (src-tauri/src/web.rs). */
+export type WebStatus = {
+  enabled: boolean
+  port: number
+  running: boolean
+  /** `port-busy`, ou message du système */
+  error: string | null
+}
