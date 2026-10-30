@@ -22,7 +22,7 @@ description: "PR Radar project rules: branches, commits, PRs, validation, releas
 
 - Green checks before any push (`CLAUDE.md` § Checks). Never `--no-verify`.
 - Visible change: `npm run demo` (skill `demo`) and explicit user validation before commit.
-- Stay inside the requested scope: no refactor, no speculative feature. Simplicity first (`ponytail`).
+- Stay inside the requested scope: no refactor, no speculative feature. Simplicity first.
 
 ## Security
 

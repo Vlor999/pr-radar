@@ -30,7 +30,7 @@ Work only inside this worktree.
 
 ## 3. Implement
 
-- Load `ponytail` first: the simplest thing that works, reuse what the repo has.
+- Do the simplest thing that works, reuse what the repo has.
 - Follow `CLAUDE.md` (stack, security rules, `site/` with mock data only).
 - Stay inside the task scope. No refactor that was not asked for.
 

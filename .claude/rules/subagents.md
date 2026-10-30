@@ -19,7 +19,6 @@ description: "Protocol for implementation and review subagents on PR Radar: mode
 
 ## Skills to always give
 
-- `ponytail`: the simplest thing that works, reuse what exists.
 - `logical-commit-sequencer`: atomic commits, ordered, before the push.
 - `worktree` for an implementation, `mr-review` (read-only mode) for a review.
 
