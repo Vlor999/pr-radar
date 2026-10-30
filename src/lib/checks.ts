@@ -17,16 +17,21 @@ const FAILED = new Set([
   "ACTION_REQUIRED",
 ])
 
+// message de GitHub d'un refus de droit (jeton fine-grained sans Actions, scope manquant), pas d'une limite ou de SSO
+const PERMISSION_MESSAGE = /scope|permission|not accessible/i
+
 const S = strings(
   {
-    forbidden: (detail: string) =>
-      `Relance refusée : le jeton doit avoir le droit d'écriture sur Actions (jeton fine-grained) ou le scope repo (${detail})`,
-    failed: (detail: string) => `Relance impossible : ${detail}`,
+    failed: (status: number) => `Relance impossible (HTTP ${status})`,
+    sep: " : ",
+    tokenHint:
+      "le jeton doit avoir le droit d'écriture sur Actions (jeton fine-grained) ou le scope repo",
   },
   {
-    forbidden: (detail: string) =>
-      `Re-run refused: the token needs write access to Actions (fine-grained token) or the repo scope (${detail})`,
-    failed: (detail: string) => `Re-run failed: ${detail}`,
+    failed: (status: number) => `Re-run failed (HTTP ${status})`,
+    sep: ": ",
+    tokenHint:
+      "the token needs write access to Actions (fine-grained token) or the repo scope",
   },
 )
 
@@ -187,9 +192,15 @@ export const formatDuration = (ms: number) => {
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
 }
 
-/** Message lisible d'un refus de `rerun-failed-jobs` ; `detail` : le `message` de GitHub, sinon le code HTTP. */
-export const rerunError = (status: number, detail: string) =>
-  // 403 : jeton sans droit Actions ; 404 : GitHub masque aussi ainsi un repo ou un run inaccessible
-  status === 403 || status === 404
-    ? pick(S).forbidden(detail)
-    : pick(S).failed(detail)
+/** Message lisible d'un refus de `rerun-failed-jobs` : code HTTP, `message` de GitHub, et l'indication sur le jeton
+ * seulement pour un refus de droit (un 403 est aussi une limite secondaire ou le SSO, un 404 un run introuvable). */
+export const rerunError = (status: number, message?: string) => {
+  const t = pick(S)
+  return [
+    t.failed(status),
+    message,
+    message && PERMISSION_MESSAGE.test(message) && t.tokenHint,
+  ]
+    .filter(Boolean)
+    .join(t.sep)
+}

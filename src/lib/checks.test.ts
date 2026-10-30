@@ -206,9 +206,23 @@ test("la durée s'affiche comme sur GitHub", () => {
   assert.equal(formatDuration(3_720_000), "1h 2m")
 })
 
-test("un refus 403 de la relance nomme le droit Actions manquant", () => {
-  assert.match(rerunError(403, "Resource not accessible"), /Actions/)
-  assert.doesNotMatch(rerunError(422, "Run is not completed"), /Actions/)
+test("un refus de droit de la relance nomme le droit Actions manquant", () => {
+  assert.match(
+    rerunError(403, "Resource not accessible by personal access token"),
+    /Actions/,
+  )
+})
+
+test("un autre 403 ou un 404 de la relance donne le code et le message de GitHub, sans parler du jeton", () => {
+  const limit = rerunError(403, "You have exceeded a secondary rate limit")
+  assert.match(limit, /HTTP 403/)
+  assert.match(limit, /secondary rate limit/)
+  assert.doesNotMatch(limit, /Actions/)
+  assert.doesNotMatch(rerunError(404, "Not Found"), /Actions/)
+})
+
+test("une relance refusée sans message donne le code HTTP", () => {
+  assert.match(rerunError(500), /HTTP 500/)
 })
 
 test("un lien de job hors https n'est pas gardé (la ligne n'est pas un lien)", () => {

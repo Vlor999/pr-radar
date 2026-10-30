@@ -712,5 +712,5 @@ export async function rerunFailedJobs(repo: string, runId: number) {
   const { message } = (await res.json().catch(() => ({}))) as {
     message?: string
   }
-  throw new Error(rerunError(res.status, message || pick(S).http(res.status)))
+  throw new Error(rerunError(res.status, message))
 }
