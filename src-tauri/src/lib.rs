@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, ipc::CapabilityBuilder};
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
 
 pub mod mcp;
@@ -211,6 +212,8 @@ fn uninstall_plan(app: AppHandle) -> UninstallPlan {
 fn uninstall_run(app: AppHandle) -> Result<(), String> {
     delete_token(DEFAULT_ACCOUNT.into())?;
     web::forget(&app)?;
+    // best effort : sinon le système chercherait à chaque session une app supprimée
+    let _ = app.autolaunch().disable();
     let plan = uninstall_plan(app.clone());
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
     let bundle = plan.app_path.as_deref().map(Path::new);
@@ -386,6 +389,8 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // lancement à l'ouverture de session : l'état vit dans le système (LaunchAgent, registre, .desktop)
+        .plugin(tauri_plugin_autostart::Builder::new().build())
         .manage(web::Web::default())
         .manage(Mutex::new(TrayLabels::default()))
         .manage(mcp::McpState::default())

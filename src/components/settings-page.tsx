@@ -1,4 +1,9 @@
 import { getVersion } from "@tauri-apps/api/app"
+import {
+  disable as disableAutostart,
+  enable as enableAutostart,
+  isEnabled as isAutostartEnabled,
+} from "@tauri-apps/plugin-autostart"
 import { cn } from "cn"
 import {
   ArrowLeft,
@@ -173,6 +178,11 @@ const S = strings(
       quotaUnknown: "Inconnu avant la première actualisation",
       reloadAll: "Relire tout maintenant",
       reloadNow: "Actualiser maintenant",
+      launch: "Lancer à l'ouverture de session",
+      launchDescription:
+        "PR Radar démarre avec la session, pour ne manquer aucune notification.",
+      launchError: (message: string) =>
+        `Réglage du système impossible : ${message}`,
     },
     notifications: {
       description:
@@ -370,6 +380,11 @@ const S = strings(
       quotaUnknown: "Unknown until the first refresh",
       reloadAll: "Reload everything now",
       reloadNow: "Refresh now",
+      launch: "Launch at login",
+      launchDescription:
+        "PR Radar starts with your session, so no notification is missed.",
+      launchError: (message: string) =>
+        `Could not change the system setting: ${message}`,
     },
     notifications: {
       description:
@@ -924,6 +939,7 @@ function RefreshSection() {
       title={t.sections.actualisation}
       description={t.refresh.description}
     >
+      {!isWeb && <LaunchAtLoginRow />}
       <Row label={t.refresh.frequency} labelId="refresh-label">
         {/* appearance-none : sinon le navigateur impose son propre style (pilule sombre) */}
         <div className="relative">
@@ -1028,6 +1044,40 @@ const SYSTEM_NOTIFICATION_SETTINGS = navigator.userAgent.includes("Mac")
   : navigator.userAgent.includes("Windows")
     ? "ms-settings:notifications"
     : null
+
+/** Lancement à l'ouverture de session : l'état est celui du système, relu en revenant sur la fenêtre. */
+function LaunchAtLoginRow() {
+  const t = useStrings(S)
+  const [on, setOn] = useState<boolean | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const read = () =>
+    isAutostartEnabled().then(setOn, (e: unknown) => setError(String(e)))
+  useEffect(() => {
+    void read()
+    const onFocus = () => void read()
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [])
+  const change = (v: boolean) => {
+    setError(null)
+    ;(v ? enableAutostart() : disableAutostart())
+      .catch((e: unknown) => setError(String(e)))
+      .finally(() => void read())
+  }
+  return (
+    <Row
+      label={t.refresh.launch}
+      description={
+        error ? t.refresh.launchError(error) : t.refresh.launchDescription
+      }
+      labelId="launch-label"
+    >
+      {on !== null && (
+        <Toggle labelledBy="launch-label" checked={on} onChange={change} />
+      )}
+    </Row>
+  )
+}
 
 function NotificationsSection() {
   const s = useSettings()

@@ -241,6 +241,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 - tauri 2.12.4 (Apache-2.0 OR MIT)
 - tauri-codegen 2.7.3 (Apache-2.0 OR MIT)
 - tauri-macros 2.7.3 (Apache-2.0 OR MIT)
+- tauri-plugin-autostart 2.7.0 (Apache-2.0 OR MIT)
 - tauri-plugin-deep-link 2.6.2 (Apache-2.0 OR MIT)
 - tauri-plugin-fs 2.7.1 (Apache-2.0 OR MIT)
 - tauri-plugin-http 2.8.3 (Apache-2.0 OR MIT)
@@ -447,6 +448,7 @@ Apache License
 - tauri 2.12.4 (Apache-2.0 OR MIT)
 - tauri-codegen 2.7.3 (Apache-2.0 OR MIT)
 - tauri-macros 2.7.3 (Apache-2.0 OR MIT)
+- tauri-plugin-autostart 2.7.0 (Apache-2.0 OR MIT)
 - tauri-plugin-deep-link 2.6.2 (Apache-2.0 OR MIT)
 - tauri-plugin-fs 2.7.1 (Apache-2.0 OR MIT)
 - tauri-plugin-http 2.8.3 (Apache-2.0 OR MIT)
@@ -508,11 +510,13 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/tauri.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
+- @tauri-apps/plugin-autostart 2.7.0 (MIT OR Apache-2.0)
 - @tauri-apps/plugin-http 2.8.3 (MIT OR Apache-2.0)
 - @tauri-apps/plugin-notification 2.7.0 (MIT OR Apache-2.0)
 - @tauri-apps/plugin-opener 2.7.2 (MIT OR Apache-2.0)
 - @tauri-apps/plugin-process 2.4.0 (MIT OR Apache-2.0)
 - @tauri-apps/plugin-updater 2.14.0 (MIT OR Apache-2.0)
+- tauri-plugin-autostart 2.7.0 (Apache-2.0 OR MIT)
 - tauri-plugin-deep-link 2.6.2 (Apache-2.0 OR MIT)
 - tauri-plugin-fs 2.7.1 (Apache-2.0 OR MIT)
 - tauri-plugin-http 2.8.3 (Apache-2.0 OR MIT)
@@ -1803,6 +1807,32 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+```
+
+- auto-launch 0.6.0 (MIT)
+
+```
+MIT License
+
+Copyright (c) 2022 zzzgydi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 - axum 0.8.9 (MIT)
@@ -5241,6 +5271,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
+- dirs 6.0.0 (MIT OR Apache-2.0)
 - dirs 7.0.0 (MIT OR Apache-2.0)
 - dirs-sys 0.5.0 (MIT OR Apache-2.0)
 
@@ -5421,6 +5452,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
    of your accepting any such warranty or additional liability.
 ```
 
+- dirs 6.0.0 (MIT OR Apache-2.0)
 - dirs 7.0.0 (MIT OR Apache-2.0)
 - dirs-sys 0.5.0 (MIT OR Apache-2.0)
 
@@ -9536,6 +9568,7 @@ DEALINGS IN THE SOFTWARE.
 ```
 
 - nix 0.29.0 (MIT)
+- nix 0.31.3 (MIT)
 
 ```
 The MIT License (MIT)
@@ -10102,6 +10135,32 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 MIT License
 
 Copyright (c) 2018 sgodwincs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+- os_info 3.15.0 (MIT)
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2017 Stanislav Tkach
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -13218,6 +13277,32 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
+- smappservice-rs 0.1.3 (MIT)
+
+```
+MIT License
+
+Copyright (c) 2025 iparaskev
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 - softbuffer 0.4.8 (MIT OR Apache-2.0)
 
 ```
@@ -16144,6 +16229,8 @@ The license is the one declared in the package metadata; its standard text appli
 - objc2-io-surface 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-io-surface/0.3.2
 - objc2-osa-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-osa-kit/0.3.2
 - objc2-quartz-core 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-quartz-core/0.3.2
+- objc2-security 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-security/0.3.2
+- objc2-service-management 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-service-management/0.3.2
 - objc2-ui-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-ui-kit/0.3.2
 - objc2-user-notifications 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-user-notifications/0.3.2
 - objc2-web-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-web-kit/0.3.2
