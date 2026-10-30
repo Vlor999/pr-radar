@@ -125,3 +125,12 @@ export type McpCall = {
   /** taille de la réponse en octets */
   bytes: number
 }
+
+/** Version web locale : statut du serveur de l'app (src-tauri/src/web.rs). */
+export type WebStatus = {
+  enabled: boolean
+  port: number
+  running: boolean
+  /** `port-busy`, ou message du système */
+  error: string | null
+}

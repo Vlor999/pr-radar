@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  ChevronRight,
   ExternalLink,
   Loader2,
   LogOut,
@@ -14,7 +15,7 @@ import {
   Sun,
   Trash2,
 } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,7 +27,15 @@ import {
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { Login } from "@/components/login"
-import { Row, Section, Segmented, Toggle } from "@/components/settings-ui"
+import {
+  Feedback,
+  Row,
+  Section,
+  Segmented,
+  Toggle,
+  useConfirm,
+  useFlash,
+} from "@/components/settings-ui"
 import { GITHUB, type Account } from "@/lib/accounts"
 import { accountAdded, refreshPrs, signOut } from "@/lib/actions"
 import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
@@ -92,7 +101,6 @@ const S = strings(
       raccourcis: "Raccourcis clavier",
       "a-propos": "À propos",
     },
-    done: "Fait",
     failed: "Échec",
     account: {
       description:
@@ -268,25 +276,10 @@ const S = strings(
     },
     web: {
       description:
-        "Ouvre PR Radar dans un onglet du navigateur, servi par l'app sur cette machine uniquement (127.0.0.1). La fenêtre peut ensuite être fermée : l'app reste dans la barre des menus et envoie les notifications.",
-      enable: "Activer la version web",
-      running: (url: string) => `Active sur ${url}`,
-      stopped: "Désactivée",
-      port: "Port",
-      portDescription: "Port local du serveur (1024 à 65535).",
-      apply: "Appliquer",
-      portBusy: (port: number) =>
-        `Le port ${port} est déjà utilisé par une autre application : choisis-en un autre.`,
-      invalidPort: "Port invalide : un nombre entre 1024 et 65535.",
-      startError: (e: string) => `Impossible de démarrer le serveur : ${e}`,
-      open: "Ouvrir dans le navigateur",
-      openDescription:
-        "Chaque lien sert une seule fois pendant une minute, échangé à l'ouverture contre une session du navigateur.",
-      secret: "Sessions des navigateurs",
-      secretDescription:
-        "Ferme toutes les sessions ouvertes : rouvre ensuite la version web depuis l'app.",
-      rotate: "Déconnecter les navigateurs",
-      confirmRotate: "Confirmer",
+        "PR Radar dans un onglet du navigateur, servi par l'app sur cette machine uniquement.",
+      settings: "Réglages de la version web",
+      settingsDescription: "Activation, port et sessions des navigateurs.",
+      open: "Ouvrir",
     },
     nav: "Sections des réglages",
     back: "Retour",
@@ -305,7 +298,6 @@ const S = strings(
       raccourcis: "Keyboard shortcuts",
       "a-propos": "About",
     },
-    done: "Done",
     failed: "Failed",
     account: {
       description:
@@ -479,25 +471,10 @@ const S = strings(
     },
     web: {
       description:
-        "Opens PR Radar in a browser tab, served by the app on this machine only (127.0.0.1). The window can then be closed: the app stays in the menu bar and sends the notifications.",
-      enable: "Enable the web version",
-      running: (url: string) => `Running at ${url}`,
-      stopped: "Off",
-      port: "Port",
-      portDescription: "Local port of the server (1024 to 65535).",
-      apply: "Apply",
-      portBusy: (port: number) =>
-        `Port ${port} is already used by another application: pick another one.`,
-      invalidPort: "Invalid port: a number between 1024 and 65535.",
-      startError: (e: string) => `Could not start the server: ${e}`,
-      open: "Open in browser",
-      openDescription:
-        "Each link works once for one minute, exchanged for a browser session when opened.",
-      secret: "Browser sessions",
-      secretDescription:
-        "Closes every open session: then reopen the web version from the app.",
-      rotate: "Sign out browsers",
-      confirmRotate: "Confirm",
+        "PR Radar in a browser tab, served by the app on this machine only.",
+      settings: "Web version settings",
+      settingsDescription: "On/off, port and browser sessions.",
+      open: "Open",
     },
     nav: "Settings sections",
     back: "Back",
@@ -515,48 +492,6 @@ const reducedMotion = () =>
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLElement &&
   (t.matches("input, textarea, select") || t.isContentEditable)
-
-/** Libellé « Fait » affiché 2 s après une action. */
-function useFlash(): [string | null, (msg?: string) => void] {
-  const t = useStrings(S)
-  const [msg, setMsg] = useState<string | null>(null)
-  const timer = useRef<number>(undefined)
-  useEffect(() => () => clearTimeout(timer.current), [])
-  return [
-    msg,
-    (m = t.done) => {
-      setMsg(m)
-      clearTimeout(timer.current)
-      timer.current = window.setTimeout(() => setMsg(null), 2000)
-    },
-  ]
-}
-
-/** Confirmation en deux clics : le premier arme le bouton pendant 4 s. */
-function useConfirm(): [boolean, (action: () => void) => void] {
-  const [armed, setArmed] = useState(false)
-  const timer = useRef<number>(undefined)
-  useEffect(() => () => clearTimeout(timer.current), [])
-  return [
-    armed,
-    (action) => {
-      clearTimeout(timer.current)
-      if (armed) {
-        setArmed(false)
-        action()
-      } else {
-        setArmed(true)
-        timer.current = window.setTimeout(() => setArmed(false), 4000)
-      }
-    },
-  ]
-}
-
-const Feedback = ({ msg }: { msg: string | null }) => (
-  <span aria-live="polite" className="min-w-8 text-xs text-muted-foreground">
-    {msg}
-  </span>
-)
 
 /* ---------- Sections ---------- */
 
@@ -1344,143 +1279,15 @@ function DataSection() {
   )
 }
 
-type WebStatus = {
-  enabled: boolean
-  port: number
-  running: boolean
-  /** `port-busy`, ou message du système */
-  error: string | null
-}
-
-const MIN_PORT = 1024 // en dessous : ports réservés au système
-const MAX_PORT = 65_535
-
-/** Version web locale : serveur de l'app sur 127.0.0.1, ouvert dans le navigateur (src-tauri/src/web.rs). */
-function WebSection() {
+/** Version web : réglages sur leur propre page (src/components/web-page.tsx). */
+function WebSection({ onOpen }: { onOpen: () => void }) {
   const t = useStrings(S)
-  const [status, setStatus] = useState<WebStatus | null>(null)
-  const [port, setPort] = useState("")
-  const [error, setError] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [secretMsg, flashSecret] = useFlash()
-  const [armed, confirm] = useConfirm()
-
-  const show = (s: WebStatus) => {
-    setStatus(s)
-    setPort(String(s.port))
-  }
-  useEffect(() => {
-    invoke<WebStatus>("web_status").then(show, (e: unknown) =>
-      setError(message(e)),
-    )
-  }, [])
-
-  const configure = async (enabled: boolean, p: number) => {
-    if (!Number.isInteger(p) || p < MIN_PORT || p > MAX_PORT) {
-      setError(t.web.invalidPort)
-      return
-    }
-    setBusy(true)
-    setError("")
-    try {
-      show(await invoke<WebStatus>("web_configure", { enabled, port: p }))
-    } catch (e) {
-      setError(message(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!status)
-    return (
-      <Section id="web" title={t.sections.web} description={t.web.description}>
-        <p className="py-3 text-sm text-destructive">{error}</p>
-      </Section>
-    )
-  const url = `http://127.0.0.1:${status.port}`
-  const startError =
-    status.error === "port-busy"
-      ? t.web.portBusy(status.port)
-      : status.error && t.web.startError(status.error)
   return (
     <Section id="web" title={t.sections.web} description={t.web.description}>
-      <Row
-        label={t.web.enable}
-        labelId="web-enable-label"
-        description={status.running ? t.web.running(url) : t.web.stopped}
-      >
-        <Toggle
-          checked={status.enabled}
-          onChange={(v) => void configure(v, status.port)}
-          labelledBy="web-enable-label"
-        />
-      </Row>
-      <Row
-        label={t.web.port}
-        labelId="web-port-label"
-        description={t.web.portDescription}
-      >
-        <Input
-          type="number"
-          inputMode="numeric"
-          min={MIN_PORT}
-          max={MAX_PORT}
-          value={port}
-          onChange={(e) => setPort(e.target.value)}
-          aria-labelledby="web-port-label"
-          className="w-24 tabular-nums"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy || port === String(status.port)}
-          onClick={() => void configure(status.enabled, Number(port))}
-        >
-          {busy && (
-            <Loader2
-              data-icon="inline-start"
-              className="animate-spin motion-reduce:animate-none"
-            />
-          )}
-          {t.web.apply}
-        </Button>
-      </Row>
-      {(error || startError) && (
-        <p role="alert" className="pb-3 text-xs text-destructive">
-          {error || startError}
-        </p>
-      )}
-      {status.running && (
-        <Row label={t.web.open} description={t.web.openDescription}>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              void invoke("web_open").catch((e: unknown) =>
-                setError(message(e)),
-              )
-            }
-          >
-            {t.web.open}
-            <ExternalLink data-icon="inline-end" />
-          </Button>
-        </Row>
-      )}
-      <Row label={t.web.secret} description={t.web.secretDescription}>
-        <Feedback msg={secretMsg} />
-        <Button
-          variant={armed ? "destructive" : "outline"}
-          size="sm"
-          onClick={() =>
-            confirm(() =>
-              invoke("web_revoke").then(
-                () => flashSecret(),
-                (e: unknown) => setError(message(e)),
-              ),
-            )
-          }
-        >
-          {armed ? t.web.confirmRotate : t.web.rotate}
+      <Row label={t.web.settings} description={t.web.settingsDescription}>
+        <Button variant="outline" size="sm" onClick={onOpen}>
+          {t.web.open}
+          <ChevronRight data-icon="inline-end" />
         </Button>
       </Row>
     </Section>
@@ -1745,7 +1552,14 @@ function AboutSection() {
 
 /* ---------- Page ---------- */
 
-export function SettingsPage({ onClose }: { onClose: () => void }) {
+export function SettingsPage({
+  onClose,
+  onOpenWeb,
+}: {
+  onClose: () => void
+  /** page de la version web */
+  onOpenWeb: () => void
+}) {
   const t = useStrings(S)
   const [active, setActive] = useState<string>(SHOWN[0])
 
@@ -1824,7 +1638,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
         <DisplaySection />
         <ReposSection />
         <DataSection />
-        {!isWeb && <WebSection />}
+        {!isWeb && <WebSection onOpen={onOpenWeb} />}
         <ShortcutsSection />
         <AboutSection />
       </div>
