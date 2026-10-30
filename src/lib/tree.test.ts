@@ -8,6 +8,7 @@ import {
   isStale,
   keepVanished,
   mergeState,
+  needsAttention,
   sortTree,
 } from "./tree.ts"
 import type { Pr } from "./types.ts"
@@ -239,4 +240,68 @@ test("repo vide deux fois de suite : ses PR disparaissent", () => {
 test("repo plus suivi : ses PR ne sont pas gardées", () => {
   const res = keepVanished([pr(1, "a", "main")], [], new Set(), [])
   assert.deepEqual(res.prs, [])
+})
+
+const theirs = (reason: "assigned" | "mentioned" | "involved") => ({
+  involved: { reason, author: "bob" },
+})
+
+test("la PR d'un autre stackée sur la mienne est rangée sous elle", () => {
+  const [root] = buildTree([
+    pr(1, "a", "main"),
+    pr(2, "b", "a", theirs("assigned")),
+  ])
+  assert.deepEqual(
+    root.children.map((n) => [n.number, n.children.map((c) => c.number)]),
+    [[1, [2]]],
+  )
+  assert.equal(root.children[0].children[0].parent, 1)
+})
+
+test("ma PR stackée sur celle d'un autre est bloquée par elle", () => {
+  const [root] = buildTree([
+    pr(1, "a", "main", theirs("involved")),
+    pr(2, "b", "a"),
+  ])
+  const mine = root.children[0].children[0]
+  assert.equal(mine.number, 2)
+  assert.deepEqual(mergeState(mine), { kind: "blocked", by: 1 })
+})
+
+test("la tête d'une PR de fork ne devient pas la base de mes PR", () => {
+  const roots = buildTree([
+    pr(1, "main", "main", { ...theirs("mentioned"), fork: true }),
+    pr(2, "b", "main"),
+  ])
+  assert.deepEqual(
+    roots.map((r) => [r.branch, r.children.map((n) => n.number)]),
+    [["main", [2, 1]]],
+  )
+  assert.deepEqual(
+    roots[0].children.map((n) => n.children.length),
+    [0, 0],
+  )
+})
+
+test("la PR approuvée d'un autre n'est pas prête à merger pour moi", () => {
+  const [root] = buildTree([
+    pr(1, "a", "main", { decision: "APPROVED", ...theirs("assigned") }),
+  ])
+  assert.equal(mergeState(root.children[0]), null)
+})
+
+test("la PR d'un autre avec changements demandés n'est pas à traiter", () => {
+  assert.equal(
+    needsAttention(
+      pr(1, "a", "main", {
+        decision: "CHANGES_REQUESTED",
+        ...theirs("assigned"),
+      }),
+    ),
+    false,
+  )
+  assert.equal(
+    needsAttention(pr(2, "b", "main", { decision: "CHANGES_REQUESTED" })),
+    true,
+  )
 })

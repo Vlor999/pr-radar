@@ -3,8 +3,9 @@ import type { Pr, PrNode, Root } from "./types.ts"
 export const TRUNKS = ["main", "master"]
 export const STALE_DAYS = 5 // par défaut ; réglable dans l'app
 
+/** À traiter : une de mes PR seulement (sur la PR d'un autre, c'est à son auteur d'agir). */
 export const needsAttention = (p: Pr) =>
-  p.decision === "CHANGES_REQUESTED" || p.unresolved > 0
+  !p.involved && (p.decision === "CHANGES_REQUESTED" || p.unresolved > 0)
 /** Stack natif GitHub, s'il a au moins deux PR. */
 export const nativeStack = (p: Pr) =>
   p.stack && p.stack.size > 1 ? p.stack : null
@@ -14,14 +15,16 @@ export const idleDays = (p: Pr, now = Date.now()) =>
 export const isStale = (p: Pr, now = Date.now(), days = STALE_DAYS) =>
   idleDays(p, now) >= days
 
-/** Prête à merger, bloquée par sa PR parente du stack, ou rien de particulier. */
+/** Prête à merger (une de mes PR seulement : l'autre auteur merge la sienne), bloquée par sa PR parente du
+ * stack, ou rien de particulier. */
 export type MergeState =
   { kind: "ready" } | { kind: "blocked"; by: number } | null
 
 export function mergeState(p: PrNode): MergeState {
   if (p.parent) return { kind: "blocked", by: p.parent }
   const ciOk = p.ci === null || p.ci === "SUCCESS"
-  return p.decision === "APPROVED" &&
+  return !p.involved &&
+    p.decision === "APPROVED" &&
     ciOk &&
     !p.conflicting &&
     !p.draft &&
@@ -41,10 +44,11 @@ const byPriority = (a: Pr, b: Pr) =>
 
 /**
  * Rattache chaque PR à celle d'en dessous dans son stack natif GitHub, sinon à la PR dont
- * la branche est sa base (stack déduit), sinon à sa branche de base.
+ * la branche est sa base (stack déduit), sinon à sa branche de base. Les PR des autres y entrent comme les
+ * miennes (base ou enfant d'une de mes PR) ; la tête d'une PR de fork n'est pas une branche du repo.
  */
 export function buildTree(prs: Pr[]): Root[] {
-  const byHead = new Map(prs.map((p) => [p.head, p]))
+  const byHead = new Map(prs.filter((p) => !p.fork).map((p) => [p.head, p]))
   const nativeBelow = (p: Pr) => {
     const s = p.stack
     return s
@@ -71,11 +75,12 @@ export function buildTree(prs: Pr[]): Root[] {
   const node = (p: Pr, seen: Set<string>): PrNode => ({
     ...p,
     parent: below(p)?.number ?? null,
-    children: seen.has(p.head) // garde-fou anti-cycle
-      ? []
-      : (kids.get(p.head) ?? [])
-          .sort(byPriority)
-          .map((k) => node(k, new Set([...seen, p.head]))),
+    children:
+      seen.has(p.head) || p.fork // garde-fou anti-cycle ; fork : rien ne part de sa tête
+        ? []
+        : (kids.get(p.head) ?? [])
+            .sort(byPriority)
+            .map((k) => node(k, new Set([...seen, p.head]))),
   })
 
   return [...kids.keys()]

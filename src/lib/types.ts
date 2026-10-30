@@ -49,12 +49,19 @@ export type Pr = {
   updated: string
   /** stack natif GitHub (`stackEntry`) ; absent : stack déduit des branches */
   stack?: { number: number; position: number; size: number }
+  /** branche de tête dans un fork (`isCrossRepository`) : ne peut pas servir de base à une PR du repo */
+  fork?: boolean
+  /** PR d'un autre, dans l'arbre parce qu'elle me concerne ; absent : PR à moi */
+  involved?: { reason: Reason; author: string }
 }
+
+/** Pourquoi la PR d'un autre est dans l'arbre, par priorité : assignée > mentionné > impliqué (commentaire, review…). */
+export type Reason = "assigned" | "mentioned" | "involved"
 
 /** Une PR dans l'arbre : ses enfants sont les PR stackées sur sa branche. */
 export type PrNode = Pr & { parent: number | null; children: PrNode[] }
 
-/** Racine d'un repo : une branche de base (main, ou branche sans PR à moi). */
+/** Racine d'un repo : une branche de base (main, ou branche sans PR chargée). */
 export type Root = { branch: string; trunk: boolean; children: PrNode[] }
 
 /** PR à moi mergée récemment. */
