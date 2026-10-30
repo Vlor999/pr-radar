@@ -98,7 +98,7 @@ As of October 2026, based on each product's public features.
 
 Where the alternatives win:
 
-- **github.com/pulls**: nothing to install (no local server to run), full review UI, GitHub Enterprise.
+- **github.com/pulls**: nothing to install, full review UI, GitHub Enterprise.
 - **Gitify**: your whole notification inbox (issues, releases, discussions) in the menu bar, GitHub Enterprise support.
 - **PR Marmot**: a native desktop app, with signed builds for Apple silicon Macs (Linux and Intel Macs via a source build).
 
