@@ -9,7 +9,7 @@
 ## Features
 
 - PR tree per repo, with "depends on / blocks" stacks
-- Review, CI and conflict status
+- Review, CI and conflict status; jobs per workflow in the expanded card, with re-run of failed jobs
 - Unresolved review threads shown with the code, reply in place
 - Filters and search
 - Ready-to-merge and stale PRs
@@ -40,8 +40,8 @@ Two options:
 
 1. **Sign in with GitHub** (device flow): no server, the token is stored in the system keychain.
 2. **Personal access token**:
-   - fine-grained: read access to Pull requests + Contents/Metadata, write access to Pull requests to reply, resolve threads and mark drafts ready, and write access to Contents to update a PR branch;
-   - or classic with the `repo` scope.
+   - fine-grained: read access to Pull requests + Contents/Metadata, write access to Pull requests to reply, resolve threads and mark drafts ready, write access to Contents to update a PR branch, and write access to Actions to re-run failed jobs;
+   - or classic with the `repo` scope (enough to re-run jobs: the `workflow` scope is only for editing workflow files).
 
 Organization repos may require the organization to approve the OAuth app, or SSO authorization of the token.
 
