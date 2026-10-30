@@ -7,6 +7,7 @@ import { openExternal } from "@/lib/open"
 /** À lire avec `useStrings(SHORTCUTS)`, touches affichées avec `<Shortcut>`. */
 export const SHORTCUTS = strings<{ keys: ShortcutKeys; label: string }[]>(
   [
+    { keys: ["mod", "K"], label: "palette de commandes" },
     { keys: ["/"], label: "rechercher" },
     { keys: [["j"], ["k"]], label: "carte suivante / précédente" },
     { keys: ["o"], label: "ouvrir sur GitHub" },
@@ -14,6 +15,7 @@ export const SHORTCUTS = strings<{ keys: ShortcutKeys; label: string }[]>(
     { keys: ["d"], label: "clair / sombre" },
   ],
   [
+    { keys: ["mod", "K"], label: "command palette" },
     { keys: ["/"], label: "search" },
     { keys: [["j"], ["k"]], label: "next / previous card" },
     { keys: ["o"], label: "open on GitHub" },
@@ -36,6 +38,8 @@ export function useKeyboardNav(): void {
         return
 
       const target = event.target as HTMLElement | null
+      // palette de commandes ouverte : ses touches ne déplacent pas les cartes derrière
+      if (target?.closest("[data-slot=dialog-content]")) return
       if (
         target?.matches("input, textarea, select") ||
         target?.isContentEditable
