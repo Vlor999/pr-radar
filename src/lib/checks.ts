@@ -175,6 +175,8 @@ export function toCiView(raw: RawChecks): CiView {
 /** « Relancer les jobs en échec » : un workflow Actions terminé avec au moins un job en échec. */
 export const canRerun = (w: CiWorkflow) =>
   w.runId !== null &&
+  // jobs non lus : ils peuvent encore tourner ou porter le seul échec ; la ligne « non affichés » mène à GitHub
+  w.hiddenJobs === 0 &&
   w.jobs.some((j) => j.state === "failure") &&
   !w.jobs.some((j) => j.state === "running" || j.state === "queued")
 

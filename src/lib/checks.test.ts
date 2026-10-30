@@ -185,6 +185,13 @@ test("pas de relance tant qu'un job du workflow tourne", () => {
   )
 })
 
+test("pas de relance quand des jobs du workflow ne sont pas affichés", () => {
+  assert.equal(
+    canRerun(wf({ hiddenJobs: 3, jobs: [job({ state: "failure" })] })),
+    false,
+  )
+})
+
 test("pas de relance sans workflow run (statuts, app hors Actions)", () => {
   assert.equal(
     canRerun(wf({ runId: null, jobs: [job({ state: "failure" })] })),
