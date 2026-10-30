@@ -94,6 +94,10 @@ const ICON: Record<CiState, { Icon: LucideIcon; className: string }> = {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
+// dernière vue CI lue par PR (`repo#numéro`), avec le commit et l'état agrégé qu'elle décrit : une vue rouverte
+// s'affiche tout de suite et se relit en fond. Une entrée par PR, remplacée : reste petit.
+const lastViews = new Map<string, { at: string; view: CiView }>()
+
 /** Jobs au-delà de la borne de la requête : leur nombre, et la page des checks de la PR sur GitHub. */
 const Hidden = ({ text, url }: { text: string; url: string }) => {
   const t = useStrings(S)
@@ -116,7 +120,12 @@ const Hidden = ({ text, url }: { text: string; url: string }) => {
  * vue ouverte (le panneau repliable démonte son contenu) : la requête part à l'ouverture, relue à chaque rechargement. */
 export function CiGraph({ pr }: { pr: PrNode }) {
   const t = useStrings(S)
-  const [view, setView] = useState<CiView>()
+  const prKey = `${pr.repo}#${pr.number}`
+  // la vue gardée ne vaut que pour ce commit et cet état agrégé : un autre commit repasse par le chargement
+  const at = `${pr.sha}|${pr.ci}`
+  const kept = lastViews.get(prKey)
+  const [, setRead] = useState(0)
+  const view = kept?.at === at ? kept.view : undefined
   const [error, setError] = useState("")
   const [now, setNow] = useState(Date.now)
   // chaque rechargement de la liste (actualisation auto ou manuelle, qui vide le cache) relit les jobs :
@@ -127,15 +136,16 @@ export function CiGraph({ pr }: { pr: PrNode }) {
     let live = true
     fetchChecks(pr.repo, pr.number, pr.sha, pr.ci)
       .then((v) => {
+        lastViews.set(prKey, { at, view: v })
         if (!live) return
-        setView(v)
+        setRead((n) => n + 1)
         setError("")
       })
       .catch((e: unknown) => live && setError(message(e)))
     return () => {
       live = false
     }
-  }, [pr.repo, pr.number, pr.sha, pr.ci, fetchedAt])
+  }, [prKey, at, fetchedAt]) // prKey et at portent repo, numéro, commit et état agrégé
 
   const workflows = view?.workflows
   const checksUrl = `${pr.url}/checks`
