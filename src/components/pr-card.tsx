@@ -415,6 +415,10 @@ function PrActions({ pr }: { pr: PrNode }) {
         },
       )
       setError(res.error ?? "")
+      // relecture faite : le bouton suit de nouveau les données (GitHub peut encore proposer l'action,
+      // ou la reproposer à une actualisation suivante)
+      setDone(undefined)
+      setGone((g) => g.filter((a) => a !== which))
     })
 
   const button = (
