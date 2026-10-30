@@ -149,6 +149,21 @@ test("get_prs : format compact, sans fils ni conversation", () => {
   assert.deepEqual(out.prs[0].reviewers, { reviews: [], requested: [] })
 })
 
+test("get_prs : la PR d'un autre donne son motif, la mienne null", () => {
+  const involved = { reason: "mentioned" as const, author: "bob" }
+  const out = prsPayload(
+    ctx,
+    [pr(1), pr(2, { involved })],
+    [],
+    new Map(),
+    noMentions,
+  )
+  assert.deepEqual(
+    out.prs.map((p) => p.involved),
+    [null, involved],
+  )
+})
+
 test("get_prs : une PR stackée donne le numéro de sa PR parente", () => {
   const a = pr(1)
   const b = pr(2, { base: "b1" })

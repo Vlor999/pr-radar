@@ -148,12 +148,14 @@ const compactPr = (
     updated: p.updated,
     reviewers: { reviews: p.reviews, requested: p.requested },
     stack: { parent: parents.get(p.url) ?? null, native: p.stack ?? null },
+    // PR d'un autre (assignée, mentionné, impliqué) ; null : une de mes PR
+    involved: p.involved ?? null,
     slack: slack?.list ?? null,
     slackCheckedAt: slack ? new Date(slack.at).toISOString() : null,
   }
 }
 
-/** `get_prs` : mes PR ouvertes (avec mentions Slack) et l'onglet « À reviewer » (`slack: null`). */
+/** `get_prs` : mes PR ouvertes et celles des autres qui me concernent (avec mentions Slack) et l'onglet « À reviewer » (`slack: null`). */
 export const prsPayload = (
   ctx: McpContext,
   prs: Pr[],
