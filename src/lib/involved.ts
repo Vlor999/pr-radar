@@ -2,13 +2,13 @@
 import type { Reason } from "./types.ts"
 
 /** Champs lus pour classer une PR (auteur, assignés) ; logins tels que GitHub les renvoie. */
-export type Who = { author: string | null; assignees: string[] }
+export type Roles = { author: string | null; assignees: string[] }
 
 const same = (a: string | null, b: string) =>
   !!a && a.toLowerCase() === b.toLowerCase()
 
 /** PR dont je suis l'auteur ou un assigné : son motif se lit sans la recherche des mentions. */
-export const knownWithoutMentions = (p: Who, login: string) =>
+export const knownWithoutMentions = (p: Roles, login: string) =>
   same(p.author, login) || p.assignees.some((a) => same(a, login))
 
 /**
@@ -16,7 +16,7 @@ export const knownWithoutMentions = (p: Who, login: string) =>
  * (`involves` = auteur, assigné, mentionné ou commentateur : ce qui reste est un commentaire ou une review).
  */
 export const reasonOf = (
-  p: Who,
+  p: Roles,
   login: string,
   mentioned: boolean,
 ): Reason | null =>
@@ -32,4 +32,19 @@ export const reasonOf = (
 export const uniqueById = <T extends { id: string }>(xs: T[]) => {
   const seen = new Set<string>()
   return xs.filter((x) => !seen.has(x.id) && !!seen.add(x.id))
+}
+
+/**
+ * Ids des PR où je suis mentionné, parmi `prs`. `search` (recherche `mentions:@me`) n'est lancée que s'il reste
+ * une PR d'un autre où je ne suis pas assigné ; en échec, aucun id : la pastille dit « Impliqué » au lieu de
+ * « Mentionné », sans faire échouer tout le compte.
+ */
+export const mentionedIds = async (
+  prs: Roles[],
+  login: string,
+  search: () => Promise<{ id: string }[]>,
+): Promise<Set<string>> => {
+  if (prs.every((p) => knownWithoutMentions(p, login))) return new Set()
+  const found = await search().catch(() => [])
+  return new Set(found.map((m) => m.id))
 }

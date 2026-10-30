@@ -28,7 +28,7 @@ import {
   type RepoNode,
 } from "./graphql"
 import { pick, strings } from "./i18n"
-import { knownWithoutMentions, reasonOf, uniqueById } from "./involved"
+import { mentionedIds, reasonOf, uniqueById } from "./involved"
 import {
   toConversation,
   withStackFallback,
@@ -385,17 +385,14 @@ export function fetchPrs(
               () => withoutStack.add(a.id),
             ),
           )
-          const mentioned = nodes.every((p) =>
-            knownWithoutMentions(who(p), login),
+          const ids = await mentionedIds(nodes.map(who), login, () =>
+            searchAll<{ id: string }>(
+              conn(a),
+              MENTIONS_QUERY,
+              "is:pr is:open mentions:@me " + filter,
+              MENTION_SEARCH_RETRIES,
+            ),
           )
-            ? []
-            : await searchAll<{ id: string }>(
-                conn(a),
-                MENTIONS_QUERY,
-                "is:pr is:open mentions:@me " + filter,
-                MENTION_SEARCH_RETRIES,
-              )
-          const ids = new Set(mentioned.map((m) => m.id))
           return nodes.map((p) => toPr(p, login, a.id, ids))
         }),
       )

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { knownWithoutMentions, reasonOf, uniqueById } from "./involved.ts"
+import {
+  knownWithoutMentions,
+  mentionedIds,
+  reasonOf,
+  uniqueById,
+} from "./involved.ts"
 
 const who = (author: string | null, assignees: string[] = []) => ({
   author,
@@ -43,4 +48,32 @@ test("une PR remontée deux fois n'est gardée qu'une fois", () => {
     uniqueById([{ id: "a" }, { id: "b" }, { id: "a" }]).map((x) => x.id),
     ["a", "b"],
   )
+})
+
+test("mentions : pas de recherche quand toutes les PR sont à moi ou assignées", async () => {
+  let searched = false
+  const ids = await mentionedIds(
+    [who("me"), who("bob", ["me"])],
+    "me",
+    async () => {
+      searched = true
+      return []
+    },
+  )
+  assert.equal(searched, false)
+  assert.equal(ids.size, 0)
+})
+
+test("mentions : ids trouvés pour une PR d'un autre non assignée", async () => {
+  const ids = await mentionedIds([who("bob")], "me", async () => [
+    { id: "PR_1" },
+  ])
+  assert.deepEqual([...ids], ["PR_1"])
+})
+
+test("mentions : une recherche en échec donne aucun id, sans rejeter", async () => {
+  const ids = await mentionedIds([who("bob")], "me", async () => {
+    throw new Error("GitHub : HTTP 502")
+  })
+  assert.equal(ids.size, 0)
 })
