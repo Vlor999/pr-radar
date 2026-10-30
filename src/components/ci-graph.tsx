@@ -197,10 +197,12 @@ function WorkflowBox({
           const ms = jobDurationMs(j, now)
           const row = (
             <>
+              {/* nom accessible de la ligne : état, nom, durée */}
               <Icon
                 className={cn("size-3.5 shrink-0", className)}
-                aria-label={t.state[j.state]}
+                aria-hidden
               />
+              <span className="sr-only">{t.state[j.state]},</span>
               <span className="min-w-0 flex-1 truncate">{j.name}</span>
               {ms !== null && (
                 <span className="shrink-0 text-muted-foreground tabular-nums">
@@ -212,14 +214,17 @@ function WorkflowBox({
           const rowClass =
             "flex items-center gap-1.5 rounded-md px-1 py-0.5 text-xs"
           return (
-            <li key={`${j.name}-${i}`} title={t.state[j.state]}>
+            <li
+              key={`${j.name}-${i}`}
+              title={j.url ? undefined : t.state[j.state]}
+            >
               {j.url ? (
                 // liens https (filtrés par toCiView) ouverts dans le navigateur du système (routeLinksToBrowser, open.ts)
                 <a
                   href={j.url}
                   target="_blank"
                   rel="noopener"
-                  aria-label={`${j.name} — ${t.openJob}`}
+                  title={`${t.state[j.state]} · ${t.openJob}`}
                   className={cn(rowClass, "hover:bg-muted")}
                 >
                   {row}
