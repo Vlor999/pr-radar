@@ -174,4 +174,9 @@ export type CiWorkflow = {
   /** id du workflow run GitHub Actions : relance des jobs en échec */
   runId: number | null
   jobs: CiJob[]
+  /** jobs au-delà de la borne de la requête : non affichés */
+  hiddenJobs: number
 }
+
+/** Vue CI d'une PR ; `hiddenWorkflows` : check suites au-delà de la borne de la requête. */
+export type CiView = { workflows: CiWorkflow[]; hiddenWorkflows: number }

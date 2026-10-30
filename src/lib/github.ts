@@ -30,14 +30,7 @@ import {
 import { trackQuota, validQuota, type Quota } from "./quota"
 import { toReview, type RawReview } from "./review"
 import type { Reviewer } from "./reviewers"
-import type {
-  CiWorkflow,
-  Decision,
-  MergedPr,
-  Pr,
-  ReviewPr,
-  Thread,
-} from "./types"
+import type { CiView, Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
 
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
@@ -683,7 +676,7 @@ export function fetchChecks(
   number: number,
   sha: string | null,
   rollup: string | null,
-): Promise<CiWorkflow[]> {
+): Promise<CiView> {
   return cached(
     `checks:${repo}#${number}@${sha}|${rollup}`,
     CACHE_TTL_MS,

@@ -13,6 +13,7 @@ import type { Reviewer } from "@/lib/reviewers"
 import type {
   CiJob,
   CiState,
+  CiView,
   CiWorkflow,
   MergedPr,
   Pr,
@@ -485,7 +486,16 @@ const workflow = (
   file: string,
   runId: number,
   jobs: CiJob[],
-): CiWorkflow => ({ key, name, file, event: "pull_request", runId, jobs })
+  hiddenJobs = 0,
+): CiWorkflow => ({
+  key,
+  name,
+  file,
+  event: "pull_request",
+  runId,
+  jobs,
+  hiddenJobs,
+})
 const statuses = (jobs: CiJob[]): CiWorkflow => ({
   key: "statuses",
   name: null,
@@ -493,6 +503,7 @@ const statuses = (jobs: CiJob[]): CiWorkflow => ({
   event: null,
   runId: null,
   jobs,
+  hiddenJobs: 0,
 })
 
 /** workflow run de acme/api#91 (seule PR en échec) relancé (ses jobs en échec repartent) ; celui de CodeQL refuse la relance */
@@ -525,12 +536,19 @@ const checksFor = (number: number, ci: string | null): CiWorkflow[] => {
   }
   if (ci === "PENDING")
     return [
-      workflow("ci", "CI", "ci.yml", 4181, [
-        job("lint", "success", 3, 38),
-        job("test", "running", 2),
-        job("e2e", "queued"),
-        job("source-branch", "skipped", 3, 0),
-      ]),
+      workflow(
+        "ci",
+        "CI",
+        "ci.yml",
+        4181,
+        [
+          job("lint", "success", 3, 38),
+          job("test", "running", 2),
+          job("e2e", "queued"),
+          job("source-branch", "skipped", 3, 0),
+        ],
+        12,
+      ), // matrice au-delà de la borne de la requête : ligne « 12 jobs non affichés »
       statuses([job("ci/circleci: build", "running")]),
     ]
   return [
@@ -551,10 +569,10 @@ export const fetchChecks = async (
   number: number,
   _sha: string | null,
   rollup: string | null,
-): Promise<CiWorkflow[]> => {
+): Promise<CiView> => {
   await new Promise((done) => setTimeout(done, CHECKS_MS))
   console.info("[demo] checks", repo, number)
-  return checksFor(number, rollup)
+  return { workflows: checksFor(number, rollup), hiddenWorkflows: 0 }
 }
 
 export const rerunFailedJobs = async (repo: string, runId: number) => {

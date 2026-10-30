@@ -19,7 +19,7 @@ import { fetchChecks } from "@/lib/github"
 import { strings, useStrings } from "@/lib/i18n"
 import { DONE_ICON, DONE_MS, wait } from "@/lib/motion"
 import { useData } from "@/lib/store"
-import type { CiState, CiWorkflow, PrNode } from "@/lib/types"
+import type { CiState, CiView, CiWorkflow, PrNode } from "@/lib/types"
 
 const S = strings(
   {
@@ -31,6 +31,11 @@ const S = strings(
     rerun: "Relancer les jobs en échec",
     rerunDone: "Jobs relancés",
     openJob: "Ouvrir le job sur GitHub",
+    hiddenJobs: (n: number) =>
+      `${n} job${n > 1 ? "s" : ""} non affiché${n > 1 ? "s" : ""}`,
+    hiddenWorkflows: (n: number) =>
+      `${n} workflow${n > 1 ? "s" : ""} non affiché${n > 1 ? "s" : ""}`,
+    openChecks: "Ouvrir sur GitHub",
     state: {
       success: "Réussi",
       failure: "Échec",
@@ -50,6 +55,10 @@ const S = strings(
     rerun: "Re-run failed jobs",
     rerunDone: "Jobs re-run",
     openJob: "Open the job on GitHub",
+    hiddenJobs: (n: number) => `${n} more job${n > 1 ? "s" : ""} not shown`,
+    hiddenWorkflows: (n: number) =>
+      `${n} more workflow${n > 1 ? "s" : ""} not shown`,
+    openChecks: "Open on GitHub",
     state: {
       success: "Succeeded",
       failure: "Failed",
@@ -87,11 +96,29 @@ const ICON: Record<CiState, { Icon: LucideIcon; className: string }> = {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
+/** Suites ou jobs au-delà des bornes de la requête : leur nombre, et la page des checks de la PR sur GitHub. */
+const Hidden = ({ text, url }: { text: string; url: string }) => {
+  const t = useStrings(S)
+  return (
+    <p className="px-1 text-xs text-muted-foreground">
+      {text} ·{" "}
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener"
+        className="text-primary hover:underline"
+      >
+        {t.openChecks}
+      </a>
+    </p>
+  )
+}
+
 /** Vue CI d'une carte, ouverte depuis sa pastille CI : une boîte par workflow, une ligne par job. Montée seulement
  * vue ouverte (le panneau repliable démonte son contenu) : la requête part à l'ouverture, relue à chaque rechargement. */
 export function CiGraph({ pr }: { pr: PrNode }) {
   const t = useStrings(S)
-  const [workflows, setWorkflows] = useState<CiWorkflow[]>()
+  const [view, setView] = useState<CiView>()
   const [error, setError] = useState("")
   const [now, setNow] = useState(Date.now)
   // chaque rechargement de la liste (actualisation auto ou manuelle, qui vide le cache) relit les jobs :
@@ -101,9 +128,9 @@ export function CiGraph({ pr }: { pr: PrNode }) {
   useEffect(() => {
     let live = true
     fetchChecks(pr.repo, pr.number, pr.sha, pr.ci)
-      .then((w) => {
+      .then((v) => {
         if (!live) return
-        setWorkflows(w)
+        setView(v)
         setError("")
       })
       .catch((e: unknown) => live && setError(message(e)))
@@ -112,6 +139,8 @@ export function CiGraph({ pr }: { pr: PrNode }) {
     }
   }, [pr.repo, pr.number, pr.sha, pr.ci, fetchedAt])
 
+  const workflows = view?.workflows
+  const checksUrl = `${pr.url}/checks`
   const running = !!workflows?.some((w) =>
     w.jobs.some((j) => j.state === "running"),
   )
@@ -123,27 +152,34 @@ export function CiGraph({ pr }: { pr: PrNode }) {
 
   return (
     <section aria-label={t.title} className="flex flex-col gap-2 border-t pt-3">
-      {error && !workflows ? (
+      {error && !view ? (
         <p className="text-xs text-destructive">{t.error(error)}</p>
-      ) : !workflows ? (
+      ) : !view ? (
         <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
           {t.loading}
         </p>
-      ) : !workflows.length ? (
+      ) : !view.workflows.length && !view.hiddenWorkflows ? (
         <p className="text-xs text-muted-foreground">{t.empty}</p>
       ) : (
         <div className="flex flex-wrap gap-2">
-          {workflows.map((w) => (
+          {view.workflows.map((w) => (
             // clé avec les états des jobs : une boîte relancée repart de zéro quand ses jobs changent
             <WorkflowBox
               key={`${w.key}:${w.jobs.map((j) => j.state).join()}`}
               pr={pr}
               w={w}
               now={now}
+              checksUrl={checksUrl}
             />
           ))}
         </div>
+      )}
+      {!!view?.hiddenWorkflows && (
+        <Hidden
+          text={t.hiddenWorkflows(view.hiddenWorkflows)}
+          url={checksUrl}
+        />
       )}
     </section>
   )
@@ -153,10 +189,12 @@ function WorkflowBox({
   pr,
   w,
   now,
+  checksUrl,
 }: {
   pr: PrNode
   w: CiWorkflow
   now: number
+  checksUrl: string
 }) {
   const t = useStrings(S)
   const [pending, start] = useTransition()
@@ -236,6 +274,9 @@ function WorkflowBox({
           )
         })}
       </ul>
+      {w.hiddenJobs > 0 && (
+        <Hidden text={t.hiddenJobs(w.hiddenJobs)} url={checksUrl} />
+      )}
       {(canRerun(w) || done) && (
         <Button
           variant="outline"

@@ -1,12 +1,12 @@
 /** Vue CI d'une PR (workflows, jobs, statuts de commit) : logique pure, sans Tauri. */
 import { pick, strings } from "./i18n.ts" // extension : chargé aussi par node --test
 import { isExternalHref } from "./links.ts"
-import type { CiJob, CiState, CiWorkflow } from "./types.ts"
+import type { CiJob, CiState, CiView, CiWorkflow } from "./types.ts"
 
 // Bornes demandées : le coût GraphQL et la limite de 500 000 nœuds par appel suivent les `first`, pas les
 // nœuds renvoyés. 1 commit × 20 suites × 50 runs = 1 000 nœuds, 1 point (mesuré : `rateLimit { cost }`).
-// Une PR a rarement plus de quelques workflows ; GitHub plafonne une matrice à 256 jobs, au-delà de 50 le
-// reste est sur GitHub (lien « Ouvrir sur GitHub » de la carte).
+// Une PR a rarement plus de quelques workflows ; GitHub plafonne une matrice à 256 jobs : au-delà, `totalCount`
+// donne le nombre de non affichés et la vue renvoie vers la page des checks de la PR.
 const SUITES_PER_COMMIT = 20
 const RUNS_PER_SUITE = 50
 // conclusions d'échec d'un check run (`CheckConclusionState`)
@@ -41,11 +41,11 @@ query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       commits(last: 1) { nodes { commit {
-        checkSuites(first: ${SUITES_PER_COMMIT}) { nodes {
+        checkSuites(first: ${SUITES_PER_COMMIT}) { totalCount nodes {
           id
           app { name }
           workflowRun { databaseId event file { path } workflow { name } }
-          checkRuns(first: ${RUNS_PER_SUITE}) { nodes { name status conclusion startedAt completedAt detailsUrl } }
+          checkRuns(first: ${RUNS_PER_SUITE}) { totalCount nodes { name status conclusion startedAt completedAt detailsUrl } }
         } }
         status { contexts { context state targetUrl createdAt } }
       } } }
@@ -70,7 +70,7 @@ type RawSuite = {
     file: { path: string } | null
     workflow: { name: string } | null
   } | null
-  checkRuns: { nodes: RawRun[] }
+  checkRuns: { totalCount: number; nodes: RawRun[] }
 }
 type RawContext = {
   context: string
@@ -84,7 +84,10 @@ export type RawChecks = {
       commits: {
         nodes: {
           commit: {
-            checkSuites: { nodes: (RawSuite | null)[] } | null
+            checkSuites: {
+              totalCount: number
+              nodes: (RawSuite | null)[]
+            } | null
             status: { contexts: RawContext[] } | null
           }
         }[]
@@ -123,11 +126,13 @@ const openable = (url: string | null) =>
 const basename = (path: string) => path.slice(path.lastIndexOf("/") + 1)
 
 /** Boîtes de la vue CI : une par check suite qui a des jobs (les apps sans check run, comme GitHub, sont masquées),
- * puis les statuts de commit en dernier. */
-export function toCiView(raw: RawChecks): CiWorkflow[] {
+ * puis les statuts de commit en dernier ; suites et jobs au-delà des bornes de la requête comptés à part. */
+export function toCiView(raw: RawChecks): CiView {
   const commit = raw.repository?.pullRequest?.commits.nodes[0]?.commit
-  if (!commit) return []
-  const suites = (commit.checkSuites?.nodes ?? [])
+  if (!commit) return { workflows: [], hiddenWorkflows: 0 }
+  const fetched = commit.checkSuites?.nodes ?? []
+  const hiddenWorkflows = (commit.checkSuites?.totalCount ?? 0) - fetched.length
+  const suites = fetched
     .filter((s): s is RawSuite => !!s && s.checkRuns.nodes.length > 0)
     .map((s): CiWorkflow => {
       const run = s.workflowRun
@@ -137,6 +142,7 @@ export function toCiView(raw: RawChecks): CiWorkflow[] {
         file: run?.file ? basename(run.file.path) : null,
         event: run?.event ?? null,
         runId: run?.databaseId ?? null,
+        hiddenJobs: s.checkRuns.totalCount - s.checkRuns.nodes.length,
         jobs: s.checkRuns.nodes.map((r) => ({
           name: r.name,
           state: runState(r.status, r.conclusion),
@@ -147,24 +153,23 @@ export function toCiView(raw: RawChecks): CiWorkflow[] {
       }
     })
   const contexts = commit.status?.contexts ?? []
-  if (!contexts.length) return suites
-  return [
-    ...suites,
-    {
-      key: "statuses",
-      name: null,
-      file: null,
-      event: null,
-      runId: null,
-      jobs: contexts.map((c): CiJob => ({
-        name: c.context,
-        state: contextState(c.state),
-        startedAt: null, // un statut n'a qu'une date de création : pas de durée
-        completedAt: null,
-        url: openable(c.targetUrl),
-      })),
-    },
-  ]
+  if (!contexts.length) return { workflows: suites, hiddenWorkflows }
+  const statuses: CiWorkflow = {
+    key: "statuses",
+    name: null,
+    file: null,
+    event: null,
+    runId: null,
+    hiddenJobs: 0,
+    jobs: contexts.map((c): CiJob => ({
+      name: c.context,
+      state: contextState(c.state),
+      startedAt: null, // un statut n'a qu'une date de création : pas de durée
+      completedAt: null,
+      url: openable(c.targetUrl),
+    })),
+  }
+  return { workflows: [...suites, statuses], hiddenWorkflows }
 }
 
 /** « Relancer les jobs en échec » : un workflow Actions terminé avec au moins un job en échec. */

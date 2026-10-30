@@ -52,6 +52,7 @@ const wf = (o: Partial<CiWorkflow> = {}): CiWorkflow => ({
   event: "pull_request",
   runId: 42,
   jobs: [],
+  hiddenJobs: 0,
   ...o,
 })
 
@@ -74,9 +75,12 @@ test("un statut de commit en erreur est un échec, en attente est en cours", () 
 })
 
 test("une check suite devient une boîte titrée par son workflow, son fichier et son déclencheur", () => {
-  const [box] = toCiView(
+  const {
+    workflows: [box],
+  } = toCiView(
     raw({
       checkSuites: {
+        totalCount: 1,
         nodes: [
           {
             id: "CS_1",
@@ -87,7 +91,7 @@ test("une check suite devient une boîte titrée par son workflow, son fichier e
               file: { path: ".github/workflows/ci.yml" },
               workflow: { name: "CI" },
             },
-            checkRuns: { nodes: [run("check")] },
+            checkRuns: { totalCount: 1, nodes: [run("check")] },
           },
         ],
       },
@@ -101,27 +105,29 @@ test("une check suite devient une boîte titrée par son workflow, son fichier e
       file: "ci.yml",
       event: "pull_request",
       runId: 42,
+      hiddenJobs: 0,
       jobs: ["check"],
     },
   )
 })
 
 test("une app sans check run est masquée, une app hors Actions est titrée par son nom", () => {
-  const view = toCiView(
+  const { workflows: view } = toCiView(
     raw({
       checkSuites: {
+        totalCount: 2,
         nodes: [
           {
             id: "CS_1",
             app: { name: "Netlify" },
             workflowRun: null,
-            checkRuns: { nodes: [] },
+            checkRuns: { totalCount: 0, nodes: [] },
           },
           {
             id: "CS_2",
             app: { name: "Codecov" },
             workflowRun: null,
-            checkRuns: { nodes: [run("coverage")] },
+            checkRuns: { totalCount: 1, nodes: [run("coverage")] },
           },
         ],
       },
@@ -134,7 +140,7 @@ test("une app sans check run est masquée, une app hors Actions est titrée par 
 })
 
 test("les statuts de commit forment une dernière boîte sans durée", () => {
-  const view = toCiView(
+  const { workflows: view } = toCiView(
     raw({
       status: {
         contexts: [
@@ -160,7 +166,10 @@ test("les statuts de commit forment une dernière boîte sans durée", () => {
 })
 
 test("une PR introuvable donne une vue vide", () => {
-  assert.deepEqual(toCiView({ repository: { pullRequest: null } }), [])
+  assert.deepEqual(toCiView({ repository: { pullRequest: null } }), {
+    workflows: [],
+    hiddenWorkflows: 0,
+  })
 })
 
 test("la relance des jobs en échec est proposée sur un workflow Actions terminé en échec", () => {
@@ -225,6 +234,26 @@ test("une relance refusée sans message donne le code HTTP", () => {
   assert.match(rerunError(500), /HTTP 500/)
 })
 
+test("les suites et jobs au-delà des bornes de la requête sont comptés", () => {
+  const { workflows, hiddenWorkflows } = toCiView(
+    raw({
+      checkSuites: {
+        totalCount: 25,
+        nodes: [
+          {
+            id: "CS_1",
+            app: { name: "GitHub Actions" },
+            workflowRun: null,
+            checkRuns: { totalCount: 80, nodes: [run("a"), run("b")] },
+          },
+        ],
+      },
+    }),
+  )
+  assert.equal(hiddenWorkflows, 24)
+  assert.equal(workflows[0].hiddenJobs, 78)
+})
+
 test("un lien de job hors https n'est pas gardé (la ligne n'est pas un lien)", () => {
   const ctx = (targetUrl: string) => ({
     context: "ci/x",
@@ -232,7 +261,9 @@ test("un lien de job hors https n'est pas gardé (la ligne n'est pas un lien)", 
     targetUrl,
     createdAt: "2026-10-30T10:00:00Z",
   })
-  const [box] = toCiView(
+  const {
+    workflows: [box],
+  } = toCiView(
     raw({
       status: {
         contexts: [
