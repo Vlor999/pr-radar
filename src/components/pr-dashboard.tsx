@@ -27,6 +27,7 @@ import { locale, pick, strings, useStrings } from "@/lib/i18n"
 import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
+import { Shortcut } from "@/components/shortcut"
 import { ReviewList } from "@/components/review-list"
 import { UpdateBanner } from "@/components/update-banner"
 import { RunningDot } from "@/components/running-dot"
@@ -769,10 +770,11 @@ export function PrDashboard({
             )}
             <footer className="flex flex-wrap gap-x-4 gap-y-1 pt-4 text-xs text-muted-foreground">
               {shortcuts.map((s) => (
-                <span key={s.keys}>
-                  <kbd className="rounded border bg-muted px-1 font-mono">
-                    {s.keys}
-                  </kbd>{" "}
+                <span
+                  key={s.label}
+                  className="inline-flex items-center gap-1.5"
+                >
+                  <Shortcut keys={s.keys} />
                   {s.label}
                 </span>
               ))}

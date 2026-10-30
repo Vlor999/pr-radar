@@ -1,23 +1,24 @@
 import { useEffect } from "react"
 
+import type { ShortcutKeys } from "@/components/shortcut"
 import { strings } from "@/lib/i18n"
 import { openExternal } from "@/lib/open"
 
-/** À lire avec `useStrings(SHORTCUTS)`. */
-export const SHORTCUTS = strings(
+/** À lire avec `useStrings(SHORTCUTS)`, touches affichées avec `<Shortcut>`. */
+export const SHORTCUTS = strings<{ keys: ShortcutKeys; label: string }[]>(
   [
-    { keys: "/", label: "rechercher" },
-    { keys: "j / k", label: "carte suivante / précédente" },
-    { keys: "o", label: "ouvrir sur GitHub" },
-    { keys: "e", label: "déplier / replier" },
-    { keys: "d", label: "clair / sombre" },
+    { keys: ["/"], label: "rechercher" },
+    { keys: [["j"], ["k"]], label: "carte suivante / précédente" },
+    { keys: ["o"], label: "ouvrir sur GitHub" },
+    { keys: ["e"], label: "déplier / replier" },
+    { keys: ["d"], label: "clair / sombre" },
   ],
   [
-    { keys: "/", label: "search" },
-    { keys: "j / k", label: "next / previous card" },
-    { keys: "o", label: "open on GitHub" },
-    { keys: "e", label: "expand / collapse" },
-    { keys: "d", label: "light / dark" },
+    { keys: ["/"], label: "search" },
+    { keys: [["j"], ["k"]], label: "next / previous card" },
+    { keys: ["o"], label: "open on GitHub" },
+    { keys: ["e"], label: "expand / collapse" },
+    { keys: ["d"], label: "light / dark" },
   ],
 )
 

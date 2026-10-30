@@ -19,6 +19,7 @@ import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Shortcut } from "@/components/shortcut"
 import { SHORTCUTS } from "@/hooks/use-keyboard-nav"
 import {
   testNotification,
@@ -253,7 +254,6 @@ const S = strings(
     shortcuts: {
       description: "Actifs hors des champs de saisie.",
       openSettings: "ouvrir les réglages",
-      esc: "Échap",
       closeSettings: "fermer les réglages",
     },
     about: {
@@ -448,7 +448,6 @@ const S = strings(
     shortcuts: {
       description: "Active outside text fields.",
       openSettings: "open settings",
-      esc: "Esc",
       closeSettings: "close settings",
     },
     about: {
@@ -1427,8 +1426,8 @@ function ShortcutsSection() {
   const t = useStrings(S)
   const rows = [
     ...useStrings(SHORTCUTS),
-    { keys: "⌘ ,", label: t.shortcuts.openSettings },
-    { keys: t.shortcuts.esc, label: t.shortcuts.closeSettings },
+    { keys: ["mod", ","], label: t.shortcuts.openSettings },
+    { keys: ["esc"], label: t.shortcuts.closeSettings },
   ]
   return (
     <Section
@@ -1439,11 +1438,9 @@ function ShortcutsSection() {
       <table className="w-full text-sm">
         <tbody>
           {rows.map((r) => (
-            <tr key={r.keys} className="border-t first:border-t-0">
+            <tr key={r.label} className="border-t first:border-t-0">
               <td className="w-28 py-2">
-                <kbd className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-xs">
-                  {r.keys}
-                </kbd>
+                <Shortcut keys={r.keys} />
               </td>
               <td className="py-2 text-muted-foreground">{r.label}</td>
             </tr>
