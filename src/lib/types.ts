@@ -32,6 +32,8 @@ export type Pr = {
   conflicting: boolean
   /** branche en retard sur sa base et que je peux mettre à jour (`viewerCanUpdateBranch`) */
   canUpdateBranch: boolean
+  /** commit de tête de la PR (`oid`) */
+  sha: string | null
   ci: string | null
   comments: number
   unresolved: number

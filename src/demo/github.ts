@@ -89,6 +89,7 @@ const pr = (p: Partial<Pr> & Pick<Pr, "repo" | "number" | "title">): Pr => ({
   decision: "REVIEW_REQUIRED",
   conflicting: false,
   canUpdateBranch: false,
+  sha: `sha-${p.number}`,
   ci: "SUCCESS",
   comments: 0,
   unresolved: 0,
@@ -548,6 +549,7 @@ const checksFor = (number: number, ci: string | null): CiWorkflow[] => {
 export const fetchChecks = async (
   repo: string,
   number: number,
+  _sha: string | null,
   rollup: string | null,
 ): Promise<CiWorkflow[]> => {
   await new Promise((done) => setTimeout(done, CHECKS_MS))

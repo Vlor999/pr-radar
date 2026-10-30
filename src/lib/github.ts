@@ -153,7 +153,9 @@ type RawPr = RawConversation & {
     nodes: { requestedReviewer: { login?: string; name?: string } | null }[]
   }
   commits: {
-    nodes: { commit: { statusCheckRollup: { state: string } | null } }[]
+    nodes: {
+      commit: { oid: string; statusCheckRollup: { state: string } | null }
+    }[]
   }
   stackEntry?: {
     position: number
@@ -240,6 +242,7 @@ function toPr(p: RawPr, login: string, account: string): Pr {
     decision: p.reviewDecision,
     conflicting: p.mergeable === "CONFLICTING",
     canUpdateBranch: p.viewerCanUpdateBranch,
+    sha: p.commits.nodes[0]?.commit.oid ?? null,
     ci: p.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null,
     comments:
       others(p.comments.nodes) +
@@ -673,14 +676,16 @@ export async function requestReviewer(
   )
 }
 
-/** Vue CI d'une PR (carte dépliée) ; `rollup` dans la clé du cache : relue quand l'état de la CI change. */
+/** Vue CI d'une PR (carte dépliée) ; commit de tête et état agrégé dans la clé du cache :
+ * relue à un nouveau push ou quand l'état de la CI change. */
 export function fetchChecks(
   repo: string,
   number: number,
+  sha: string | null,
   rollup: string | null,
 ): Promise<CiWorkflow[]> {
   return cached(
-    `checks:${repo}#${number}|${rollup}`,
+    `checks:${repo}#${number}@${sha}|${rollup}`,
     CACHE_TTL_MS,
     async () => {
       const [owner, name] = splitKey(repo).name.split("/")

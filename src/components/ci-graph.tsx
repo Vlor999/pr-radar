@@ -18,6 +18,7 @@ import { canRerun, formatDuration, jobDurationMs } from "@/lib/checks"
 import { fetchChecks } from "@/lib/github"
 import { strings, useStrings } from "@/lib/i18n"
 import { DONE_ICON, DONE_MS, wait } from "@/lib/motion"
+import { useData } from "@/lib/store"
 import type { CiState, CiWorkflow, PrNode } from "@/lib/types"
 
 const S = strings(
@@ -92,13 +93,14 @@ export function CiGraph({ pr }: { pr: PrNode }) {
   const t = useStrings(S)
   const [workflows, setWorkflows] = useState<CiWorkflow[]>()
   const [error, setError] = useState("")
-  // relance réussie : relit la vue même si l'état agrégé de la CI n'a pas encore bougé
-  const [version, setVersion] = useState(0)
   const [now, setNow] = useState(Date.now)
+  // chaque rechargement de la liste (actualisation auto ou manuelle, qui vide le cache) relit les jobs :
+  // une CI en cours avance même si son état agrégé reste PENDING
+  const { fetchedAt } = useData()
 
   useEffect(() => {
     let live = true
-    fetchChecks(pr.repo, pr.number, pr.ci)
+    fetchChecks(pr.repo, pr.number, pr.sha, pr.ci)
       .then((w) => {
         if (!live) return
         setWorkflows(w)
@@ -108,7 +110,7 @@ export function CiGraph({ pr }: { pr: PrNode }) {
     return () => {
       live = false
     }
-  }, [pr.repo, pr.number, pr.ci, version])
+  }, [pr.repo, pr.number, pr.sha, pr.ci, fetchedAt])
 
   const running = !!workflows?.some((w) =>
     w.jobs.some((j) => j.state === "running"),
@@ -139,7 +141,6 @@ export function CiGraph({ pr }: { pr: PrNode }) {
               pr={pr}
               w={w}
               now={now}
-              onRerun={() => setVersion((v) => v + 1)}
             />
           ))}
         </div>
@@ -152,12 +153,10 @@ function WorkflowBox({
   pr,
   w,
   now,
-  onRerun,
 }: {
   pr: PrNode
   w: CiWorkflow
   now: number
-  onRerun: () => void
 }) {
   const t = useStrings(S)
   const [pending, start] = useTransition()
@@ -170,8 +169,8 @@ function WorkflowBox({
         setDone(true)
         await wait(DONE_MS)
       })
+      // succès : la relecture de la liste qui suit (rerunFailed) relit aussi les jobs (`fetchedAt`)
       setError(res.error ?? "")
-      if (!res.error) onRerun()
     })
 
   return (
