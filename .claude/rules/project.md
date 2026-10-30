@@ -16,13 +16,14 @@ description: "PR Radar project rules: branches, commits, PRs, validation, releas
 - Conventional Commits (`feat`, `fix`, `perf`, `ci`, `chore`, `docs`, `refactor`, `test`), with the `Co-Authored-By` trailer.
 - Atomic commits ordered by dependency: skill `logical-commit-sequencer`.
 - PR body: `## Intent` / `## Choices and caveats`. No question in the body: an open decision is settled with the user before the PR is opened.
-- Review: skill `mr-review`.
+- Review: skill `mr-review`. Review fixes: new commits on the same branch, pushed to the same PR.
+- Stacked PR (only when the user asks): branch from the parent feature branch, `gh pr create --base <parent branch>`. Retarget to `dev` (`gh pr edit --base dev`) once the parent is merged.
 
 ## Validation
 
 - Green checks before any push (`CLAUDE.md` § Checks). Never `--no-verify`.
-- Visible change: `npm run demo` (skill `demo`) and explicit user validation before commit.
-- Stay inside the requested scope: no refactor, no speculative feature. Simplicity first (`ponytail`).
+- Visible change: `npm run demo` (skill `demo`) and explicit user validation before merge. Commit, push and PR do not wait for it.
+- Stay inside the requested scope: no refactor, no speculative feature. Simplicity first.
 
 ## Security
 

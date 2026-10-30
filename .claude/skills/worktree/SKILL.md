@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Implement one feature or fix of PR Radar in an isolated git worktree, from branch to GitHub PR on dev (checks, demo, logical commits, push, PR). Use when asked to implement something in a worktree or to start a worktree for a task.
+description: Implement one feature or fix of PR Radar in an isolated git worktree, from branch to GitHub PR on dev (checks, logical commits, push, PR, then demo). Use when asked to implement something in a worktree or to start a worktree for a task.
 user-invocable: true
 ---
 
@@ -19,6 +19,8 @@ and do only what is really left.
 ## 2. Create the worktree
 
 Branch: `<type>/<feature-slug>` (e.g. `fix/quota-refresh`), `type` = Conventional Commit type.
+Base: `origin/dev`. Stacked PR (only when the user asks): base on the parent feature
+branch instead (`origin/<parent branch>`).
 
 ```bash
 git fetch origin
@@ -30,7 +32,7 @@ Work only inside this worktree.
 
 ## 3. Implement
 
-- Load `ponytail` first: the simplest thing that works, reuse what the repo has.
+- Do the simplest thing that works, reuse what the repo has.
 - Follow `CLAUDE.md` (stack, security rules, `site/` with mock data only).
 - Stay inside the task scope. No refactor that was not asked for.
 
@@ -43,8 +45,9 @@ npm run typecheck && npm test
 (cd src-tauri && cargo clippy -- -D warnings && cargo test)
 ```
 
-Never push red, never use `--no-verify`. Then the `demo` skill (`npm run demo`) and
-explicit validation by the user before any commit.
+Never push red, never use `--no-verify`. Green checks are the only gate before commit,
+push and PR: do not wait for the user. The demo and the user's validation come after
+the PR, before merge (step 7).
 
 ## 5. Commit and push
 
@@ -59,6 +62,7 @@ git push -u origin <branch>
 
 ```bash
 gh pr create --base dev --title "<conventional commit>" --body "..."
+# stacked PR: --base <parent branch>
 ```
 
 Body:
@@ -72,9 +76,16 @@ Body:
 ```
 
 No question in the body. An open decision goes to the user in the conversation and is
-settled before the PR is opened.
+settled before the PR is opened. Never add or request a reviewer (`--reviewer`).
 
-## 7. Report
+## 7. Demo, review, merge
+
+- Visible change: `demo` skill (`npm run demo`) and explicit validation by the user before
+  merge. As a subagent, hand back: the orchestrator runs the demo.
+- Review fixes (`mr-review` § Orchestrated loop): new commits on the same branch, checks
+  green, `git push`. Never `--amend`, never force-push.
+
+## 8. Report
 
 Give the PR URL, the decisions taken, and the work left after the PR. Remove the
 worktree once the PR is merged: `git worktree remove .claude/worktrees/<feature-slug>`.

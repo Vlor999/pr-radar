@@ -18,6 +18,6 @@ No gh login, no network call to GitHub.
 3. Run in the background: `npm run demo` (strict port 1420, the same as `tauri dev`: stop `tauri dev` first; if the demo already runs, reuse it).
 4. Open: `open http://localhost:1420`.
 5. Give the user a short list of what to test (concrete steps, window sizes if responsive).
-6. Wait for explicit validation before commit/release (rule in `CLAUDE.md`).
+6. Wait for explicit validation before merge/release (rule in `CLAUDE.md`). The PR may already be open.
 
 Browser state (followed repos, settings) lives in the `localhost:1420` localStorage, separate from the installed app. To start over: clear the site storage in the browser.

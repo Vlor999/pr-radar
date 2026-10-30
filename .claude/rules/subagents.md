@@ -19,20 +19,20 @@ description: "Protocol for implementation and review subagents on PR Radar: mode
 
 ## Skills to always give
 
-- `ponytail`: the simplest thing that works, reuse what exists.
 - `logical-commit-sequencer`: atomic commits, ordered, before the push.
 - `worktree` for an implementation, `mr-review` (read-only mode) for a review.
 
 ## Output requirements
 
 1. Green checks before push (`CLAUDE.md` § Checks).
-2. Visible change: the agent does not commit before validation. It hands back to the orchestrator, which runs `npm run demo` and gets the user's validation.
-3. PR with `gh pr create --base dev`, format from `project.md`, no question in the body.
-4. Final report: PR URL, decisions taken, work left.
+2. Checks green → the agent commits (`logical-commit-sequencer`), pushes (`git push -u origin <branch>`) and opens the PR at once, without waiting for the user. This is the expected end of every implementation task, not an extra step to confirm.
+3. PR with `gh pr create --base dev` (or `--base <parent branch>` for a stacked PR the user asked for), format from `project.md`, no question in the body, never `--reviewer`.
+4. Visible change: after the PR, the orchestrator runs `npm run demo` (skill `demo`) and gets the user's validation before merge.
+5. Final report: PR URL, decisions taken, work left.
 
 ## After review
 
-- A subagent does not launch agents: the orchestrator launches the reviewers and consolidates.
-- Review comments go back to the original agent (it has the context), which fixes them with new commits on the same branch.
+- A subagent does not launch agents: the orchestrator runs the review loop of `mr-review` (§ Orchestrated loop): one delegated read-only reviewer per PR.
+- Review findings go back to the original agent (it has the context, `SendMessage`), which fixes them with new commits on the same branch, checks green, and pushes without waiting. Never `--amend`, never force-push.
 - After merge: worktree removed.
 - Parallel agents only on disjoint areas of the code.
