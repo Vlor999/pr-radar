@@ -82,6 +82,8 @@ const S = strings(
     updateBranch: "Mettre à jour la branche",
     branchUpdated: "Branche à jour",
     updateBranchTitle: (base: string) => `Merge ${base} dans la branche`,
+    showCi: "Afficher les jobs de la CI",
+    hideCi: "Masquer les jobs de la CI",
   },
   {
     status: {
@@ -123,6 +125,8 @@ const S = strings(
     updateBranch: "Update branch",
     branchUpdated: "Branch up to date",
     updateBranchTitle: (base: string) => `Merge ${base} into the branch`,
+    showCi: "Show CI jobs",
+    hideCi: "Hide CI jobs",
   },
 )
 
@@ -193,6 +197,8 @@ export function PrCard({
   const t = useStrings(S)
   const decision = pr.decision && pr.decision in STATUS ? pr.decision : "NONE"
   const ci = pr.ci ? CI[pr.ci] : undefined
+  // vue CI (workflows, jobs) : ouverte depuis la pastille CI ; la requête des jobs ne part que vue ouverte
+  const [ciOpen, setCiOpen] = useState(false)
   const merge = mergeState(pr)
   const stack = nativeStack(pr)
   const { staleDays } = useSettings()
@@ -263,7 +269,19 @@ export function PrCard({
           <Badge variant={STATUS[decision]}>{t.status[decision]}</Badge>
           {pr.draft && <Badge variant="secondary">Draft</Badge>}
           {ci && (
-            <Badge variant={ci.bad ? "destructive" : "outline"}>
+            <Badge
+              variant={ci.bad ? "destructive" : "outline"}
+              title={ciOpen ? t.hideCi : t.showCi}
+              render={<button type="button" />}
+              aria-expanded={ciOpen}
+              aria-controls={`ci-${pr.id}`}
+              onClick={() => setCiOpen(!ciOpen)}
+              className={cn(
+                "cursor-pointer",
+                !ci.bad && "bg-background hover:bg-muted dark:bg-muted",
+                ciOpen && "ring-2 ring-ring/40",
+              )}
+            >
               {ci.label}
             </Badge>
           )}
@@ -322,6 +340,16 @@ export function PrCard({
             </Badge>
           )}
         </div>
+        {/* hors du contenu de la carte : s'ouvre carte repliée ou dépliée ; démontée fermée (pas de requête) */}
+        {ci && (
+          <Collapsible open={ciOpen}>
+            <CollapsibleContent id={`ci-${pr.id}`}>
+              <div className="px-4 pb-3 pl-10">
+                <CiGraph pr={pr} />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
         <CollapsibleContent>
           <div className="flex flex-col gap-3 border-t px-4 py-3 pl-10 text-sm">
             <ul className="flex flex-col gap-2">
@@ -355,8 +383,6 @@ export function PrCard({
               </li>
             </ul>
             {(pr.draft || pr.canUpdateBranch) && <PrActions pr={pr} />}
-            {/* sans CI (aucun check ni statut) : pas de requête */}
-            {pr.ci && <CiGraph pr={pr} />}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <MessageSquare className="size-3.5" />

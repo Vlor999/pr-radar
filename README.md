@@ -9,7 +9,7 @@
 ## Features
 
 - PR tree per repo, with "depends on / blocks" stacks
-- Review, CI and conflict status; jobs per workflow in the expanded card, with re-run of failed jobs
+- Review, CI and conflict status; click the CI badge for jobs per workflow, with re-run of failed jobs
 - Unresolved review threads shown with the code, reply in place
 - Filters and search
 - Ready-to-merge and stale PRs

@@ -458,7 +458,7 @@ export const requestReviewer = async (
   console.info("[demo] request review", prId, userId, repo)
 }
 
-/* ---------- Vue CI (carte dépliée) ---------- */
+/* ---------- Vue CI (ouverte depuis la pastille CI) ---------- */
 
 /** latence de la requête des jobs : laisse voir le chargement de la vue CI */
 const CHECKS_MS = 600

@@ -139,7 +139,7 @@ export type WebStatus = {
   error: string | null
 }
 
-/* ---------- Vue CI d'une PR (carte dépliée) ---------- */
+/* ---------- Vue CI d'une PR (ouverte depuis la pastille CI) ---------- */
 
 /** État d'un job normalisé depuis `CheckRun` (status + conclusion) ou `StatusContext`. */
 export type CiState =

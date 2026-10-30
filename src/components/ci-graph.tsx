@@ -87,8 +87,8 @@ const ICON: Record<CiState, { Icon: LucideIcon; className: string }> = {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-/** Vue CI de la carte dépliée : une boîte par workflow, une ligne par job. Montée seulement carte ouverte
- * (le panneau repliable démonte son contenu) : la requête part au dépliage, relue quand l'état de la CI change. */
+/** Vue CI d'une carte, ouverte depuis sa pastille CI : une boîte par workflow, une ligne par job. Montée seulement
+ * vue ouverte (le panneau repliable démonte son contenu) : la requête part à l'ouverture, relue à chaque rechargement. */
 export function CiGraph({ pr }: { pr: PrNode }) {
   const t = useStrings(S)
   const [workflows, setWorkflows] = useState<CiWorkflow[]>()

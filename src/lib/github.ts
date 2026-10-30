@@ -676,7 +676,7 @@ export async function requestReviewer(
   )
 }
 
-/** Vue CI d'une PR (carte dépliée) ; commit de tête et état agrégé dans la clé du cache :
+/** Vue CI d'une PR (ouverte depuis la pastille CI) ; commit de tête et état agrégé dans la clé du cache :
  * relue à un nouveau push ou quand l'état de la CI change. */
 export function fetchChecks(
   repo: string,
