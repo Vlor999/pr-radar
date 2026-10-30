@@ -1,14 +1,16 @@
 import { useMemo, useState, useTransition, type ReactNode } from "react"
 import DOMPurify from "dompurify"
-import { ExternalLink, Loader2, Send } from "lucide-react"
+import { Check, CircleCheck, ExternalLink, Loader2, Send } from "lucide-react"
 import { cn } from "cn"
 
 import { Avatar } from "@/components/avatar"
-import { comment, reply } from "@/lib/actions"
+import { comment, reply, resolve } from "@/lib/actions"
 import { strings, useStrings } from "@/lib/i18n"
 import { isExternalHref } from "@/lib/links"
+import { DONE_ICON, pause, wait } from "@/lib/motion"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import type { Note, Thread } from "@/lib/types"
 
 // liens du HTML GitHub : https → navigateur du système, comme les autres liens de l'app ; sinon texte seul
@@ -23,6 +25,10 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 
 /** initiales affichées dans l'en-tête d'une discussion, au-delà : un « +N » */
 const MAX_INITIALS = 3
+/** coche « Résolu » affichée avant que le fil se replie */
+const DONE_MS = 700
+/** repli du fil résolu : durée de CollapsibleContent (duration-200) */
+const EXIT_MS = 200
 
 const S = strings(
   {
@@ -38,6 +44,8 @@ const S = strings(
     agoD: (d: number) => `il y a ${d} j`,
     outdated: "code modifié depuis",
     reply: "Répondre",
+    resolve: "Résoudre",
+    resolved: "Résolu",
     replyPlaceholder: "Répondre…",
     commentPlaceholder: "Commenter la PR…",
     viewOnGithub: "Voir sur GitHub",
@@ -55,6 +63,8 @@ const S = strings(
     agoD: (d: number) => `${d}d ago`,
     outdated: "code changed since",
     reply: "Reply",
+    resolve: "Resolve",
+    resolved: "Resolved",
     replyPlaceholder: "Reply…",
     commentPlaceholder: "Comment on the PR…",
     viewOnGithub: "View on GitHub",
@@ -87,19 +97,50 @@ export function ThreadColumn({
         </Bubble>
       )}
       {threads.map((t) => (
-        <Bubble key={t.id}>
-          <ThreadCard thread={t} repo={repo} />
-        </Bubble>
+        <ThreadItem key={t.id} thread={t} repo={repo} />
       ))}
     </ul>
   )
 }
 
-function Bubble({ children }: { children: ReactNode }) {
+/** Fil résolu : coche, puis repli (hauteur + opacité) avant la relecture qui le retire. */
+function ThreadItem({ thread, repo }: { thread: Thread; repo: string }) {
+  const [leaving, setLeaving] = useState(false)
+  return (
+    <Bubble leaving={leaving}>
+      <Collapsible open={!leaving}>
+        {/* ombre et contour de la carte visibles, coupés seulement pendant le repli */}
+        <CollapsibleContent className="overflow-visible data-[ending-style]:overflow-hidden">
+          <ThreadCard
+            thread={thread}
+            repo={repo}
+            onResolve={(showDone) =>
+              resolve(thread.id, repo, async () => {
+                await showDone()
+                setLeaving(true)
+                await pause(EXIT_MS)
+              })
+            }
+          />
+        </CollapsibleContent>
+      </Collapsible>
+    </Bubble>
+  )
+}
+
+function Bubble({
+  children,
+  leaving = false,
+}: {
+  children: ReactNode
+  /** repli en cours : coude et queue s'effacent, -mt-3 rattrape le gap-3 de la colonne */
+  leaving?: boolean
+}) {
   return (
     <li
       className={cn(
-        "relative",
+        "relative transition-[opacity,margin] duration-200 motion-reduce:transition-none",
+        leaving && "-mt-3 opacity-0",
         // coude qui part de la carte de la PR vers chaque discussion.
         // Valeurs liées : -top-3 = gap-3 sous la carte (repo-section) ; -left-4.5 sous pl-14 ;
         // trait du coude à y = 15px (-top-3 + h-7), pointe de la queue au même y (top-2.25 + 6px).
@@ -117,7 +158,15 @@ function Bubble({ children }: { children: ReactNode }) {
   )
 }
 
-function ThreadCard({ thread, repo }: { thread: Thread; repo: string }) {
+function ThreadCard({
+  thread,
+  repo,
+  onResolve,
+}: {
+  thread: Thread
+  repo: string
+  onResolve: OnResolve
+}) {
   const t = useStrings(S)
   return (
     <Card
@@ -151,6 +200,7 @@ function ThreadCard({ thread, repo }: { thread: Thread; repo: string }) {
         id={thread.id}
         link={thread.comments.at(-1)?.url}
         onSend={(text) => reply(thread.id, text, repo)}
+        onResolve={onResolve}
       />
     </Card>
   )
@@ -189,22 +239,30 @@ function ConversationCard({
   )
 }
 
-/** Zone de réponse en bas d'une carte : ⌘↵ envoie, vidée après succès. */
+/** Résout le fil ; `showDone` affiche la coche de succès (appelé par l'action après la réponse de GitHub). */
+type OnResolve = (showDone: () => Promise<void>) => Promise<{ error?: string }>
+
+/** Zone de réponse en bas d'une carte : ⌘↵ envoie, vidée après succès ; `onResolve` : bouton Résoudre (fil de review). */
 function ReplyForm({
   id,
   link,
   onSend,
+  onResolve,
   placeholder,
 }: {
   id: string
   link?: string
   onSend: (text: string) => Promise<{ error?: string }>
+  onResolve?: OnResolve
   placeholder?: string
 }) {
   const t = useStrings(S)
   const [draft, setDraft] = useState("")
   const [error, setError] = useState("")
   const [sending, start] = useTransition()
+  const [resolving, startResolve] = useTransition()
+  const [resolved, setResolved] = useState(false)
+  const busy = sending || resolving || resolved
 
   const send = () =>
     start(async () => {
@@ -236,11 +294,11 @@ function ReplyForm({
         }}
         rows={2}
         placeholder={placeholder ?? t.replyPlaceholder}
-        disabled={sending}
+        disabled={busy}
         className="min-h-16 w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
       />
       {error && <p className="text-xs text-destructive">{error}</p>}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <a
           href={link}
           target="_blank"
@@ -249,11 +307,50 @@ function ReplyForm({
         >
           {t.viewOnGithub} <ExternalLink className="size-3" />
         </a>
-        <Button type="submit" size="sm" disabled={sending || !draft.trim()}>
-          {sending ? <Loader2 className="animate-spin" /> : <Send />}
-          {t.reply}
-          <kbd className="font-sans text-xs opacity-70">⌘↵</kbd>
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          {onResolve && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              // coche de succès gardée lisible : pas l'opacité d'un bouton désactivé
+              className={cn(resolved && "disabled:opacity-100")}
+              onClick={() =>
+                startResolve(async () => {
+                  const res = await onResolve(async () => {
+                    setResolved(true)
+                    await wait(DONE_MS)
+                  })
+                  setError(res.error ?? "")
+                })
+              }
+            >
+              {resolved ? (
+                <CircleCheck className={DONE_ICON} />
+              ) : resolving ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Check />
+              )}
+              {resolved ? t.resolved : t.resolve}
+            </Button>
+          )}
+          <Button
+            type="submit"
+            size="sm"
+            disabled={busy || !draft.trim()}
+            // message vide : bouton neutre et lisible à côté de « Résoudre » (pas le vert à demi-opacité)
+            variant={draft.trim() ? "default" : "outline"}
+            className={cn(
+              !draft.trim() && "text-muted-foreground disabled:opacity-100",
+            )}
+          >
+            {sending ? <Loader2 className="animate-spin" /> : <Send />}
+            {t.reply}
+            <kbd className="font-sans text-xs opacity-70">⌘↵</kbd>
+          </Button>
+        </div>
       </div>
     </form>
   )
