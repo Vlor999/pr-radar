@@ -24,9 +24,11 @@ import { cn } from "cn"
 
 import { refreshPrs } from "@/lib/actions"
 import { locale, pick, strings, useStrings } from "@/lib/i18n"
+import { CommandPalette } from "@/components/command-palette"
 import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
+import { Shortcut } from "@/components/shortcut"
 import { ReviewList } from "@/components/review-list"
 import { UpdateBanner } from "@/components/update-banner"
 import { RunningDot } from "@/components/running-dot"
@@ -511,6 +513,52 @@ export function PrDashboard({
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
+      <CommandPalette
+        prs={prs}
+        reviews={reviews.reviews}
+        tabs={TABS.map((tb) => ({ id: tb.id, label: t.tabs[tb.id] }))}
+        filters={FILTERS.map((f) => ({ id: f.id, label: t.filters[f.id] }))}
+        sorts={SORTS.map((s) => ({ id: s.id, label: t.sorts[s.id] }))}
+        current={{ tab, filter, sort }}
+        mcp={!!mcp.info?.supported}
+        on={{
+          tab: (id) => {
+            setPage(null)
+            setTab(id)
+          },
+          filter: (id) => {
+            setPage(null)
+            setTab("open")
+            setFilter(id as typeof filter)
+          },
+          sort: (id) => {
+            setPage(null)
+            setTab("open")
+            setSort(id)
+          },
+          refresh: () => startRefresh(() => refreshPrs()),
+          settings: () => setPage("settings"),
+          mcp: () => setPage("mcp"),
+          repos: () => {
+            setPage(null)
+            if (!wide) return setReposOpen(true)
+            requestAnimationFrame(() =>
+              document.getElementById("repo-filter")?.focus(),
+            )
+          },
+          expand: (pr) => {
+            setPage(null)
+            setTab("open")
+            const key = `${pr.repo}#${pr.number}`
+            setOpen((o) => ({ ...o, [pr.repo]: true, [key]: true }))
+            seen.markSeen([pr])
+          },
+          showAll: () => {
+            setQuery("")
+            setFilter("all")
+          },
+        }}
+      />
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           {!wide && (
@@ -806,10 +854,11 @@ export function PrDashboard({
             )}
             <footer className="flex flex-wrap gap-x-4 gap-y-1 pt-4 text-xs text-muted-foreground">
               {shortcuts.map((s) => (
-                <span key={s.keys}>
-                  <kbd className="rounded border bg-muted px-1 font-mono">
-                    {s.keys}
-                  </kbd>{" "}
+                <span
+                  key={s.label}
+                  className="inline-flex items-center gap-1.5"
+                >
+                  <Shortcut keys={s.keys} />
                   {s.label}
                 </span>
               ))}
