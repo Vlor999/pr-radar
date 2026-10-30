@@ -28,6 +28,7 @@ const pr = (
   draft: false,
   decision: null,
   conflicting: false,
+  canUpdateBranch: false,
   ci: null,
   comments: 0,
   unresolved: 0,

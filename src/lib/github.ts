@@ -120,6 +120,7 @@ type RawPr = RawConversation & {
   isDraft: boolean
   updatedAt: string
   mergeable: string
+  viewerCanUpdateBranch: boolean
   reviewDecision: Decision
   headRefName: string
   baseRefName: string
@@ -230,6 +231,7 @@ function toPr(p: RawPr, login: string, account: string): Pr {
     draft: p.isDraft,
     decision: p.reviewDecision,
     conflicting: p.mergeable === "CONFLICTING",
+    canUpdateBranch: p.viewerCanUpdateBranch,
     ci: p.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null,
     comments:
       others(p.comments.nodes) +

@@ -30,6 +30,8 @@ export type Pr = {
   draft: boolean
   decision: Decision
   conflicting: boolean
+  /** branche en retard sur sa base et que je peux mettre à jour (`viewerCanUpdateBranch`) */
+  canUpdateBranch: boolean
   ci: string | null
   comments: number
   unresolved: number

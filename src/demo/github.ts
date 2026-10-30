@@ -79,6 +79,7 @@ const pr = (p: Partial<Pr> & Pick<Pr, "repo" | "number" | "title">): Pr => ({
   draft: false,
   decision: "REVIEW_REQUIRED",
   conflicting: false,
+  canUpdateBranch: false,
   ci: "SUCCESS",
   comments: 0,
   unresolved: 0,
@@ -171,6 +172,7 @@ const PRS: Pr[] = [
     repo: "globex/billing",
     number: 7,
     title: "Export CSV des factures",
+    canUpdateBranch: true, // branche en retard sur main : bouton « Mettre à jour la branche »
     // commentaire général seul, sans fil sur un fichier
     comments: 1,
     conversation: [
