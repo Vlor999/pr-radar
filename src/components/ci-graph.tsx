@@ -202,6 +202,11 @@ function WorkflowBox({
   const [pending, start] = useTransition()
   const [done, setDone] = useState(false)
   const [error, setError] = useState("")
+  // jobs relus après la relance : la coche s'efface, une nouvelle relance est possible si GitHub
+  // renvoie encore les anciens états (sinon la boîte, de clé changée, repart de zéro)
+  useEffect(() => {
+    if (!pending) setDone(false)
+  }, [w]) // seulement à l'arrivée de nouvelles données, pas à la fin de la relance
 
   const rerun = () =>
     start(async () => {
