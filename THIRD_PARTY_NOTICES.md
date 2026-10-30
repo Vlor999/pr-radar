@@ -195,6 +195,47 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
 
+- @radix-ui/primitive 1.2.0 (MIT)
+- @radix-ui/react-compose-refs 1.1.5 (MIT)
+- @radix-ui/react-context 1.3.0 (MIT)
+- @radix-ui/react-dialog 1.3.1 (MIT)
+- @radix-ui/react-dismissable-layer 1.2.1 (MIT)
+- @radix-ui/react-focus-guards 1.2.0 (MIT)
+- @radix-ui/react-focus-scope 1.3.1 (MIT)
+- @radix-ui/react-id 1.1.4 (MIT)
+- @radix-ui/react-portal 1.2.0 (MIT)
+- @radix-ui/react-presence 1.1.11 (MIT)
+- @radix-ui/react-primitive 2.2.0 (MIT)
+- @radix-ui/react-slot 1.5.0 (MIT)
+- @radix-ui/react-use-callback-ref 1.1.5 (MIT)
+- @radix-ui/react-use-controllable-state 1.3.0 (MIT)
+- @radix-ui/react-use-effect-event 0.0.5 (MIT)
+- @radix-ui/react-use-layout-effect 1.1.4 (MIT)
+
+```
+MIT License
+
+Copyright (c) 2022 WorkOS
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 - @tauri-apps/api 2.12.4 (Apache-2.0 OR MIT)
 - anyhow 1.0.104 (MIT OR Apache-2.0)
 - async-trait 0.1.92 (MIT OR Apache-2.0)
@@ -546,6 +587,7 @@ Creator: Person: Daniel Thompson-Yvetot
 ```
 
 - @types/react 19.3.0 (MIT)
+- @types/react-dom 19.3.0 (MIT)
 - @types/trusted-types 2.0.7 (MIT)
 - windows 0.62.2 (MIT OR Apache-2.0)
 - windows-collections 0.3.2 (MIT OR Apache-2.0)
@@ -1531,6 +1573,36 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+```
+
+- aria-hidden 1.2.6 (MIT)
+- react-remove-scroll 2.7.2 (MIT)
+- react-style-singleton 2.2.3 (MIT)
+- use-callback-ref 1.3.3 (MIT)
+- use-sidecar 1.1.3 (MIT)
+
+```
+MIT License
+
+Copyright (c) 2017 Anton Korzunov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 - async-broadcast 0.7.2 (MIT OR Apache-2.0)
@@ -2776,6 +2848,32 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+- cmdk 1.1.1 (MIT)
+
+```
+MIT License
+
+Copyright (c) 2022 Paco Coursey
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 - cn 0.5.0 (MIT)
@@ -5210,6 +5308,32 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+- detect-node-es 1.1.0 (MIT)
+
+```
+MIT License
+
+Copyright (c) 2017 Ilya Kantor
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 - digest 0.10.7 (MIT OR Apache-2.0)
 - hmac 0.12.1 (MIT OR Apache-2.0)
 
@@ -6524,6 +6648,32 @@ DEALINGS IN THE SOFTWARE.
 The MIT License (MIT)
 
 Copyright (c) 2015 Bartłomiej Kamiński
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+- get-nonce 1.0.1 (MIT)
+
+```
+MIT License
+
+Copyright (c) 2020 Anton Korzunov
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -14538,6 +14688,23 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
+- tslib 2.8.1 (0BSD)
+
+```
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+```
+
 - tw-animate-css 1.4.0 (MIT)
 
 ```
@@ -16149,6 +16316,7 @@ The license is the one declared in the package metadata; its standard text appli
 - objc2-web-kit 0.3.2 (Zlib OR Apache-2.0 OR MIT), by https://github.com/madsmtm/objc2: https://crates.io/crates/objc2-web-kit/0.3.2
 - r-efi 5.3.0 (MIT OR Apache-2.0 OR LGPL-2.1-or-later), by https://github.com/r-efi/r-efi: https://crates.io/crates/r-efi/5.3.0
 - r-efi 6.0.0 (MIT OR Apache-2.0 OR LGPL-2.1-or-later), by https://github.com/r-efi/r-efi: https://crates.io/crates/r-efi/6.0.0
+- react-remove-scroll-bar 2.3.8 (MIT): https://www.npmjs.com/package/react-remove-scroll-bar/v/2.3.8
 - rustls-platform-verifier-android 0.2.0 (MIT OR Apache-2.0), by https://github.com/rustls/rustls-platform-verifier: https://crates.io/crates/rustls-platform-verifier-android/0.2.0
 - selectors 0.38.0 (MPL-2.0), by The Servo Project Developers: https://crates.io/crates/selectors/0.38.0
 - webview2-com 0.39.1 (MIT), by https://github.com/wravery/webview2-rs: https://crates.io/crates/webview2-com/0.39.1
