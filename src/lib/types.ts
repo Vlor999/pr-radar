@@ -32,6 +32,8 @@ export type Pr = {
   conflicting: boolean
   /** branche en retard sur sa base et que je peux mettre à jour (`viewerCanUpdateBranch`) */
   canUpdateBranch: boolean
+  /** commit de tête de la PR (`oid`) */
+  sha: string | null
   ci: string | null
   comments: number
   unresolved: number
@@ -136,3 +138,46 @@ export type WebStatus = {
   /** `port-busy`, ou message du système */
   error: string | null
 }
+
+/* ---------- Vue CI d'une PR (ouverte depuis la pastille CI) ---------- */
+
+/** État d'un job normalisé depuis `CheckRun` (status + conclusion) ou `StatusContext`. */
+export type CiState =
+  | "success"
+  | "failure"
+  | "running"
+  | "queued"
+  | "skipped"
+  | "cancelled"
+  | "neutral"
+
+/** Un job (check run) ou un statut de commit (CI hors Actions). */
+export type CiJob = {
+  name: string
+  state: CiState
+  startedAt: string | null
+  completedAt: string | null
+  /** page du job sur GitHub (`detailsUrl` ou `targetUrl`) */
+  url: string | null
+}
+
+/** Une boîte de la vue CI : un workflow (check suite), ou les statuts de commit. */
+export type CiWorkflow = {
+  /** clé de liste stable */
+  key: string
+  /** nom du workflow, de l'app GitHub, ou null pour les statuts de commit */
+  name: string | null
+  /** fichier du workflow (`ci.yml`) */
+  file: string | null
+  /** déclencheur (`pull_request`) */
+  event: string | null
+  /** id du workflow run GitHub Actions : relance des jobs en échec */
+  runId: number | null
+  jobs: CiJob[]
+  /** jobs au-delà de la borne de la requête : non affichés */
+  hiddenJobs: number
+}
+
+/** Vue CI d'une PR ; `moreChecks` : check suites au-delà de la borne de la requête (nombre inconnu de workflows :
+ * des apps n'y déclarent qu'une suite vide, masquée). */
+export type CiView = { workflows: CiWorkflow[]; moreChecks: boolean }

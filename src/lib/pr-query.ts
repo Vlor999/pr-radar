@@ -19,7 +19,7 @@ query($q: String!, $after: String) {
         comments(first: 20) { nodes { author { login } bodyHTML url createdAt } } } }
       latestOpinionatedReviews(first: 20) { nodes { author { login } state } }
       reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
-      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+      commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } }
       STACK
     } }
   }

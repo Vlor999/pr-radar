@@ -14,6 +14,13 @@ import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
 import { fetch } from "./platform"
 import { sweep, type Entry } from "./cache"
 import {
+  CHECKS_QUERY,
+  checksTtlMs,
+  rerunError,
+  toCiView,
+  type RawChecks,
+} from "./checks"
+import {
   gqlFailed,
   gqlMessage,
   restRepos,
@@ -29,7 +36,7 @@ import {
 import { trackQuota, validQuota, type Quota } from "./quota"
 import { toReview, type RawReview } from "./review"
 import type { Reviewer } from "./reviewers"
-import type { Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
+import type { CiView, Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
 
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
@@ -145,7 +152,9 @@ type RawPr = RawConversation & {
     nodes: { requestedReviewer: { login?: string; name?: string } | null }[]
   }
   commits: {
-    nodes: { commit: { statusCheckRollup: { state: string } | null } }[]
+    nodes: {
+      commit: { oid: string; statusCheckRollup: { state: string } | null }
+    }[]
   }
   stackEntry?: {
     position: number
@@ -232,6 +241,7 @@ function toPr(p: RawPr, login: string, account: string): Pr {
     decision: p.reviewDecision,
     conflicting: p.mergeable === "CONFLICTING",
     canUpdateBranch: p.viewerCanUpdateBranch,
+    sha: p.commits.nodes[0]?.commit.oid ?? null,
     ci: p.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null,
     comments:
       others(p.comments.nodes) +
@@ -663,4 +673,43 @@ export async function requestReviewer(
     "mutation($pr: ID!, $user: ID!) { requestReviews(input: { pullRequestId: $pr, userIds: [$user], union: true }) { pullRequest { id } } }",
     { pr: prId, user: userId },
   )
+}
+
+/** Vue CI d'une PR (ouverte depuis la pastille CI) ; commit de tête et état agrégé dans la clé du cache :
+ * relue à un nouveau push ou quand l'état de la CI change. */
+export function fetchChecks(
+  repo: string,
+  number: number,
+  sha: string | null,
+  rollup: string | null,
+): Promise<CiView> {
+  return cached(
+    `checks:${repo}#${number}@${sha}|${rollup}`,
+    checksTtlMs(rollup),
+    async () => {
+      const [owner, name] = splitKey(repo).name.split("/")
+      return toCiView(
+        await gql<RawChecks>(conn(accountOf(repo)), CHECKS_QUERY, {
+          owner,
+          name,
+          number,
+        }),
+      )
+    },
+  )
+}
+
+/** Relance les jobs en échec (et ceux qui en dépendent) d'un workflow run GitHub Actions. */
+export async function rerunFailedJobs(repo: string, runId: number) {
+  const a = accountOf(repo)
+  const res = await fetch(
+    `${apiUrl(a.host)}/repos/${splitKey(repo).name}/actions/runs/${runId}/rerun-failed-jobs`,
+    { method: "POST", headers: headers(tokenOf(a.id), a.id) },
+  )
+  if (res.status === 401) throw new AuthError(pick(S).tokenRejected, a.id)
+  if (res.ok) return
+  const { message } = (await res.json().catch(() => ({}))) as {
+    message?: string
+  }
+  throw new Error(rerunError(res.status, message))
 }

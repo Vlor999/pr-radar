@@ -29,6 +29,7 @@ const pr = (
   decision: null,
   conflicting: false,
   canUpdateBranch: false,
+  sha: null,
   ci: null,
   comments: 0,
   unresolved: 0,
