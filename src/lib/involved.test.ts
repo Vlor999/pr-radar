@@ -77,3 +77,15 @@ test("mentions : une recherche en échec donne aucun id, sans rejeter", async ()
   })
   assert.equal(ids.size, 0)
 })
+
+test("mentions : un jeton refusé (AuthError) rejette", async () => {
+  const denied = Object.assign(new Error("Jeton GitHub refusé"), {
+    name: "AuthError",
+  })
+  await assert.rejects(
+    mentionedIds([who("bob")], "me", async () => {
+      throw denied
+    }),
+    denied,
+  )
+})

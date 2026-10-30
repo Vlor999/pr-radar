@@ -37,7 +37,7 @@ export const uniqueById = <T extends { id: string }>(xs: T[]) => {
 /**
  * Ids des PR où je suis mentionné, parmi `prs`. `search` (recherche `mentions:@me`) n'est lancée que s'il reste
  * une PR d'un autre où je ne suis pas assigné ; en échec, aucun id : la pastille dit « Impliqué » au lieu de
- * « Mentionné », sans faire échouer tout le compte.
+ * « Mentionné », sans faire échouer tout le compte. Un jeton refusé (`AuthError`) rejette quand même.
  */
 export const mentionedIds = async (
   prs: Roles[],
@@ -45,6 +45,10 @@ export const mentionedIds = async (
   search: () => Promise<{ id: string }[]>,
 ): Promise<Set<string>> => {
   if (prs.every((p) => knownWithoutMentions(p, login))) return new Set()
-  const found = await search().catch(() => [])
+  // jeton refusé : remonte (retour à la connexion) ; autre échec : aucun id
+  const found = await search().catch((e: unknown) => {
+    if (e instanceof Error && e.name === "AuthError") throw e
+    return []
+  })
   return new Set(found.map((m) => m.id))
 }
