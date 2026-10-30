@@ -11,6 +11,7 @@ query($q: String!, $after: String) {
     nodes { ... on PullRequest {
       id number title url isDraft updatedAt mergeable viewerCanUpdateBranch reviewDecision headRefName baseRefName additions deletions changedFiles
       repository { nameWithOwner }
+      isCrossRepository author { login } assignees(first: 10) { nodes { login } }
       comments(first: 100) { nodes { author { login } } }
       conversation: comments(last: 10) { nodes { author { login } bodyHTML url createdAt } }
       reviews(last: 30) { nodes { author { login } state bodyHTML url submittedAt } }
