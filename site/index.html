@@ -107,6 +107,36 @@
     <p class="lead" data-i18n="flead">Everything waiting on you, across all your repos, in one window.</p>
     <div class="vigs">
       <figure class="vig">
+        <div class="vm v-web" aria-hidden="true">
+          <div class="wbar"><span class="wname"><img src="logo.svg" width="16" height="16" alt=""><span>PR Radar</span></span><span class="wbub"><span data-i18n="webOn">On · 127.0.0.1:14200</span><span class="wset" data-i18n="webSet">Web settings</span></span><span class="wbtn"><span class="wglobe"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/></svg><i class="wdot"></i></span><span class="wchev">‹</span></span></div>
+          <div class="wwin">
+            <div class="wtab"><i></i><i></i><i></i><span class="wurl">127.0.0.1:14200</span></div>
+            <div class="wpage">
+              <span class="branch"><i></i>main</span>
+              <ul class="tree"><li><div class="pc">
+                  <div class="r1"><span class="num">#7</span><span class="ti" data-i18n="pr7">feat(sync): offline mode</span></div>
+                  <div class="r3" style="padding:0"><span class="b ok" data-i18n="approved">Approved</span><span class="b">CI ✓</span></div>
+                </div>
+                <ul><li><div class="pc">
+                  <div class="r1"><span class="num">#9</span><span class="ti" data-i18n="pr9">fix(sync): retry on conflict</span></div>
+                  <div class="r3" style="padding:0"><span class="b warn" data-i18n="by7">blocked by #7</span></div>
+                </div></li></ul>
+              </li></ul>
+            </div>
+          </div>
+        </div>
+        <figcaption data-i18n-html="cap8"><strong>In your browser</strong>Your PR list and its GitHub and Slack actions in a browser tab, served by the app on your machine. Close the window: the app keeps running in the menu bar or tray and still sends notifications.<span class="sr"> Animation: a click on the globe in the PR Radar header, a green dot and the status bubble On · 127.0.0.1:14200 appear, then a browser tab at 127.0.0.1:14200 opens on the PR tree of globex/app.</span></figcaption>
+      </figure>
+      <figure class="vig">
+        <div class="vm v-thr" aria-hidden="true">
+          <div class="msg"><i class="av" style="background:#2b8fd9">y</i><span data-i18n-html="mcpq"><b>you</b> Which of my PRs can I merge?</span></div>
+          <div class="file">pr-radar · get_prs</div>
+          <div class="hunk"><span>{ "repo": "acme/web", "number": 12,</span><span>  "ci": "SUCCESS", "decision": "APPROVED",</span><span class="ha">  "slack": [{ "where": "#reviews" }] }</span></div>
+          <div class="msg v-sent"><i class="av" style="background:#d9822b">C</i><span data-i18n-html="mcpa"><b>Claude</b> acme/web#12: approved, CI green, already posted in #reviews.</span></div>
+        </div>
+        <figcaption data-i18n-html="cap7"><strong>Local MCP server</strong>Claude Code or Claude Desktop reads your PRs and their Slack mentions straight from the app, without a single extra request. Opt-in, read-only.<span class="sr"> Animation: a question to Claude, the get_prs reply from PR Radar for acme/web#12, then Claude's answer.</span></figcaption>
+      </figure>
+      <figure class="vig">
         <div class="vm v-stack" aria-hidden="true">
           <span class="branch"><i></i>main</span>
           <ul class="tree"><li><div class="pc">
@@ -176,36 +206,6 @@
           <div class="revs"><span data-i18n="revs">Your PR #12 · reviewers</span><i class="av" style="background:#d9822b">c</i><span class="b ok" data-i18n="approved">Approved</span><i class="av v-add" style="background:#2b8fd9">d</i><span class="b v-add" data-i18n="pend">Pending</span></div>
         </div>
         <figcaption data-i18n-html="cap6"><strong>To review</strong>PRs waiting for your review get their own tab and a notification. On your own PRs, add reviewers from the card.<span class="sr"> Animation: the To review tab lists two PRs from acme/api, a New badge appears on the first, then dave is added as a reviewer of PR #12 next to chloe, who approved it.</span></figcaption>
-      </figure>
-      <figure class="vig">
-        <div class="vm v-thr" aria-hidden="true">
-          <div class="msg"><i class="av" style="background:#2b8fd9">y</i><span data-i18n-html="mcpq"><b>you</b> Which of my PRs can I merge?</span></div>
-          <div class="file">pr-radar · get_prs</div>
-          <div class="hunk"><span>{ "repo": "acme/web", "number": 12,</span><span>  "ci": "SUCCESS", "decision": "APPROVED",</span><span class="ha">  "slack": [{ "where": "#reviews" }] }</span></div>
-          <div class="msg v-sent"><i class="av" style="background:#d9822b">C</i><span data-i18n-html="mcpa"><b>Claude</b> acme/web#12: approved, CI green, already posted in #reviews.</span></div>
-        </div>
-        <figcaption data-i18n-html="cap7"><strong>Local MCP server</strong>Claude Code or Claude Desktop reads your PRs and their Slack mentions straight from the app, without a single extra request. Opt-in, read-only.<span class="sr"> Animation: a question to Claude, the get_prs reply from PR Radar for acme/web#12, then Claude's answer.</span></figcaption>
-      </figure>
-      <figure class="vig">
-        <div class="vm v-web" aria-hidden="true">
-          <div class="wbar"><span class="wname"><img src="logo.svg" width="16" height="16" alt=""><span>PR Radar</span></span><span class="wbub"><span data-i18n="webOn">On · 127.0.0.1:14200</span><span class="wset" data-i18n="webSet">Web settings</span></span><span class="wbtn"><span class="wglobe"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/></svg><i class="wdot"></i></span><span class="wchev">‹</span></span></div>
-          <div class="wwin">
-            <div class="wtab"><i></i><i></i><i></i><span class="wurl">127.0.0.1:14200</span></div>
-            <div class="wpage">
-              <span class="branch"><i></i>main</span>
-              <ul class="tree"><li><div class="pc">
-                  <div class="r1"><span class="num">#7</span><span class="ti" data-i18n="pr7">feat(sync): offline mode</span></div>
-                  <div class="r3" style="padding:0"><span class="b ok" data-i18n="approved">Approved</span><span class="b">CI ✓</span></div>
-                </div>
-                <ul><li><div class="pc">
-                  <div class="r1"><span class="num">#9</span><span class="ti" data-i18n="pr9">fix(sync): retry on conflict</span></div>
-                  <div class="r3" style="padding:0"><span class="b warn" data-i18n="by7">blocked by #7</span></div>
-                </div></li></ul>
-              </li></ul>
-            </div>
-          </div>
-        </div>
-        <figcaption data-i18n-html="cap8"><strong>In your browser</strong>Your PR list and its GitHub and Slack actions in a browser tab, served by the app on your machine. Close the window: the app keeps running in the menu bar or tray and still sends notifications.<span class="sr"> Animation: a click on the globe in the PR Radar header, a green dot and the status bubble On · 127.0.0.1:14200 appear, then a browser tab at 127.0.0.1:14200 opens on the PR tree of globex/app.</span></figcaption>
       </figure>
     </div>
     <h3 class="more" data-i18n="more">And also</h3>
