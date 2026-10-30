@@ -95,8 +95,8 @@
     legal: 'Mentions légales',
     lg1: '<strong>Éditeur :</strong> Vlor999, particulier, à titre non professionnel. Contact : <a href="https://github.com/Vlor999/pr-radar/issues">issues GitHub</a>.',
     lg2: '<strong>Hébergeur :</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.',
-    lg3: 'PR Radar est fourni tel quel, sans garantie (licence MIT). Non affilié à GitHub ni à Slack.',
-    lg4: 'GitHub, Slack, macOS, Windows et Linux sont des marques de leurs détenteurs respectifs.',
+    lg3: 'PR Radar est fourni tel quel, sans garantie (licence MIT). Non affilié à GitHub, Slack, Anthropic, Gitify ni PR Marmot.',
+    lg4: 'GitHub, Slack, Anthropic, Claude, Claude Code, Claude Desktop, Gitify, PR Marmot, Apple, Apple silicon, Mac, macOS, Intel, Windows, Linux, Debian, Ubuntu, Fedora et AppImage sont des marques ou des noms de leurs détenteurs respectifs.',
     rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT', nav: 'Principal', lang: 'Langue',
     ph: 'Votre réponse…'
   };
