@@ -50,12 +50,22 @@
       "Bash(git push * -d *)",
       "Bash(git push * :dev*)",
       "Bash(git push * :main*)",
+      "Bash(git push * :refs/heads/*)",
+      "Bash(git push * --mirror*)",
+      "Bash(git push * --prune*)",
+      "Bash(git push * --all*)",
       "Bash(git branch -d dev)",
       "Bash(git branch -D dev)",
       "Bash(git branch -d main)",
       "Bash(git branch -D main)",
-      "Bash(git branch * dev)",
-      "Bash(git branch * main)",
+      "Bash(git branch --delete dev)",
+      "Bash(git branch --delete main)",
+      "Bash(git branch -d * dev)",
+      "Bash(git branch -D * dev)",
+      "Bash(git branch --delete * dev)",
+      "Bash(git branch -d * main)",
+      "Bash(git branch -D * main)",
+      "Bash(git branch --delete * main)",
       "Bash(git * --no-verify*)",
       "Bash(git commit -n*)",
       "Bash(git commit * -n)",
@@ -68,7 +78,12 @@
       "Bash(gh api *requested_reviewers*)",
       "Read(~/.tauri/pr-radar.key)",
       "Bash(*pr-radar.key)",
-      "Bash(*pr-radar.key *)"
+      "Bash(*pr-radar.key *)",
+      "Bash(*pr-radar.key\")",
+      "Bash(*pr-radar.key\"*)",
+      "Bash(echo *TAURI_SIGNING_PRIVATE_KEY*)",
+      "Bash(printf *TAURI_SIGNING_PRIVATE_KEY*)",
+      "Bash(printenv TAURI_SIGNING_PRIVATE_KEY*)"
     ]
   }
 }
