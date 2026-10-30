@@ -1208,7 +1208,11 @@ function DoNotDisturbRows() {
             className="h-8 max-w-64 appearance-none rounded-lg border bg-background pr-7 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
           >
             <option value="">{t.notifications.systemZone(systemZone())}</option>
-            {TIME_ZONES.map((z) => (
+            {/* fuseau partagé que ce moteur ne liste pas (ex. "UTC") : ajouté pour rester affiché */}
+            {(s.quietTimeZone && !TIME_ZONES.includes(s.quietTimeZone)
+              ? [s.quietTimeZone, ...TIME_ZONES]
+              : TIME_ZONES
+            ).map((z) => (
               <option key={z} value={z}>
                 {z}
               </option>

@@ -87,3 +87,10 @@ test("fuseau de la plage : inconnu remplacé par celui du système (null)", () =
     "Asia/Tokyo",
   )
 })
+
+test("fuseau de la plage : enregistré sous son nom canonique", () => {
+  assert.equal(
+    parseSettings('{"quietTimeZone":"Etc/UTC"}').quietTimeZone,
+    "UTC",
+  )
+})

@@ -3,11 +3,11 @@ import { test } from "node:test"
 
 import {
   inQuietHours,
+  normalZone,
   notificationsAllowed,
   parseHm,
   pauseEnd,
   pausedUntil,
-  validZone,
   wallClock,
   type Quiet,
 } from "./quiet.ts"
@@ -85,9 +85,10 @@ test("parseHm lit HH:MM et refuse le reste", () => {
   assert.equal(parseHm("8:30"), null)
 })
 
-test("validZone accepte un fuseau IANA et refuse le reste", () => {
-  assert.equal(validZone("America/New_York"), true)
-  assert.equal(validZone("Mars/Olympus"), false)
+test("normalZone donne le nom canonique d'un fuseau et refuse l'inconnu", () => {
+  assert.equal(normalZone("europe/paris"), "Europe/Paris")
+  assert.equal(normalZone("Etc/UTC"), "UTC")
+  assert.equal(normalZone("Mars/Olympus"), null)
 })
 
 test("wallClock donne l'heure locale du fuseau", () => {

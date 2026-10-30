@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react"
 
 import type { Lang } from "./i18n"
 import type { Who } from "./review"
-import { parseHm, validZone } from "./quiet.ts"
+import { normalZone, parseHm } from "./quiet.ts"
 import { onPulled, saveItem } from "./sync.ts" // extension : chargé aussi par node --test
 
 /** Réglages de l'app, gardés dans la fenêtre (localStorage). Chaque clé a une valeur par défaut. */
@@ -114,10 +114,10 @@ export function parseSettings(raw: string | null): Settings {
       mcpEnabled: saved.mcpEnabled === true,
       pauseUntil: Number.isFinite(saved.pauseUntil) ? saved.pauseUntil! : null,
       quietHours: quietHoursOf(saved.quietHours),
+      // nom canonique : celui que le choix du fuseau des réglages sait afficher
       quietTimeZone:
-        typeof saved.quietTimeZone === "string" &&
-        validZone(saved.quietTimeZone)
-          ? saved.quietTimeZone
+        typeof saved.quietTimeZone === "string"
+          ? normalZone(saved.quietTimeZone)
           : null,
       refreshMinutes: refreshMinutesOf(saved.refreshMinutes),
     }

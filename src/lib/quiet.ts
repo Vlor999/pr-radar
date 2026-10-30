@@ -23,13 +23,13 @@ export const systemZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
 export const zoneOf = (q: Pick<Quiet, "quietTimeZone">) =>
   q.quietTimeZone ?? systemZone()
 
-/** Fuseau IANA connu du moteur JS. */
-export const validZone = (zone: string) => {
+/** Nom canonique d'un fuseau connu du moteur JS (casse, alias : "Etc/UTC" → "UTC"), sinon null. */
+export const normalZone = (zone: string): string | null => {
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone: zone })
-    return true
+    return new Intl.DateTimeFormat("en", { timeZone: zone }).resolvedOptions()
+      .timeZone
   } catch {
-    return false
+    return null
   }
 }
 
