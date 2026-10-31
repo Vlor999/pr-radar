@@ -254,21 +254,43 @@ export const parseHistory = (raw: string | null): McpCall[] => {
 
 /* ---------- Installation ---------- */
 
-export type McpClient = "claude-code" | "claude-desktop" | "other"
+export type McpClient =
+  | "claude-code"
+  | "claude-desktop"
+  | "codex"
+  | "cursor"
+  | "gemini"
+  | "vscode"
+  | "windsurf"
+  | "zed"
+  | "other"
 
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 
+const json = (v: unknown) => JSON.stringify(v, null, 2)
+
 /** Ce que l'utilisateur colle pour brancher son agent, avec le chemin réel du binaire. */
 export const installSnippet = (client: McpClient, exe: string) => {
+  const server = { command: exe, args: ["--mcp"] }
   switch (client) {
     case "claude-code":
       return `claude mcp add --scope user pr-radar -- ${shellQuote(exe)} --mcp`
     case "claude-desktop":
-      return JSON.stringify(
-        { mcpServers: { "pr-radar": { command: exe, args: ["--mcp"] } } },
-        null,
-        2,
-      )
+    case "windsurf":
+      return json({ mcpServers: { "pr-radar": server } })
+    case "codex":
+      return `codex mcp add pr-radar -- ${shellQuote(exe)} --mcp`
+    case "cursor":
+      return json({ mcpServers: { "pr-radar": { type: "stdio", ...server } } })
+    case "gemini":
+      // `--` : sinon gemini lit `--mcp` comme une de ses options
+      return `gemini mcp add --scope user pr-radar ${shellQuote(exe)} -- --mcp`
+    case "vscode":
+      return `code --add-mcp ${shellQuote(
+        JSON.stringify({ name: "pr-radar", type: "stdio", ...server }),
+      )}`
+    case "zed":
+      return json({ context_servers: { "pr-radar": server } })
     case "other":
       return `${shellQuote(exe)} --mcp`
   }
