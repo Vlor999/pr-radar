@@ -24,15 +24,17 @@ import { cn } from "cn"
 
 import { refreshPrs } from "@/lib/actions"
 import { locale, pick, strings, useStrings } from "@/lib/i18n"
+import { CommandPalette } from "@/components/command-palette"
 import { MergeCalendar } from "@/components/merge-calendar"
 import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
+import { Shortcut } from "@/components/shortcut"
 import { ReviewList } from "@/components/review-list"
 import { UpdateBanner } from "@/components/update-banner"
 import { RunningDot } from "@/components/running-dot"
 import { WebMenu } from "@/components/web-menu"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
-import { invoke, isWeb } from "@/lib/platform"
+import { invoke, isWeb, listen } from "@/lib/platform"
 import { useAutoInterval } from "@/lib/quota"
 import { getSettings, useSettings } from "@/lib/settings"
 import { refreshMentions, useSlack } from "@/lib/slack"
@@ -53,6 +55,7 @@ import {
   usePrNotifications,
   useReviewNotifications,
 } from "@/hooks/use-pr-notifications"
+import { formatUntil, pause, resume, useQuiet } from "@/hooks/use-quiet"
 import { useSeen } from "@/hooks/use-seen"
 import { useThumb } from "@/hooks/use-thumb"
 import {
@@ -124,6 +127,10 @@ const S = strings(
       open: "Ouvrir PR Radar",
       quit: "Quitter",
       web: "Ouvrir dans le navigateur",
+      pauseHour: "Pause des notifications pendant 1 heure",
+      pauseTomorrow: "Pause des notifications jusqu'à demain",
+      paused: (until: string) => `Notifications en pause jusqu'à ${until}`,
+      resume: "Reprendre les notifications",
     },
   },
   {
@@ -178,9 +185,31 @@ const S = strings(
       open: "Open PR Radar",
       quit: "Quit",
       web: "Open in browser",
+      pauseHour: "Pause notifications for 1 hour",
+      pauseTomorrow: "Pause notifications until tomorrow",
+      paused: (until: string) => `Notifications paused until ${until}`,
+      resume: "Resume notifications",
     },
   },
 )
+
+/**
+ * Libellés du menu de l'icône (src-tauri `TrayLabels`). `dnd` null : sans « Ne pas déranger »,
+ * hors du tableau de bord (personne n'écoute `tray-pause`). Sinon état de la pause, puis
+ * « Reprendre » ou les choix de pause.
+ */
+const trayLabels = (
+  tray: (typeof S)["fr"]["tray"],
+  dnd: { paused: string | null; manual: boolean } | null,
+) => ({
+  open: tray.open,
+  quit: tray.quit,
+  web: tray.web,
+  pauseHour: dnd && tray.pauseHour,
+  pauseTomorrow: dnd && tray.pauseTomorrow,
+  paused: dnd?.paused ?? null,
+  resume: dnd?.manual ? tray.resume : null,
+})
 
 // réglages, serveur MCP et version web : ouverts à la demande, chargés dans leur propre chunk
 const SettingsPage = lazy(() =>
@@ -290,27 +319,37 @@ export function PrDashboard({
   const toReview = reviewCount(reviews.reviews)
   // icône de la barre des menus : PR « À traiter » (même filtre que l'onglet)
   const attention = prs.filter(needsAttention).length
+  const quiet = useQuiet()
+  const pausedText =
+    quiet.until && t.tray.paused(formatUntil(quiet.until, quiet.zone))
   useEffect(() => {
     if (isWeb) return // icône de l'app : tenue par la fenêtre de l'app
     invoke("set_tray", {
       count: attention,
       tooltip: t.tray.tooltip(attention),
-      open: t.tray.open,
-      quit: t.tray.quit,
-      web: t.tray.web,
+      labels: trayLabels(t.tray, {
+        paused: pausedText,
+        manual: quiet.manual,
+      }),
     }).catch(() => {})
-  }, [attention, t])
-  // déconnexion (le tableau de bord disparaît) : plus de compteur
+  }, [attention, t, pausedText, quiet.manual])
+  // choix « Ne pas déranger » du menu de l'icône
+  useEffect(() => {
+    const off = listen<string>("tray-pause", ({ payload }) =>
+      payload === "resume"
+        ? resume()
+        : pause(payload === "tomorrow" ? "tomorrow" : "hour"),
+    )
+    return () => void off.then((f) => f())
+  }, [])
+  // déconnexion (le tableau de bord disparaît) : plus de compteur ni de choix de pause
   useEffect(
     () => () => {
       if (isWeb) return
-      const { open, quit, web } = pick(S).tray
       invoke("set_tray", {
         count: 0,
         tooltip: "PR Radar",
-        open,
-        quit,
-        web,
+        labels: trayLabels(pick(S).tray, null),
       }).catch(() => {})
     },
     [],
@@ -474,6 +513,52 @@ export function PrDashboard({
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
+      <CommandPalette
+        prs={prs}
+        reviews={reviews.reviews}
+        tabs={TABS.map((tb) => ({ id: tb.id, label: t.tabs[tb.id] }))}
+        filters={FILTERS.map((f) => ({ id: f.id, label: t.filters[f.id] }))}
+        sorts={SORTS.map((s) => ({ id: s.id, label: t.sorts[s.id] }))}
+        current={{ tab, filter, sort }}
+        mcp={!!mcp.info?.supported}
+        on={{
+          tab: (id) => {
+            setPage(null)
+            setTab(id)
+          },
+          filter: (id) => {
+            setPage(null)
+            setTab("open")
+            setFilter(id as typeof filter)
+          },
+          sort: (id) => {
+            setPage(null)
+            setTab("open")
+            setSort(id)
+          },
+          refresh: () => startRefresh(() => refreshPrs()),
+          settings: () => setPage("settings"),
+          mcp: () => setPage("mcp"),
+          repos: () => {
+            setPage(null)
+            if (!wide) return setReposOpen(true)
+            requestAnimationFrame(() =>
+              document.getElementById("repo-filter")?.focus(),
+            )
+          },
+          expand: (pr) => {
+            setPage(null)
+            setTab("open")
+            const key = `${pr.repo}#${pr.number}`
+            setOpen((o) => ({ ...o, [pr.repo]: true, [key]: true }))
+            seen.markSeen([pr])
+          },
+          showAll: () => {
+            setQuery("")
+            setFilter("all")
+          },
+        }}
+      />
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           {!wide && (
@@ -769,10 +854,11 @@ export function PrDashboard({
             )}
             <footer className="flex flex-wrap gap-x-4 gap-y-1 pt-4 text-xs text-muted-foreground">
               {shortcuts.map((s) => (
-                <span key={s.keys}>
-                  <kbd className="rounded border bg-muted px-1 font-mono">
-                    {s.keys}
-                  </kbd>{" "}
+                <span
+                  key={s.label}
+                  className="inline-flex items-center gap-1.5"
+                >
+                  <Shortcut keys={s.keys} />
                   {s.label}
                 </span>
               ))}

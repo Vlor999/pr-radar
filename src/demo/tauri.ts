@@ -49,3 +49,13 @@ export const openUrl = async (url: string) => {
   window.open(url, "_blank")
 }
 export const fetch = window.fetch.bind(window)
+
+// lancement à l'ouverture de session : état du « système » gardé en mémoire
+let autostart = false
+export const isEnabled = async () => autostart
+export const enable = async () => {
+  autostart = true
+}
+export const disable = async () => {
+  autostart = false
+}

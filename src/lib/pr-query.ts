@@ -9,8 +9,9 @@ query($q: String!, $after: String) {
   search(query: $q, type: ISSUE, first: ${PAGE_SIZE}, after: $after) {
     pageInfo { hasNextPage endCursor }
     nodes { ... on PullRequest {
-      id number title url isDraft updatedAt mergeable reviewDecision headRefName baseRefName additions deletions changedFiles
+      id number title url isDraft updatedAt mergeable viewerCanUpdateBranch reviewDecision headRefName baseRefName additions deletions changedFiles
       repository { nameWithOwner }
+      isCrossRepository author { login } assignees(first: 10) { nodes { login } }
       comments(first: 100) { nodes { author { login } } }
       conversation: comments(last: 10) { nodes { author { login } bodyHTML url createdAt } }
       reviews(last: 30) { nodes { author { login } state bodyHTML url submittedAt } }
@@ -19,7 +20,7 @@ query($q: String!, $after: String) {
         comments(first: 20) { nodes { author { login } bodyHTML url createdAt } } } }
       latestOpinionatedReviews(first: 20) { nodes { author { login } state } }
       reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
-      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+      commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } }
       STACK
     } }
   }

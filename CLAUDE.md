@@ -16,7 +16,7 @@ npm run tauri build -- --bundles app   # local macOS build
 - Never print or commit `~/.tauri/pr-radar.key` or its password (CI secrets `TAURI_SIGNING_PRIVATE_KEY*`).
 - `site/` (GitHub Pages landing): mock data only (`acme`), never real private repos.
 - The OAuth client ID in `src/lib/auth.ts` is public, not a secret.
-- Every feature: local browser demo (skill `demo`, `npm run demo` → localhost:1420, mocked data) and explicit user validation before commit/release. No release without validation.
+- Every feature: local browser demo (skill `demo`, `npm run demo` → localhost:1420, mocked data) and explicit user validation before merge/release. Agents commit, push and open the PR as soon as checks are green, without waiting. No merge or release without validation.
 - Branches: work on `dev` (or a branch → PR to `dev`). `main` only accepts PRs from `dev`; the merge triggers the release.
 - Detailed rules: `.claude/rules/` (`project`, `typescript`, `test`, `subagents`).
 - Skills: `worktree` (task → PR to `dev`), `mr-review` (PR review), `grill-me` (stress-test a plan).

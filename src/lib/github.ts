@@ -14,6 +14,13 @@ import { allAccounts, findAccount, rememberLogin, tokenOf } from "./auth"
 import { fetch } from "./platform"
 import { sweep, type Entry } from "./cache"
 import {
+  CHECKS_QUERY,
+  checksTtlMs,
+  rerunError,
+  toCiView,
+  type RawChecks,
+} from "./checks"
+import {
   gqlFailed,
   gqlMessage,
   restRepos,
@@ -21,6 +28,7 @@ import {
   type RepoNode,
 } from "./graphql"
 import { pick, strings } from "./i18n"
+import { mentionedIds, reasonOf, uniqueById } from "./involved"
 import {
   toConversation,
   withStackFallback,
@@ -29,7 +37,7 @@ import {
 import { trackQuota, validQuota, type Quota } from "./quota"
 import { toReview, type RawReview } from "./review"
 import type { Reviewer } from "./reviewers"
-import type { Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
+import type { CiView, Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
 
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
@@ -39,6 +47,9 @@ const ASSIGNABLE_PAGE = 20 // assez pour un popover ; la recherche affine au-del
 // la recherche GitHub renvoie parfois 0 résultat sans erreur (~1 appel sur 3) : un vide est relu avant d'être cru.
 // Reste ~1/27 par recherche (un lot de 5 repos), absorbé par `keepVanished` dans store.reload.
 const EMPTY_SEARCH_RETRIES = 2
+// recherche des mentions : un vide est courant (PR seulement commentée) ; une relance limite le motif
+// « Impliqué » affiché à tort à la place de « Mentionné » (cosmétique, corrigé au chargement suivant)
+const MENTION_SEARCH_RETRIES = 1
 
 const S = strings(
   {
@@ -120,6 +131,7 @@ type RawPr = RawConversation & {
   isDraft: boolean
   updatedAt: string
   mergeable: string
+  viewerCanUpdateBranch: boolean
   reviewDecision: Decision
   headRefName: string
   baseRefName: string
@@ -127,6 +139,9 @@ type RawPr = RawConversation & {
   deletions: number
   changedFiles: number
   repository: { nameWithOwner: string }
+  isCrossRepository: boolean
+  author: { login: string } | null
+  assignees: { nodes: { login: string }[] }
   comments: { nodes: Login[] }
   reviewThreads: {
     nodes: {
@@ -144,7 +159,9 @@ type RawPr = RawConversation & {
     nodes: { requestedReviewer: { login?: string; name?: string } | null }[]
   }
   commits: {
-    nodes: { commit: { statusCheckRollup: { state: string } | null } }[]
+    nodes: {
+      commit: { oid: string; statusCheckRollup: { state: string } | null }
+    }[]
   }
   stackEntry?: {
     position: number
@@ -215,7 +232,13 @@ function me(a: Account): Promise<string> {
   return v
 }
 
-function toPr(p: RawPr, login: string, account: string): Pr {
+function toPr(
+  p: RawPr,
+  login: string,
+  account: string,
+  mentioned: Set<string>,
+): Pr {
+  const reason = reasonOf(who(p), login, mentioned.has(p.id))
   const others = (nodes: Login[]) =>
     nodes.filter((n) => n.author?.login !== login).length
   const threads = p.reviewThreads.nodes
@@ -230,6 +253,8 @@ function toPr(p: RawPr, login: string, account: string): Pr {
     draft: p.isDraft,
     decision: p.reviewDecision,
     conflicting: p.mergeable === "CONFLICTING",
+    canUpdateBranch: p.viewerCanUpdateBranch,
+    sha: p.commits.nodes[0]?.commit.oid ?? null,
     ci: p.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null,
     comments:
       others(p.comments.nodes) +
@@ -268,8 +293,17 @@ function toPr(p: RawPr, login: string, account: string): Pr {
     ...(p.stackEntry && {
       stack: { ...p.stackEntry.stack, position: p.stackEntry.position },
     }),
+    ...(p.isCrossRepository && { fork: true }),
+    ...(reason && {
+      involved: { reason, author: p.author?.login ?? "ghost" },
+    }),
   }
 }
+
+const who = (p: RawPr) => ({
+  author: p.author?.login ?? null,
+  assignees: p.assignees.nodes.map((n) => n.login),
+})
 
 // ponytail: caches en mémoire de la fenêtre, suffisent pour une app mono-utilisateur
 const caches = new Map<string, Entry<unknown>>()
@@ -315,7 +349,19 @@ const perFollowed = <T>(
 // comptes dont GitHub a refusé `stackEntry` : la session continue sans les stacks natifs
 const withoutStack = new Set<string>()
 
-/** Mes PR ouvertes ; `errors` : comptes en échec, les autres sont gardés. */
+// ids seulement : ~1 point par page, contre ~21 pour une page de la requête complète
+const MENTIONS_QUERY = `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
+  pageInfo { hasNextPage endCursor } nodes { ... on PullRequest { id } } } }`
+
+/**
+ * PR ouvertes des repos suivis qui me concernent : les miennes, et celles des autres où je suis assigné,
+ * mentionné ou impliqué (commentaire, review). `errors` : comptes en échec, les autres sont gardés.
+ *
+ * Coût : `involves:@me` (auteur OU assigné OU mentionné OU commentateur) remplace `author:@me`, même nombre de
+ * recherches complètes. Auteur et assignés sont lus dans la réponse ; seul « mentionné » n'a pas de champ
+ * GraphQL : une recherche légère `mentions:@me` (ids seulement), lancée uniquement s'il reste une PR d'un
+ * autre où je ne suis pas assigné.
+ */
 export function fetchPrs(
   repos: string[],
 ): Promise<{ data: Pr[]; errors: AccountError[] }> {
@@ -323,19 +369,34 @@ export function fetchPrs(
     perFollowed(repos, async (a, names) => {
       const login = await me(a)
       const parts = await Promise.all(
-        chunk(names, REPOS_PER_QUERY).map((c) => {
-          const q =
-            "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" ")
+        chunk(names, REPOS_PER_QUERY).map(async (c) => {
+          const filter = c.map((r) => "repo:" + r).join(" ")
           // ponytail: au premier chargement, chaque requête parallèle peut relancer une fois (accepté)
-          return withStackFallback(
-            a.host,
-            withoutStack.has(a.id),
-            (query) => searchAll<RawPr>(conn(a), query, q),
-            () => withoutStack.add(a.id),
+          const nodes = uniqueById(
+            await withStackFallback(
+              a.host,
+              withoutStack.has(a.id),
+              (query) =>
+                searchAll<RawPr>(
+                  conn(a),
+                  query,
+                  "is:pr is:open involves:@me " + filter,
+                ),
+              () => withoutStack.add(a.id),
+            ),
           )
+          const ids = await mentionedIds(nodes.map(who), login, () =>
+            searchAll<{ id: string }>(
+              conn(a),
+              MENTIONS_QUERY,
+              "is:pr is:open mentions:@me " + filter,
+              MENTION_SEARCH_RETRIES,
+            ),
+          )
+          return nodes.map((p) => toPr(p, login, a.id, ids))
         }),
       )
-      return parts.flat().map((p) => toPr(p, login, a.id))
+      return parts.flat()
     }),
   )
 }
@@ -493,6 +554,33 @@ export async function commentOnPr(prId: string, body: string, repo: string) {
   )
 }
 
+/** Marque un fil de review comme résolu. */
+export async function resolveThread(threadId: string, repo: string) {
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($id: ID!) { resolveReviewThread(input: { threadId: $id }) { thread { id } } }",
+    { id: threadId },
+  )
+}
+
+/** Sort une PR du mode draft. */
+export async function markReady(prId: string, repo: string) {
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { id } } }",
+    { id: prId },
+  )
+}
+
+/** Merge la branche de base dans la branche de la PR (bouton « Update branch » de GitHub). */
+export async function updateBranch(prId: string, repo: string) {
+  await gql(
+    conn(accountOf(repo)),
+    "mutation($id: ID!) { updatePullRequestBranch(input: { pullRequestId: $id }) { pullRequest { id } } }",
+    { id: prId },
+  )
+}
+
 /** Quota GraphQL d'un compte (`GET /rate_limit`, gratuit : ne compte pas dans la limite) ; null si absent ou en échec. */
 export async function rateLimit(a: Account): Promise<Quota | null> {
   try {
@@ -634,4 +722,43 @@ export async function requestReviewer(
     "mutation($pr: ID!, $user: ID!) { requestReviews(input: { pullRequestId: $pr, userIds: [$user], union: true }) { pullRequest { id } } }",
     { pr: prId, user: userId },
   )
+}
+
+/** Vue CI d'une PR (ouverte depuis la pastille CI) ; commit de tête et état agrégé dans la clé du cache :
+ * relue à un nouveau push ou quand l'état de la CI change. */
+export function fetchChecks(
+  repo: string,
+  number: number,
+  sha: string | null,
+  rollup: string | null,
+): Promise<CiView> {
+  return cached(
+    `checks:${repo}#${number}@${sha}|${rollup}`,
+    checksTtlMs(rollup),
+    async () => {
+      const [owner, name] = splitKey(repo).name.split("/")
+      return toCiView(
+        await gql<RawChecks>(conn(accountOf(repo)), CHECKS_QUERY, {
+          owner,
+          name,
+          number,
+        }),
+      )
+    },
+  )
+}
+
+/** Relance les jobs en échec (et ceux qui en dépendent) d'un workflow run GitHub Actions. */
+export async function rerunFailedJobs(repo: string, runId: number) {
+  const a = accountOf(repo)
+  const res = await fetch(
+    `${apiUrl(a.host)}/repos/${splitKey(repo).name}/actions/runs/${runId}/rerun-failed-jobs`,
+    { method: "POST", headers: headers(tokenOf(a.id), a.id) },
+  )
+  if (res.status === 401) throw new AuthError(pick(S).tokenRejected, a.id)
+  if (res.ok) return
+  const { message } = (await res.json().catch(() => ({}))) as {
+    message?: string
+  }
+  throw new Error(rerunError(res.status, message))
 }

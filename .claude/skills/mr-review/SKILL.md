@@ -8,7 +8,23 @@ disable-model-invocation: false
 
 Reviews a GitHub pull request and produces findings prioritized by importance and relevance to the code changes.
 
-**Read-only mode.** When the review is delegated (a sub-agent reviewing for an orchestrator) or the user asks for read-only: do not write the review file, do not spawn sub-agents (do one careful pass, and validate each finding yourself against the code), do not commit, do not post on GitHub. Return the review table in the final report instead of Step 5.
+**Read-only mode.** When the review is delegated (a sub-agent reviewing for an orchestrator) or the user asks for read-only: do not write the review file, do not spawn sub-agents (do one careful pass, and validate each finding yourself against the code), do not commit, do not post on GitHub. Return the review table in the final report instead of Step 5. Ask no question: nobody can answer; take the project rules as they are. When nothing is found, return exactly `NO FINDINGS`.
+
+---
+
+## Orchestrated loop
+
+How the orchestrator reviews each PR opened by an implementation subagent (`.claude/rules/subagents.md`). A subagent cannot launch agents, so the orchestrator drives every round:
+
+1. **Reviewer.** As soon as the author agent reports its PR, launch one reviewer (`model: "sonnet"`) with this skill in read-only mode. Give it the PR URL, the task, the author's worktree path (read the code there, read-only, never check out a branch anywhere), and the scope:
+   - round 1: the whole PR (`gh pr diff <n>`);
+   - round N: only the fix commits since the last reviewed head (`cd <worktree> && git fetch origin && git diff <old head>..<new head>`), plus one line per previous finding: resolved | not resolved, with the evidence.
+   It returns the review table or `NO FINDINGS`.
+2. **Fixes.** Findings → `SendMessage` to the PR's author agent (it has the context) with the table. It fixes each finding or contests it with evidence, keeps the checks green, commits with `logical-commit-sequencer` (new commits, never `--amend`), and pushes on the same branch without waiting. It reports the new head SHA.
+3. **Re-review** on the new head (step 1, round N).
+4. **Done** at `NO FINDINGS`: report the PR as ready to merge. Visible change: the user validates the demo (skill `demo`) before merge. The orchestrator never merges.
+
+At most 3 fix rounds. If the 4th review still has findings, or a contested finding is kept again, stop and give the user the open findings and the author's position.
 
 ---
 

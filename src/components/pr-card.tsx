@@ -1,25 +1,36 @@
 import {
+  AtSign,
   ChevronRight,
+  CircleCheck,
   Clock,
   ExternalLink,
   GitMerge,
+  GitPullRequest,
   GitPullRequestArrow,
   Layers,
+  Loader2,
   MessageSquare,
+  MessagesSquare,
+  RefreshCw,
+  UserCheck,
 } from "lucide-react"
 import { cn } from "cn"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useTransition } from "react"
 
 import { AddReviewer } from "@/components/add-reviewer"
 import { Avatar } from "@/components/avatar"
+import { CiGraph } from "@/components/ci-graph"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { ready, syncBranch } from "@/lib/actions"
 import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
+import { DONE_ICON, DONE_MS, pause, wait } from "@/lib/motion"
 import { useSettings } from "@/lib/settings"
 import { useMentions } from "@/lib/slack"
 import { slackParts, spoofedHost } from "@/lib/slack-text"
@@ -30,7 +41,7 @@ import {
   nativeStack,
   needsAttention,
 } from "@/lib/tree"
-import type { PrNode } from "@/lib/types"
+import type { PrNode, Reason } from "@/lib/types"
 
 const S = strings(
   {
@@ -69,6 +80,23 @@ const S = strings(
     slackTitle: "Lien posté sur Slack",
     slackMentions: "Mentions Slack",
     openInSlack: "Ouvrir dans Slack",
+    markReady: "Prête pour review",
+    markedReady: "Ouverte à la review",
+    updateBranch: "Mettre à jour la branche",
+    branchUpdated: "Branche à jour",
+    updateBranchTitle: (base: string) => `Merge ${base} dans la branche`,
+    showCi: "Afficher les jobs de la CI",
+    hideCi: "Masquer les jobs de la CI",
+    reason: {
+      assigned: "Assignée",
+      mentioned: "Mentionné",
+      involved: "Impliqué",
+    } as Record<Reason, string>,
+    reasonTitle: {
+      assigned: (who: string) => `PR de ${who}, assignée à toi`,
+      mentioned: (who: string) => `PR de ${who}, où tu es mentionné`,
+      involved: (who: string) => `PR de ${who}, où tu as commenté ou reviewé`,
+    } as Record<Reason, (who: string) => string>,
   },
   {
     status: {
@@ -105,8 +133,29 @@ const S = strings(
     slackTitle: "Link posted on Slack",
     slackMentions: "Slack mentions",
     openInSlack: "Open in Slack",
+    markReady: "Ready for review",
+    markedReady: "Open for review",
+    updateBranch: "Update branch",
+    branchUpdated: "Branch up to date",
+    updateBranchTitle: (base: string) => `Merge ${base} into the branch`,
+    showCi: "Show CI jobs",
+    hideCi: "Hide CI jobs",
+    reason: {
+      assigned: "Assigned",
+      mentioned: "Mentioned",
+      involved: "Involved",
+    },
+    reasonTitle: {
+      assigned: (who: string) => `PR by ${who}, assigned to you`,
+      mentioned: (who: string) => `PR by ${who}, where you are mentioned`,
+      involved: (who: string) =>
+        `PR by ${who}, where you commented or reviewed`,
+    },
   },
 )
+
+/** rétractation du bouton, puis repli de la ligne (durée de CollapsibleContent, duration-200) */
+const EXIT_MS = 200
 
 const STATUS: Record<string, "default" | "destructive" | "outline"> = {
   APPROVED: "default",
@@ -114,6 +163,12 @@ const STATUS: Record<string, "default" | "destructive" | "outline"> = {
   REVIEW_REQUIRED: "outline",
   NONE: "outline",
 }
+const REASON_ICON: Record<Reason, typeof AtSign> = {
+  assigned: UserCheck,
+  mentioned: AtSign,
+  involved: MessagesSquare,
+}
+
 const CI: Record<string, { label: string; bad?: boolean }> = {
   SUCCESS: { label: "CI ✓" },
   FAILURE: { label: "CI ✗", bad: true },
@@ -172,6 +227,8 @@ export function PrCard({
   const t = useStrings(S)
   const decision = pr.decision && pr.decision in STATUS ? pr.decision : "NONE"
   const ci = pr.ci ? CI[pr.ci] : undefined
+  // vue CI (workflows, jobs) : ouverte depuis la pastille CI ; la requête des jobs ne part que vue ouverte
+  const [ciOpen, setCiOpen] = useState(false)
   const merge = mergeState(pr)
   const stack = nativeStack(pr)
   const { staleDays } = useSettings()
@@ -233,6 +290,7 @@ export function PrCard({
             if (!(e.target as Element).closest("button")) onOpenChange(!open)
           }}
         >
+          {pr.involved && <ReasonBadge {...pr.involved} />}
           {merge?.kind === "ready" && (
             <Badge>
               <GitMerge />
@@ -242,7 +300,19 @@ export function PrCard({
           <Badge variant={STATUS[decision]}>{t.status[decision]}</Badge>
           {pr.draft && <Badge variant="secondary">Draft</Badge>}
           {ci && (
-            <Badge variant={ci.bad ? "destructive" : "outline"}>
+            <Badge
+              variant={ci.bad ? "destructive" : "outline"}
+              title={ciOpen ? t.hideCi : t.showCi}
+              render={<button type="button" />}
+              aria-expanded={ciOpen}
+              aria-controls={`ci-${pr.id}`}
+              onClick={() => setCiOpen(!ciOpen)}
+              className={cn(
+                "cursor-pointer",
+                !ci.bad && "bg-background hover:bg-muted dark:bg-muted",
+                ciOpen && "ring-2 ring-ring/40",
+              )}
+            >
               {ci.label}
             </Badge>
           )}
@@ -301,6 +371,16 @@ export function PrCard({
             </Badge>
           )}
         </div>
+        {/* hors du contenu de la carte : s'ouvre carte repliée ou dépliée ; démontée fermée (pas de requête) */}
+        {ci && (
+          <Collapsible open={ciOpen}>
+            <CollapsibleContent id={`ci-${pr.id}`}>
+              <div className="px-4 pb-3 pl-10">
+                <CiGraph pr={pr} />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
         <CollapsibleContent>
           <div className="flex flex-col gap-3 border-t px-4 py-3 pl-10 text-sm">
             <ul className="flex flex-col gap-2">
@@ -333,6 +413,9 @@ export function PrCard({
                 {pr.reviews.length + pr.requested.length === 0 && t.noReviewer}
               </li>
             </ul>
+            {((pr.draft && !pr.involved) || pr.canUpdateBranch) && (
+              <PrActions pr={pr} />
+            )}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <MessageSquare className="size-3.5" />
@@ -358,6 +441,122 @@ export function PrCard({
         </CollapsibleContent>
       </Collapsible>
     </Card>
+  )
+}
+
+/** Pourquoi la PR d'un autre est là ; l'auteur au survol. */
+function ReasonBadge({ reason, author }: NonNullable<PrNode["involved"]>) {
+  const t = useStrings(S)
+  const Icon = REASON_ICON[reason]
+  return (
+    <Badge variant="outline" title={t.reasonTitle[reason](author)}>
+      <Icon />
+      {t.reason[reason]}
+    </Badge>
+  )
+}
+
+type PrAction = "ready" | "update"
+
+/** Actions d'écriture sur la PR : sortir du draft, mettre la branche à jour ; erreur de GitHub affichée dessous.
+ * Succès : coche, puis le bouton se rétracte (la ligne se replie s'il était le dernier) avant la relecture. */
+function PrActions({ pr }: { pr: PrNode }) {
+  const t = useStrings(S)
+  const [error, setError] = useState("")
+  const [pending, start] = useTransition()
+  const [running, setRunning] = useState<PrAction>()
+  const [done, setDone] = useState<PrAction>()
+  const [gone, setGone] = useState<PrAction[]>([])
+  const shown = [
+    pr.draft && !pr.involved && ("ready" as const), // sortir du draft : décision de l'auteur
+    pr.canUpdateBranch && ("update" as const),
+  ].filter((a): a is PrAction => !!a)
+  const open = shown.some((a) => !gone.includes(a))
+
+  const run = (which: PrAction) =>
+    start(async () => {
+      setRunning(which)
+      const res = await (which === "ready" ? ready : syncBranch)(
+        pr.id,
+        pr.repo,
+        async () => {
+          setDone(which)
+          await wait(DONE_MS)
+          setGone((g) => [...g, which])
+          await pause(EXIT_MS)
+        },
+      )
+      setError(res.error ?? "")
+      // relecture faite : le bouton suit de nouveau les données (GitHub peut encore proposer l'action,
+      // ou la reproposer à une actualisation suivante)
+      setDone(undefined)
+      setGone((g) => g.filter((a) => a !== which))
+    })
+
+  const button = (
+    which: PrAction,
+    Icon: typeof RefreshCw,
+    label: string,
+    doneLabel: string,
+    title?: string,
+  ) => (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={pending}
+      title={title}
+      onClick={() => run(which)}
+      className={cn(
+        // largeur animée (transition-all du bouton) ; -mr-2 rattrape le gap-2 de la ligne
+        "max-w-72 overflow-hidden motion-reduce:transition-none",
+        done === which && "disabled:opacity-100",
+        gone.includes(which) && "-mr-2 max-w-0 border-0 px-0 opacity-0",
+      )}
+    >
+      {done === which ? (
+        <CircleCheck className={DONE_ICON} />
+      ) : pending && running === which ? (
+        // mise à jour : l'icône de la branche tourne ; sinon le spinner des autres actions
+        which === "update" ? (
+          <RefreshCw className="animate-spin" />
+        ) : (
+          <Loader2 className="animate-spin" />
+        )
+      ) : (
+        <Icon />
+      )}
+      {done === which ? doneLabel : label}
+    </Button>
+  )
+
+  return (
+    // repli de la ligne : -mt-3 rattrape le gap-3 du contenu de la carte
+    <div
+      className={cn(
+        "transition-[margin] duration-200 motion-reduce:transition-none",
+        !open && "-mt-3",
+      )}
+    >
+      <Collapsible open={open}>
+        <CollapsibleContent className="overflow-visible data-[ending-style]:overflow-hidden">
+          <div className="flex flex-col gap-2 border-t pt-3">
+            <div className="flex flex-wrap gap-2">
+              {pr.draft &&
+                button("ready", GitPullRequest, t.markReady, t.markedReady)}
+              {pr.canUpdateBranch &&
+                button(
+                  "update",
+                  RefreshCw,
+                  t.updateBranch,
+                  t.branchUpdated,
+                  t.updateBranchTitle(pr.base),
+                )}
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   )
 }
 

@@ -40,6 +40,16 @@ test("réglage brouillons décoché : une demande de review sur un brouillon n'e
   )
 })
 
+test("PR d'un autre : approbation, changements demandés et CI rouge ne sont pas notifiés", () => {
+  const theirs = {
+    ...pr(false),
+    involved: { reason: "assigned" as const, author: "bob" },
+  }
+  for (const kind of ["approved", "changesRequested", "ciFailed"] as const)
+    assert.equal(shouldNotify(DEFAULT_SETTINGS, theirs, kind), false)
+  assert.equal(shouldNotify(DEFAULT_SETTINGS, theirs, "comments"), true)
+})
+
 test("fréquence enregistrée : auto et minutes entières >= 0 gardées", () => {
   assert.equal(refreshMinutesOf("auto"), "auto")
   assert.equal(refreshMinutesOf(0), 0)
@@ -60,4 +70,37 @@ test("un changement de réglage appliqué aux réglages partagés garde leurs au
 
 test("des réglages partagés absents reprennent les valeurs par défaut", () => {
   assert.deepEqual(parseSettings(null), DEFAULT_SETTINGS)
+})
+
+test("ne pas déranger : plage et pause mal formées remplacées par les valeurs par défaut", () => {
+  const s = parseSettings(
+    JSON.stringify({
+      pauseUntil: "demain",
+      quietHours: { enabled: true, start: "25:00", end: "07:30" },
+    }),
+  )
+  assert.equal(s.pauseUntil, null)
+  assert.deepEqual(s.quietHours, {
+    enabled: true,
+    start: "22:00",
+    end: "07:30",
+  })
+})
+
+test("fuseau de la plage : inconnu remplacé par celui du système (null)", () => {
+  assert.equal(
+    parseSettings('{"quietTimeZone":"Mars/Olympus"}').quietTimeZone,
+    null,
+  )
+  assert.equal(
+    parseSettings('{"quietTimeZone":"Asia/Tokyo"}').quietTimeZone,
+    "Asia/Tokyo",
+  )
+})
+
+test("fuseau de la plage : enregistré sous son nom canonique", () => {
+  assert.equal(
+    parseSettings('{"quietTimeZone":"Etc/UTC"}').quietTimeZone,
+    "UTC",
+  )
 })

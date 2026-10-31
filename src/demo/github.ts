@@ -1,4 +1,4 @@
-// Démo navigateur : même API que src/lib/github.ts, données fictives (org « acme »).
+// Démo navigateur : même API que src/lib/github.ts, données fictives (orgs « acme », « globex »).
 // Un compte GitHub Enterprise ajouté dans les réglages (hôte au choix, jeton quelconque) voit `globex/ledger`.
 import {
   DEFAULT_ID,
@@ -7,9 +7,19 @@ import {
   type AccountError,
 } from "@/lib/accounts"
 import { allAccounts } from "@/lib/auth"
+import { rerunError } from "@/lib/checks"
 import { trackQuota, type Quota } from "@/lib/quota"
 import type { Reviewer } from "@/lib/reviewers"
-import type { MergedPr, Pr, ReviewPr, Thread } from "@/lib/types"
+import type {
+  CiJob,
+  CiState,
+  CiView,
+  CiWorkflow,
+  MergedPr,
+  Pr,
+  ReviewPr,
+  Thread,
+} from "@/lib/types"
 
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
@@ -79,6 +89,8 @@ const pr = (p: Partial<Pr> & Pick<Pr, "repo" | "number" | "title">): Pr => ({
   draft: false,
   decision: "REVIEW_REQUIRED",
   conflicting: false,
+  canUpdateBranch: false,
+  sha: `sha-${p.number}`,
   ci: "SUCCESS",
   comments: 0,
   unresolved: 0,
@@ -171,6 +183,7 @@ const PRS: Pr[] = [
     repo: "globex/billing",
     number: 7,
     title: "Export CSV des factures",
+    canUpdateBranch: true, // branche en retard sur main : bouton « Mettre à jour la branche »
     // commentaire général seul, sans fil sur un fichier
     comments: 1,
     conversation: [
@@ -184,6 +197,52 @@ const PRS: Pr[] = [
     additions: 640,
     deletions: 12,
     files: 14,
+  }),
+  // PR des autres qui me concernent (motif en pastille), dans l'arbre avec les miennes
+  pr({
+    repo: "acme/web",
+    number: 420,
+    title: "Checkout : traductions du formulaire",
+    head: "feat/checkout-i18n",
+    base: "feat/checkout", // stackée sur ma #412
+    involved: { reason: "assigned", author: "alice" },
+    decision: "APPROVED", // approuvée, mais pas « prête à merger » : ce n'est pas la mienne
+    reviews: [{ who: "bob", state: "APPROVED" }],
+    requested: [],
+    updated: ago(6),
+  }),
+  pr({
+    repo: "acme/web",
+    number: 423,
+    title: "Cache des images produit",
+    head: "perf/image-cache",
+    // aussi dans « À reviewer » (re-request) : j'ai déjà reviewé, donc impliqué
+    involved: { reason: "involved", author: "bob" },
+    reviews: [{ who: "me", state: "COMMENTED" }],
+    requested: [{ who: "me" }],
+    updated: ago(3),
+  }),
+  pr({
+    repo: "acme/api",
+    number: 93,
+    title: "Logs structurés des workers",
+    involved: { reason: "mentioned", author: "carol" },
+    comments: 4,
+    requested: [{ who: "dave" }],
+    updated: ago(10),
+  }),
+  pr({
+    repo: "globex/billing",
+    number: 9,
+    title: "Arrondi des montants en JPY",
+    head: "main", // branche main d'un fork : ne devient pas la base de mes PR
+    fork: true,
+    involved: { reason: "involved", author: "erin" },
+    ci: "FAILURE",
+    decision: "CHANGES_REQUESTED",
+    reviews: [{ who: "me", state: "CHANGES_REQUESTED" }],
+    requested: [],
+    updated: ago(28),
   }),
   // repo public hors de listRepos() : non suivi dans la démo (voir la graine plus bas),
   // visible dans le panneau avec le point vert
@@ -261,7 +320,10 @@ const has = (repos: string[]) => (r: string) =>
   repos.some((x) => x.toLowerCase() === r.toLowerCase())
 
 export const viewerLogin = async (_token: string, _host?: string) => "me"
-export const clearCache = () => {}
+// PR dont les jobs ont déjà été lus : pas de latence ensuite, comme le cache de src/lib/github.ts ; une
+// actualisation (clearCache) la remet
+const checksRead = new Set<string>()
+export const clearCache = () => checksRead.clear()
 export const fetchPrs = async (repos: string[]) => {
   // quota bas pour montrer la notification et la ligne des réglages
   trackQuota(
@@ -278,7 +340,10 @@ export const fetchPrs = async (repos: string[]) => {
   }
 }
 export const reposWithMyOpenPrs = async () => [
-  ...new Set([...PRS.map((p) => p.repo), ...otherRepos()]),
+  ...new Set([
+    ...PRS.filter((p) => !p.involved).map((p) => p.repo),
+    ...otherRepos(),
+  ]),
 ]
 export const fetchMerged = async (repos: string[], from: string, to: string) =>
   MERGED.filter(
@@ -302,6 +367,33 @@ export const replyToThread = async (
 }
 export const commentOnPr = async (prId: string, body: string, repo: string) => {
   console.info("[demo] comment", prId, body, repo)
+}
+
+const findPr = (prId: string) => PRS.find((p) => p.id === prId)
+/** latence d'une mutation GitHub : laisse voir l'état « en cours » des boutons */
+const MUTATION_MS = 800
+const latency = () => new Promise((done) => setTimeout(done, MUTATION_MS))
+export const resolveThread = async (threadId: string, repo: string) => {
+  await latency()
+  // le fil disparaît de la carte au rechargement qui suit
+  const p = PRS.find((p) => p.threads.some((t) => t.id === threadId))
+  if (p) {
+    p.threads = p.threads.filter((t) => t.id !== threadId)
+    p.unresolved = p.threads.length
+  }
+  console.info("[demo] resolve", threadId, repo)
+}
+export const markReady = async (prId: string, repo: string) => {
+  await latency()
+  const p = findPr(prId)
+  if (p) p.draft = false
+  console.info("[demo] ready", prId, repo)
+}
+export const updateBranch = async (prId: string, repo: string) => {
+  await latency()
+  const p = findPr(prId)
+  if (p) p.canUpdateBranch = false
+  console.info("[demo] update branch", prId, repo)
 }
 
 // quota qui baisse de 120 points par actualisation : le mode auto affiche ~3 min dès la 2e actualisation
@@ -417,4 +509,136 @@ export const requestReviewer = async (
   const p = PRS.find((p) => `${p.repo}#${p.number}` === prId)
   p?.requested.push({ who: userId.slice(2) })
   console.info("[demo] request review", prId, userId, repo)
+}
+
+/* ---------- Vue CI (ouverte depuis la pastille CI) ---------- */
+
+/** latence de la première lecture des jobs d'une PR : laisse voir le chargement de la vue CI */
+const CHECKS_MS = 600
+const minsAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
+/** job lancé il y a `startMin` minutes, durée `s` secondes ; `s` null : encore en cours */
+const job = (
+  name: string,
+  state: CiState,
+  startMin: number | null = null,
+  s: number | null = null,
+): CiJob => ({
+  name,
+  state,
+  startedAt: startMin === null ? null : minsAgo(startMin),
+  completedAt:
+    startMin === null || s === null
+      ? null
+      : new Date(Date.parse(minsAgo(startMin)) + s * 1000).toISOString(),
+  url: `https://github.com/acme/web/actions/runs/1/job/${encodeURIComponent(name)}`,
+})
+const workflow = (
+  key: string,
+  name: string,
+  file: string,
+  runId: number,
+  jobs: CiJob[],
+  hiddenJobs = 0,
+): CiWorkflow => ({
+  key,
+  name,
+  file,
+  event: "pull_request",
+  runId,
+  jobs,
+  hiddenJobs,
+})
+const statuses = (jobs: CiJob[]): CiWorkflow => ({
+  key: "statuses",
+  name: null,
+  file: null,
+  event: null,
+  runId: null,
+  jobs,
+  hiddenJobs: 0,
+})
+
+/** workflow run de acme/api#91 (seule PR en échec) relancé (ses jobs en échec repartent) ; celui de CodeQL refuse la relance */
+const RERUN_OK = 9101
+const RERUN_REFUSED = 9102
+const rerunAt = new Map<number, number>()
+
+const checksFor = (number: number, ci: string | null): CiWorkflow[] => {
+  if (number === 91) {
+    const since = rerunAt.get(RERUN_OK)
+    const again = (name: string): CiJob =>
+      since
+        ? {
+            ...job(name, "running"),
+            startedAt: new Date(since).toISOString(),
+          }
+        : job(name, "failure", 12, 74)
+    return [
+      workflow("ci", "CI", "ci.yml", RERUN_OK, [
+        job("lint", "success", 12, 41),
+        again("test (node 22)"),
+        job("test (node 20)", "success", 12, 95),
+        job("build", "cancelled", 12, 80),
+        job("deploy-preview", "skipped", 10, 0),
+      ]),
+      workflow("codeql", "CodeQL", "codeql.yml", RERUN_REFUSED, [
+        job("analyze (javascript)", "failure", 12, 203),
+      ]),
+    ]
+  }
+  if (ci === "PENDING")
+    return [
+      workflow(
+        "ci",
+        "CI",
+        "ci.yml",
+        4181,
+        [
+          job("lint", "success", 3, 38),
+          job("test", "running", 2),
+          job("e2e", "queued"),
+          job("source-branch", "skipped", 3, 0),
+        ],
+        12,
+      ), // matrice au-delà de la borne de la requête : ligne « 12 jobs non affichés »
+      statuses([job("ci/circleci: build", "running")]),
+    ]
+  return [
+    workflow("ci", "CI", "ci.yml", 1, [
+      job("check", "success", 40, 91),
+      job("source-branch", "skipped", 40, 0),
+    ]),
+    workflow("pages", "Deploy site", "pages.yml", 2, [
+      job("build", "success", 40, 52),
+      job("deploy", "neutral", 39, 12),
+    ]),
+    statuses([job("netlify/deploy-preview", "success")]),
+  ]
+}
+
+export const fetchChecks = async (
+  repo: string,
+  number: number,
+  _sha: string | null,
+  rollup: string | null,
+): Promise<CiView> => {
+  const key = `${repo}#${number}`
+  if (!checksRead.has(key)) {
+    await new Promise((done) => setTimeout(done, CHECKS_MS))
+    checksRead.add(key)
+  }
+  console.info("[demo] checks", repo, number)
+  return { workflows: checksFor(number, rollup), moreChecks: false }
+}
+
+export const rerunFailedJobs = async (repo: string, runId: number) => {
+  await latency()
+  if (runId === RERUN_REFUSED)
+    throw new Error(
+      rerunError(403, "Resource not accessible by personal access token"),
+    )
+  rerunAt.set(runId, Date.now())
+  const p = PRS.find((p) => p.repo === repo && p.ci === "FAILURE")
+  if (p) p.ci = "PENDING"
+  console.info("[demo] rerun failed jobs", repo, runId)
 }

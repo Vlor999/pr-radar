@@ -30,6 +30,10 @@ export type Pr = {
   draft: boolean
   decision: Decision
   conflicting: boolean
+  /** branche en retard sur sa base et que je peux mettre à jour (`viewerCanUpdateBranch`) */
+  canUpdateBranch: boolean
+  /** commit de tête de la PR (`oid`) */
+  sha: string | null
   ci: string | null
   comments: number
   unresolved: number
@@ -45,12 +49,19 @@ export type Pr = {
   updated: string
   /** stack natif GitHub (`stackEntry`) ; absent : stack déduit des branches */
   stack?: { number: number; position: number; size: number }
+  /** branche de tête dans un fork (`isCrossRepository`) : ne peut pas servir de base à une PR du repo */
+  fork?: boolean
+  /** PR d'un autre, dans l'arbre parce qu'elle me concerne ; absent : PR à moi */
+  involved?: { reason: Reason; author: string }
 }
+
+/** Pourquoi la PR d'un autre est dans l'arbre, par priorité : assignée > mentionné > impliqué (commentaire, review…). */
+export type Reason = "assigned" | "mentioned" | "involved"
 
 /** Une PR dans l'arbre : ses enfants sont les PR stackées sur sa branche. */
 export type PrNode = Pr & { parent: number | null; children: PrNode[] }
 
-/** Racine d'un repo : une branche de base (main, ou branche sans PR à moi). */
+/** Racine d'un repo : une branche de base (main, ou branche sans PR chargée). */
 export type Root = { branch: string; trunk: boolean; children: PrNode[] }
 
 /** PR à moi mergée récemment. */
@@ -134,3 +145,46 @@ export type WebStatus = {
   /** `port-busy`, ou message du système */
   error: string | null
 }
+
+/* ---------- Vue CI d'une PR (ouverte depuis la pastille CI) ---------- */
+
+/** État d'un job normalisé depuis `CheckRun` (status + conclusion) ou `StatusContext`. */
+export type CiState =
+  | "success"
+  | "failure"
+  | "running"
+  | "queued"
+  | "skipped"
+  | "cancelled"
+  | "neutral"
+
+/** Un job (check run) ou un statut de commit (CI hors Actions). */
+export type CiJob = {
+  name: string
+  state: CiState
+  startedAt: string | null
+  completedAt: string | null
+  /** page du job sur GitHub (`detailsUrl` ou `targetUrl`) */
+  url: string | null
+}
+
+/** Une boîte de la vue CI : un workflow (check suite), ou les statuts de commit. */
+export type CiWorkflow = {
+  /** clé de liste stable */
+  key: string
+  /** nom du workflow, de l'app GitHub, ou null pour les statuts de commit */
+  name: string | null
+  /** fichier du workflow (`ci.yml`) */
+  file: string | null
+  /** déclencheur (`pull_request`) */
+  event: string | null
+  /** id du workflow run GitHub Actions : relance des jobs en échec */
+  runId: number | null
+  jobs: CiJob[]
+  /** jobs au-delà de la borne de la requête : non affichés */
+  hiddenJobs: number
+}
+
+/** Vue CI d'une PR ; `moreChecks` : check suites au-delà de la borne de la requête (nombre inconnu de workflows :
+ * des apps n'y déclarent qu'une suite vide, masquée). */
+export type CiView = { workflows: CiWorkflow[]; moreChecks: boolean }

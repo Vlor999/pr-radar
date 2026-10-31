@@ -1,23 +1,26 @@
 import { useEffect } from "react"
 
+import type { ShortcutKeys } from "@/components/shortcut"
 import { strings } from "@/lib/i18n"
 import { openExternal } from "@/lib/open"
 
-/** À lire avec `useStrings(SHORTCUTS)`. */
-export const SHORTCUTS = strings(
+/** À lire avec `useStrings(SHORTCUTS)`, touches affichées avec `<Shortcut>`. */
+export const SHORTCUTS = strings<{ keys: ShortcutKeys; label: string }[]>(
   [
-    { keys: "/", label: "rechercher" },
-    { keys: "j / k", label: "carte suivante / précédente" },
-    { keys: "o", label: "ouvrir sur GitHub" },
-    { keys: "e", label: "déplier / replier" },
-    { keys: "d", label: "clair / sombre" },
+    { keys: ["mod", "K"], label: "palette de commandes" },
+    { keys: ["/"], label: "rechercher" },
+    { keys: [["j"], ["k"]], label: "carte suivante / précédente" },
+    { keys: ["o"], label: "ouvrir sur GitHub" },
+    { keys: ["e"], label: "déplier / replier" },
+    { keys: ["d"], label: "clair / sombre" },
   ],
   [
-    { keys: "/", label: "search" },
-    { keys: "j / k", label: "next / previous card" },
-    { keys: "o", label: "open on GitHub" },
-    { keys: "e", label: "expand / collapse" },
-    { keys: "d", label: "light / dark" },
+    { keys: ["mod", "K"], label: "command palette" },
+    { keys: ["/"], label: "search" },
+    { keys: [["j"], ["k"]], label: "next / previous card" },
+    { keys: ["o"], label: "open on GitHub" },
+    { keys: ["e"], label: "expand / collapse" },
+    { keys: ["d"], label: "light / dark" },
   ],
 )
 
@@ -35,6 +38,8 @@ export function useKeyboardNav(): void {
         return
 
       const target = event.target as HTMLElement | null
+      // palette de commandes ouverte : ses touches ne déplacent pas les cartes derrière
+      if (target?.closest("[data-slot=dialog-content]")) return
       if (
         target?.matches("input, textarea, select") ||
         target?.isContentEditable

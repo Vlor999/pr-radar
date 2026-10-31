@@ -10,9 +10,13 @@ import {
   reposWithMyOpenPrs,
   fetchMerged,
   listRepos,
+  markReady,
   replyToThread,
   requestReviewer,
+  rerunFailedJobs,
   resolveRepo,
+  resolveThread,
+  updateBranch,
 } from "./github"
 import { forgetQuota } from "./quota"
 import { getRepos, reload, setRepos } from "./store"
@@ -102,6 +106,53 @@ export const reply = (threadId: string, body: string, repo: string) =>
 /** Commentaire général sur la PR (une review ne se répond pas individuellement sur GitHub). */
 export const comment = (prId: string, body: string, repo: string) =>
   post(prId, body, (text) => commentOnPr(prId, text, repo))
+
+/** Écrit sur le nœud GitHub `id` (fil, PR), puis relit GitHub pour afficher le résultat.
+ * `settle` : attendu entre le succès et la relecture (animation de sortie de l'élément). */
+async function act(
+  id: string,
+  send: () => Promise<void>,
+  settle?: () => Promise<void>,
+): Promise<{ error?: string }> {
+  if (!/^[\w=-]+$/.test(id)) return { error: "Identifiant GitHub invalide" }
+  try {
+    await send()
+  } catch (e) {
+    return { error: message(e) }
+  }
+  await settle?.()
+  clearCache()
+  await reload()
+  return {}
+}
+
+/** Résout un fil de review : il quitte la liste des fils non résolus au rechargement. */
+export const resolve = (
+  threadId: string,
+  repo: string,
+  settle?: () => Promise<void>,
+) => act(threadId, () => resolveThread(threadId, repo), settle)
+
+/** Sort une de mes PR du mode draft. */
+export const ready = (
+  prId: string,
+  repo: string,
+  settle?: () => Promise<void>,
+) => act(prId, () => markReady(prId, repo), settle)
+
+/** Merge la base dans la branche de la PR, en retard sur sa base. */
+export const syncBranch = (
+  prId: string,
+  repo: string,
+  settle?: () => Promise<void>,
+) => act(prId, () => updateBranch(prId, repo), settle)
+
+/** Relance les jobs en échec d'un workflow run de la PR ; la vue CI se relit avec la PR. */
+export const rerunFailed = (
+  repo: string,
+  runId: number,
+  settle?: () => Promise<void>,
+) => act(String(runId), () => rerunFailedJobs(repo, runId), settle)
 
 /** Compte ajouté dans les réglages : on suit d'office ses repos où j'ai des PR ouvertes. */
 export async function accountAdded(id: string) {

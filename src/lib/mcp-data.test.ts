@@ -30,6 +30,8 @@ const pr = (number: number, extra: Partial<Pr> = {}): Pr => ({
   draft: false,
   decision: null,
   conflicting: false,
+  canUpdateBranch: false,
+  sha: null,
   ci: "SUCCESS",
   comments: 0,
   unresolved: 0,
@@ -145,6 +147,21 @@ test("get_prs : format compact, sans fils ni conversation", () => {
   assert.equal("threads" in out.prs[0], false)
   assert.equal("conversation" in out.prs[0], false)
   assert.deepEqual(out.prs[0].reviewers, { reviews: [], requested: [] })
+})
+
+test("get_prs : la PR d'un autre donne son motif, la mienne null", () => {
+  const involved = { reason: "mentioned" as const, author: "bob" }
+  const out = prsPayload(
+    ctx,
+    [pr(1), pr(2, { involved })],
+    [],
+    new Map(),
+    noMentions,
+  )
+  assert.deepEqual(
+    out.prs.map((p) => p.involved),
+    [null, involved],
+  )
 })
 
 test("get_prs : une PR stackée donne le numéro de sa PR parente", () => {
