@@ -1,21 +1,10 @@
 import assert from "node:assert/strict"
-import { execFileSync } from "node:child_process"
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
 import { test } from "node:test"
 
 import {
   callsToday,
   htmlToText,
   installSnippet,
-  type McpOs,
   MCP_HISTORY_MAX,
   normalizeUrl,
   parentsOf,
@@ -343,141 +332,54 @@ test("appels du jour : seulement ceux de la date locale courante", () => {
   assert.equal(callsToday(list, now), 1)
 })
 
-const EXE = `/Applications/PR "Radar".app/it's/pr-radar`
-const QUOTED = `'/Applications/PR "Radar".app/it'\\''s/pr-radar'`
-const OSES = ["macos", "linux"] as const
-const SERVER = { command: EXE, args: ["--mcp"] }
-
-/** fichier de config de chaque client JSON, relatif au dossier personnel */
-const CONFIGS = {
-  antigravity: () => ".gemini/config/mcp_config.json",
-  "claude-desktop": (os: McpOs) =>
-    os === "macos"
-      ? "Library/Application Support/Claude/claude_desktop_config.json"
-      : ".config/Claude/claude_desktop_config.json",
-  cursor: () => ".cursor/mcp.json",
-  windsurf: () => ".codeium/windsurf/mcp_config.json",
-} as const
-
-const entryOf = (client: keyof typeof CONFIGS) =>
-  client === "cursor" ? { type: "stdio", ...SERVER } : SERVER
-
-test("installation : même commande CLI sous macOS et Linux, chemin cité pour le shell", () => {
-  for (const os of OSES) {
-    assert.deepEqual(installSnippet("claude-code", EXE, os), {
-      main: `claude mcp add --scope user pr-radar -- ${QUOTED} --mcp`,
-    })
-    assert.deepEqual(installSnippet("codex", EXE, os), {
-      main: `codex mcp add pr-radar -- ${QUOTED} --mcp`,
-    })
-    assert.deepEqual(installSnippet("gemini", EXE, os), {
-      main: `gemini mcp add --scope user pr-radar ${QUOTED} -- --mcp`,
-    })
-    assert.deepEqual(installSnippet("other", EXE, os), {
-      main: `${QUOTED} --mcp`,
-    })
-  }
-})
-
-test("installation : VS Code reçoit le serveur en JSON cité pour le shell", () => {
-  for (const os of OSES) {
-    const { main } = installSnippet("vscode", EXE, os)
-    const prefix = "code --add-mcp '"
-    assert.ok(main.startsWith(prefix) && main.endsWith("'"))
-    assert.deepEqual(
-      JSON.parse(main.slice(prefix.length, -1).replaceAll(`'\\''`, "'")),
-      {
-        name: "pr-radar",
-        type: "stdio",
-        ...SERVER,
-      },
-    )
-  }
-})
-
-test("installation : Zed reste à coller (settings.json en JSONC)", () => {
-  for (const os of OSES) {
-    const snippet = installSnippet("zed", EXE, os)
-    assert.equal(snippet.manual, undefined)
-    assert.deepEqual(JSON.parse(snippet.main), {
-      context_servers: { "pr-radar": SERVER },
-    })
-  }
-})
-
-test("installation : clients JSON, commande de fusion par système et JSON manuel en secours", () => {
-  for (const client of Object.keys(CONFIGS) as (keyof typeof CONFIGS)[])
-    for (const os of OSES) {
-      const { main, manual } = installSnippet(client, EXE, os)
-      assert.ok(
-        main.startsWith(
-          os === "macos" ? "osascript -l JavaScript -e '" : "python3 -c '",
-        ),
-      )
-      assert.ok(main.includes(` "$HOME/${CONFIGS[client](os)}" mcpServers '`))
-      assert.equal(manual?.file, `~/${CONFIGS[client](os)}`)
-      assert.deepEqual(JSON.parse(manual?.json ?? ""), {
-        mcpServers: { "pr-radar": entryOf(client) },
-      })
-    }
-})
-
-/** Lance la commande avec un HOME temporaire : jamais la vraie config. */
-const runMerge = (main: string, home: string) =>
-  execFileSync("/bin/sh", ["-c", main], {
-    env: { ...process.env, HOME: home },
-    stdio: "pipe",
-  })
-
-const runs = (cmd: string) => {
-  try {
-    execFileSync("/bin/sh", ["-c", cmd], { stdio: "ignore" })
-    return true
-  } catch {
-    return false
-  }
-}
-
-for (const [os, tool, available] of [
-  ["macos", "osascript", process.platform === "darwin"],
-  ["linux", "python3", runs("python3 -c pass")],
-] as const)
-  test(
-    `installation : la commande ${os} fusionne sans écraser, idempotente, avec sauvegarde`,
-    { skip: !available && `${tool} absent` },
-    () => {
-      const home = mkdtempSync(join(tmpdir(), "pr-radar-mcp-"))
-      try {
-        for (const client of Object.keys(CONFIGS) as (keyof typeof CONFIGS)[]) {
-          const file = join(home, CONFIGS[client](os))
-          const { main } = installSnippet(client, EXE, os)
-          const expected = { "pr-radar": entryOf(client) }
-
-          runMerge(main, home)
-          assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), {
-            mcpServers: expected,
-          })
-          assert.equal(existsSync(`${file}.bak`), false)
-
-          const before = {
-            theme: "dark",
-            mcpServers: { other: { command: "x" } },
-          }
-          writeFileSync(file, JSON.stringify(before))
-          runMerge(main, home)
-          runMerge(main, home)
-          assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), {
-            theme: "dark",
-            mcpServers: { other: { command: "x" }, ...expected },
-          })
-          assert.ok(existsSync(`${file}.bak`))
-
-          writeFileSync(file, "{ invalid")
-          assert.throws(() => runMerge(main, home))
-          assert.equal(readFileSync(file, "utf8"), "{ invalid")
-        }
-      } finally {
-        rmSync(home, { recursive: true, force: true })
-      }
-    },
+test("installation : chemin du binaire cité pour le shell, JSON pour Claude Desktop", () => {
+  const exe = "/Applications/PR Radar.app/Contents/MacOS/pr-radar"
+  assert.equal(
+    installSnippet("claude-code", exe),
+    "claude mcp add --scope user pr-radar -- '/Applications/PR Radar.app/Contents/MacOS/pr-radar' --mcp",
   )
+  assert.deepEqual(JSON.parse(installSnippet("claude-desktop", exe)), {
+    mcpServers: { "pr-radar": { command: exe, args: ["--mcp"] } },
+  })
+  assert.equal(installSnippet("other", "/a/it's"), `'/a/it'\\''s' --mcp`)
+})
+
+test("installation : commande en une ligne pour Codex, Gemini CLI et VS Code", () => {
+  const exe = "/a b/it's"
+  const quoted = `'/a b/it'\\''s'`
+  assert.equal(
+    installSnippet("codex", exe),
+    `codex mcp add pr-radar -- ${quoted} --mcp`,
+  )
+  assert.equal(
+    installSnippet("gemini", exe),
+    `gemini mcp add --scope user pr-radar ${quoted} -- --mcp`,
+  )
+  const vscode = installSnippet("vscode", exe)
+  const prefix = "code --add-mcp '"
+  assert.ok(vscode.startsWith(prefix) && vscode.endsWith("'"))
+  const unquoted = vscode.slice(prefix.length, -1).replaceAll(`'\\''`, "'")
+  assert.deepEqual(JSON.parse(unquoted), {
+    name: "pr-radar",
+    type: "stdio",
+    command: exe,
+    args: ["--mcp"],
+  })
+})
+
+test("installation : JSON au format d'Antigravity, Cursor, Windsurf et Zed", () => {
+  const exe = '/a b/say "hi"'
+  const server = { command: exe, args: ["--mcp"] }
+  assert.deepEqual(JSON.parse(installSnippet("cursor", exe)), {
+    mcpServers: { "pr-radar": { type: "stdio", ...server } },
+  })
+  assert.deepEqual(JSON.parse(installSnippet("antigravity", exe)), {
+    mcpServers: { "pr-radar": server },
+  })
+  assert.deepEqual(JSON.parse(installSnippet("windsurf", exe)), {
+    mcpServers: { "pr-radar": server },
+  })
+  assert.deepEqual(JSON.parse(installSnippet("zed", exe)), {
+    context_servers: { "pr-radar": server },
+  })
+})

@@ -5,11 +5,6 @@ import { useEffect, useRef, useState } from "react"
 import { Row, Section, Toggle } from "@/components/settings-ui"
 import { Button } from "@/components/ui/button"
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -23,19 +18,11 @@ import {
   useMcp,
   useMcpHistory,
 } from "@/lib/mcp"
-import {
-  callsToday,
-  installSnippet,
-  type McpClient,
-  type McpOs,
-} from "@/lib/mcp-data"
+import { callsToday, installSnippet, type McpClient } from "@/lib/mcp-data"
 import type { McpCall } from "@/lib/types"
 
 /** durée de la coche « Copié » */
 const COPIED_MS = 1_500
-
-/** le serveur MCP ne tourne que sous unix (`McpInfo.supported`) : macOS, sinon Linux */
-const OS: McpOs = navigator.userAgent.includes("Mac") ? "macos" : "linux"
 
 /** ordre du sélecteur : Claude d'abord, « Autre » en dernier */
 const CLIENTS: McpClient[] = [
@@ -89,23 +76,22 @@ const S = strings(
       hint: {
         "claude-code": "Dans un terminal, une seule fois :",
         "claude-desktop":
-          "Dans un terminal : ajoute pr-radar à la config de Claude Desktop (autres serveurs gardés, ancienne version en .bak), puis redémarre Claude Desktop :",
+          "Dans claude_desktop_config.json (Réglages › Développeur › Modifier la config), puis redémarre Claude Desktop :",
         antigravity:
-          "Dans un terminal : ajoute pr-radar à ~/.gemini/config/mcp_config.json, lu par l'IDE, l'app et la CLI agy (autres serveurs gardés, ancienne version en .bak). Puis Refresh dans Réglages › Customizations › Installed MCP Servers, ou /mcp dans la CLI :",
+          "Dans ~/.gemini/config/mcp_config.json (IDE, app et CLI agy). Puis Refresh dans Réglages › Customizations › Installed MCP Servers, ou /mcp dans la CLI :",
         codex:
           "Dans un terminal, une seule fois (écrit dans ~/.codex/config.toml, partagé avec l'app et l'extension IDE). Relance Codex :",
         cursor:
-          "Dans un terminal : ajoute pr-radar à ~/.cursor/mcp.json (autres serveurs gardés, ancienne version en .bak). Vérifie dans Customize › MCP :",
+          "Dans ~/.cursor/mcp.json (fusionne avec les serveurs existants). Vérifie dans Customize › MCP :",
         gemini:
           "Dans un terminal, une seule fois (écrit dans ~/.gemini/settings.json). Relance Gemini CLI :",
         vscode:
           "Dans un terminal (commande code dans le PATH), une seule fois. Ou colle le serveur dans « MCP: Open User Configuration », sous servers :",
         windsurf:
-          "Dans un terminal : ajoute pr-radar à ~/.codeium/windsurf/mcp_config.json (autres serveurs gardés, ancienne version en .bak), puis Refresh dans Cascade :",
-        zed: "Dans settings.json (zed: open settings file), à la main : le fichier accepte les commentaires, aucune commande ne le fusionne sans risque. Puis vérifie dans Settings › AI › MCP Servers :",
+          "Dans ~/.codeium/windsurf/mcp_config.json (icône MCP › Configure › View raw config), puis Refresh dans Cascade :",
+        zed: "Dans settings.json (zed: open settings file), puis vérifie dans Settings › AI › MCP Servers :",
         other: "Commande stdio à déclarer dans ton client MCP :",
       } satisfies Record<McpClient, string>,
-      manual: (file: string) => `Manuel : à coller dans ${file}`,
       copy: "Copier",
       copied: "Copié",
     },
@@ -157,23 +143,22 @@ const S = strings(
       hint: {
         "claude-code": "In a terminal, once:",
         "claude-desktop":
-          "In a terminal: adds pr-radar to the Claude Desktop config (other servers kept, previous version in .bak), then restart Claude Desktop:",
+          "In claude_desktop_config.json (Settings › Developer › Edit Config), then restart Claude Desktop:",
         antigravity:
-          "In a terminal: adds pr-radar to ~/.gemini/config/mcp_config.json, read by the IDE, the app and the agy CLI (other servers kept, previous version in .bak). Then Refresh in Settings › Customizations › Installed MCP Servers, or /mcp in the CLI:",
+          "In ~/.gemini/config/mcp_config.json (IDE, app and agy CLI). Then Refresh in Settings › Customizations › Installed MCP Servers, or /mcp in the CLI:",
         codex:
           "In a terminal, once (writes ~/.codex/config.toml, shared with the app and the IDE extension). Restart Codex:",
         cursor:
-          "In a terminal: adds pr-radar to ~/.cursor/mcp.json (other servers kept, previous version in .bak). Check in Customize › MCP:",
+          "In ~/.cursor/mcp.json (merge with existing servers). Check in Customize › MCP:",
         gemini:
           "In a terminal, once (writes ~/.gemini/settings.json). Restart Gemini CLI:",
         vscode:
           "In a terminal (code command on PATH), once. Or paste the server into “MCP: Open User Configuration”, under servers:",
         windsurf:
-          "In a terminal: adds pr-radar to ~/.codeium/windsurf/mcp_config.json (other servers kept, previous version in .bak), then Refresh in Cascade:",
-        zed: "In settings.json (zed: open settings file), by hand: the file allows comments, so no command can merge it safely. Then check in Settings › AI › MCP Servers:",
+          "In ~/.codeium/windsurf/mcp_config.json (MCP icon › Configure › View raw config), then Refresh in Cascade:",
+        zed: "In settings.json (zed: open settings file), then check in Settings › AI › MCP Servers:",
         other: "Stdio command to declare in your MCP client:",
       },
-      manual: (file: string) => `Manual: paste into ${file}`,
       copy: "Copy",
       copied: "Copied",
     },
@@ -262,14 +247,21 @@ function StateSection() {
   )
 }
 
-/** Bloc de code avec bouton Copier. */
-function CopyBlock(props: { text: string }) {
+function InstallSection() {
   const t = useStrings(S).install
+  const { info } = useMcp()
+  const [client, setClient] = useState<McpClient>("claude-code")
   const [copied, setCopied] = useState(false)
   const timer = useRef<number>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
+  if (!info) return null
+  const snippet = installSnippet(client, info.exe)
+  const items = CLIENTS.map((c) => ({
+    value: c,
+    label: c === "other" ? t.other : CLIENT_LABEL[c],
+  }))
   const copy = () =>
-    navigator.clipboard.writeText(props.text).then(
+    navigator.clipboard.writeText(snippet).then(
       () => {
         setCopied(true)
         clearTimeout(timer.current)
@@ -277,34 +269,6 @@ function CopyBlock(props: { text: string }) {
       },
       () => {},
     )
-  return (
-    <div className="mt-2 flex items-start gap-2">
-      <pre className="min-w-0 flex-1 overflow-x-auto rounded-lg border bg-muted p-3 font-mono text-xs">
-        {props.text}
-      </pre>
-      <Button
-        variant="outline"
-        size="icon-sm"
-        onClick={copy}
-        aria-label={copied ? t.copied : t.copy}
-        title={copied ? t.copied : t.copy}
-      >
-        {copied ? <Check /> : <Copy />}
-      </Button>
-    </div>
-  )
-}
-
-function InstallSection() {
-  const t = useStrings(S).install
-  const { info } = useMcp()
-  const [client, setClient] = useState<McpClient>("claude-code")
-  if (!info) return null
-  const snippet = installSnippet(client, info.exe, OS)
-  const items = CLIENTS.map((c) => ({
-    value: c,
-    label: c === "other" ? t.other : CLIENT_LABEL[c],
-  }))
   return (
     <Section id="mcp-install" title={t.title} description={t.description}>
       <Row labelId="mcp-client" label={t.client}>
@@ -341,18 +305,20 @@ function InstallSection() {
       </Row>
       <div className="border-t py-3">
         <p className="text-xs text-muted-foreground">{t.hint[client]}</p>
-        <CopyBlock key={client} text={snippet.main} />
-        {snippet.manual && (
-          <Collapsible key={`${client}-manual`} className="mt-3">
-            <CollapsibleTrigger className="group inline-flex items-center gap-1 rounded-md text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30">
-              <ChevronRight className="size-3.5 transition-transform group-data-[panel-open]:rotate-90 motion-reduce:transition-none" />
-              {t.manual(snippet.manual.file)}
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CopyBlock text={snippet.manual.json} />
-            </CollapsibleContent>
-          </Collapsible>
-        )}
+        <div className="mt-2 flex items-start gap-2">
+          <pre className="min-w-0 flex-1 overflow-x-auto rounded-lg border bg-muted p-3 font-mono text-xs">
+            {snippet}
+          </pre>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={copy}
+            aria-label={copied ? t.copied : t.copy}
+            title={copied ? t.copied : t.copy}
+          >
+            {copied ? <Check /> : <Copy />}
+          </Button>
+        </div>
       </div>
     </Section>
   )
