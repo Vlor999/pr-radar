@@ -344,9 +344,13 @@ test("installation : chemin du binaire cité pour le shell, JSON pour Claude Des
   assert.equal(installSnippet("other", "/a/it's"), `'/a/it'\\''s' --mcp`)
 })
 
-test("installation : commande en une ligne pour Codex, Gemini CLI et VS Code", () => {
+test("installation : commande en une ligne pour Codex, Devin, Gemini CLI et VS Code", () => {
   const exe = "/a b/it's"
   const quoted = `'/a b/it'\\''s'`
+  assert.equal(
+    installSnippet("devin", exe),
+    `devin mcp add -s user pr-radar -- ${quoted} --mcp`,
+  )
   assert.equal(
     installSnippet("codex", exe),
     `codex mcp add pr-radar -- ${quoted} --mcp`,

@@ -31,6 +31,7 @@ const CLIENTS: McpClient[] = [
   "antigravity",
   "codex",
   "cursor",
+  "devin",
   "gemini",
   "vscode",
   "windsurf",
@@ -44,6 +45,7 @@ const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
   "claude-desktop": "Claude Desktop",
   codex: "Codex",
   cursor: "Cursor",
+  devin: "Devin Desktop",
   gemini: "Gemini CLI",
   vscode: "VS Code (Copilot)",
   windsurf: "Windsurf",
@@ -83,6 +85,8 @@ const S = strings(
           "Dans un terminal, une seule fois (écrit dans ~/.codex/config.toml, partagé avec l'app et l'extension IDE). Relance Codex :",
         cursor:
           "Dans ~/.cursor/mcp.json (fusionne avec les serveurs existants). Vérifie dans Customize › MCP :",
+        devin:
+          "Dans un terminal (CLI devin), une seule fois : écrit dans ~/.config/devin/mcp_config.json, la config de toutes tes sessions. Vérifie dans Customize › MCPs › This computer :",
         gemini:
           "Dans un terminal, une seule fois (écrit dans ~/.gemini/settings.json). Relance Gemini CLI :",
         vscode:
@@ -150,6 +154,8 @@ const S = strings(
           "In a terminal, once (writes ~/.codex/config.toml, shared with the app and the IDE extension). Restart Codex:",
         cursor:
           "In ~/.cursor/mcp.json (merge with existing servers). Check in Customize › MCP:",
+        devin:
+          "In a terminal (devin CLI), once: writes ~/.config/devin/mcp_config.json, the config for all your sessions. Check in Customize › MCPs › This computer:",
         gemini:
           "In a terminal, once (writes ~/.gemini/settings.json). Restart Gemini CLI:",
         vscode:

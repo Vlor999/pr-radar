@@ -260,6 +260,7 @@ export type McpClient =
   | "claude-desktop"
   | "codex"
   | "cursor"
+  | "devin"
   | "gemini"
   | "vscode"
   | "windsurf"
@@ -282,6 +283,8 @@ export const installSnippet = (client: McpClient, exe: string) => {
       return json({ mcpServers: { "pr-radar": server } })
     case "codex":
       return `codex mcp add pr-radar -- ${shellQuote(exe)} --mcp`
+    case "devin":
+      return `devin mcp add -s user pr-radar -- ${shellQuote(exe)} --mcp`
     case "cursor":
       return json({ mcpServers: { "pr-radar": { type: "stdio", ...server } } })
     case "gemini":
