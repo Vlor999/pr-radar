@@ -1,8 +1,16 @@
 import { cn } from "cn"
-import { ArrowLeft, Check, ChevronRight, Copy, Trash2, X } from "lucide-react"
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Trash2,
+  X,
+} from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
-import { Row, Section, Segmented, Toggle } from "@/components/settings-ui"
+import { Row, Section, Toggle } from "@/components/settings-ui"
 import { Button } from "@/components/ui/button"
 import { locale, strings, useStrings } from "@/lib/i18n"
 import {
@@ -16,6 +24,30 @@ import type { McpCall } from "@/lib/types"
 
 /** durée de la coche « Copié » */
 const COPIED_MS = 1_500
+
+/** ordre du sélecteur : Claude d'abord, « Autre » en dernier */
+const CLIENTS: McpClient[] = [
+  "claude-code",
+  "claude-desktop",
+  "codex",
+  "cursor",
+  "gemini",
+  "vscode",
+  "windsurf",
+  "zed",
+  "other",
+]
+
+const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
+  "claude-code": "Claude Code",
+  "claude-desktop": "Claude Desktop",
+  codex: "Codex",
+  cursor: "Cursor",
+  gemini: "Gemini CLI",
+  vscode: "VS Code (Copilot)",
+  windsurf: "Windsurf",
+  zed: "Zed",
+}
 
 const S = strings(
   {
@@ -44,6 +76,17 @@ const S = strings(
         "claude-code": "Dans un terminal, une seule fois :",
         "claude-desktop":
           "Dans claude_desktop_config.json (Réglages › Développeur › Modifier la config), puis redémarre Claude Desktop :",
+        codex:
+          "Dans un terminal, une seule fois (écrit dans ~/.codex/config.toml, partagé avec l'app et l'extension IDE). Relance Codex :",
+        cursor:
+          "Dans ~/.cursor/mcp.json (fusionne avec les serveurs existants). Vérifie dans Customize › MCP :",
+        gemini:
+          "Dans un terminal, une seule fois (écrit dans ~/.gemini/settings.json). Relance Gemini CLI :",
+        vscode:
+          "Dans un terminal (commande code dans le PATH), une seule fois. Ou colle le serveur dans « MCP: Open User Configuration », sous servers :",
+        windsurf:
+          "Dans ~/.codeium/windsurf/mcp_config.json (icône MCP › Configure › View raw config), puis Refresh dans Cascade :",
+        zed: "Dans settings.json (zed: open settings file), puis vérifie dans Settings › AI › MCP Servers :",
         other: "Commande stdio à déclarer dans ton client MCP :",
       } satisfies Record<McpClient, string>,
       copy: "Copier",
@@ -98,6 +141,17 @@ const S = strings(
         "claude-code": "In a terminal, once:",
         "claude-desktop":
           "In claude_desktop_config.json (Settings › Developer › Edit Config), then restart Claude Desktop:",
+        codex:
+          "In a terminal, once (writes ~/.codex/config.toml, shared with the app and the IDE extension). Restart Codex:",
+        cursor:
+          "In ~/.cursor/mcp.json (merge with existing servers). Check in Customize › MCP:",
+        gemini:
+          "In a terminal, once (writes ~/.gemini/settings.json). Restart Gemini CLI:",
+        vscode:
+          "In a terminal (code command on PATH), once. Or paste the server into “MCP: Open User Configuration”, under servers:",
+        windsurf:
+          "In ~/.codeium/windsurf/mcp_config.json (MCP icon › Configure › View raw config), then Refresh in Cascade:",
+        zed: "In settings.json (zed: open settings file), then check in Settings › AI › MCP Servers:",
         other: "Stdio command to declare in your MCP client:",
       },
       copy: "Copy",
@@ -209,16 +263,25 @@ function InstallSection() {
   return (
     <Section id="mcp-install" title={t.title} description={t.description}>
       <Row labelId="mcp-client" label={t.client}>
-        <Segmented
-          value={client}
-          onChange={setClient}
-          labelledBy="mcp-client"
-          options={[
-            { value: "claude-code", label: "Claude Code" },
-            { value: "claude-desktop", label: "Claude Desktop" },
-            { value: "other", label: t.other },
-          ]}
-        />
+        {/* appearance-none : sinon le navigateur impose son propre style (pilule sombre) */}
+        <div className="relative">
+          <select
+            aria-labelledby="mcp-client"
+            value={client}
+            onChange={(e) => setClient(e.target.value as McpClient)}
+            className="h-8 appearance-none rounded-lg border bg-background pr-7 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+          >
+            {CLIENTS.map((c) => (
+              <option key={c} value={c}>
+                {c === "other" ? t.other : CLIENT_LABEL[c]}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+        </div>
       </Row>
       <div className="border-t py-3">
         <p className="text-xs text-muted-foreground">{t.hint[client]}</p>
