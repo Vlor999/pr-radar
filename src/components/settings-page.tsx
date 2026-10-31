@@ -2345,10 +2345,17 @@ export function SettingsPage({
   const mcpStrings = useStrings(MCP_STRINGS)
   const webStrings = useStrings(WEB_STRINGS)
   // mêmes conditions que les anciens points d'entrée : bouton MCP si le binaire le gère, version web dans l'app seulement
-  const mcpSupported = !!useMcp().info?.supported
+  const mcpInfo = useMcp().info
+  const mcpSupported = !!mcpInfo?.supported
   const available = (c: Category) =>
     c === "mcp" ? mcpSupported : c === "web" ? !isWeb : true
   const category = available(requested) ? requested : "general"
+  // catégorie indisponible pour de bon : le tableau de bord se recale sur Général. Infos MCP encore
+  // en chargement (info null au lancement) : on garde « mcp » demandé, affiché dès qu'il est confirmé.
+  const settled = requested !== "mcp" || mcpInfo !== null
+  useEffect(() => {
+    if (category !== requested && settled) onCategory(category)
+  }, [category, requested, settled, onCategory])
   const [troubleshootOpen, setTroubleshootOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [cursor, setCursor] = useState(0)
@@ -2356,6 +2363,13 @@ export function SettingsPage({
   /** réglage à montrer après le rendu de sa catégorie */
   const target = useRef<string | null>(null)
   const highlightTimer = useRef<number>(undefined)
+  /** élément surligné en ce moment */
+  const highlighted = useRef<HTMLElement | null>(null)
+  const clearHighlight = () => {
+    clearTimeout(highlightTimer.current)
+    if (highlighted.current) delete highlighted.current.dataset.highlight
+    highlighted.current = null
+  }
 
   const index = useMemo(
     () => settingsIndex(t, shortcuts, mcpStrings, webStrings, available),
@@ -2426,12 +2440,11 @@ export function SettingsPage({
     // sans l'anneau focus-visible qu'un focus programmé sur le bouton affiche après Entrée
     el.tabIndex = -1
     el.focus({ preventScroll: true })
+    // résultat précédent encore surligné (deux résultats à moins de HIGHLIGHT_MS) : éteint d'abord
+    clearHighlight()
     el.dataset.highlight = ""
-    clearTimeout(highlightTimer.current)
-    highlightTimer.current = window.setTimeout(
-      () => delete el.dataset.highlight,
-      HIGHLIGHT_MS,
-    )
+    highlighted.current = el
+    highlightTimer.current = window.setTimeout(clearHighlight, HIGHLIGHT_MS)
   })
 
   useEffect(() => {
