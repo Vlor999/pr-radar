@@ -2,6 +2,7 @@ import type { Pr, PrNode, Root } from "./types.ts"
 
 export const TRUNKS = ["main", "master"]
 export const STALE_DAYS = 5 // par défaut ; réglable dans l'app
+const ORDER: Record<string, number> = { CHANGES_REQUESTED: 0, APPROVED: 1 }
 
 /** À traiter : une de mes PR seulement (sur la PR d'un autre, c'est à son auteur d'agir). */
 export const needsAttention = (p: Pr) =>
@@ -36,7 +37,6 @@ export function mergeState(p: PrNode): MergeState {
 export const descendants = (n: Root | PrNode): PrNode[] =>
   n.children.flatMap((c) => [c, ...descendants(c)])
 
-const ORDER: Record<string, number> = { CHANGES_REQUESTED: 0, APPROVED: 1 }
 const byPriority = (a: Pr, b: Pr) =>
   (ORDER[a.decision ?? ""] ?? 2) - (ORDER[b.decision ?? ""] ?? 2) ||
   b.unresolved - a.unresolved ||

@@ -45,6 +45,10 @@ const DEFAULT_RETRY_S = 30
 const MAX_RETRY_S = 60
 /** noms des DM lus en parallèle dans les réglages (users.info : palier 4, ~100 appels / min) */
 const NAME_CONCURRENCY = 4
+/** conversations.list : maximum de Slack, moins de pages (palier 2, ~20 appels / min) */
+const CONVERSATIONS_PAGE_SIZE = 1_000
+/** search.messages : maximum de Slack par page */
+const SEARCH_PAGE_SIZE = 100
 /** révocation à la déconnexion : la désinstallation ne doit jamais rester bloquée */
 const REVOKE_TIMEOUT_MS = 5_000
 const AUTH_ERRORS = [
@@ -525,7 +529,7 @@ export async function listConversations(
       {
         types: "public_channel,private_channel,im,mpim",
         exclude_archived: "true",
-        limit: "1000", // maximum de Slack : moins de pages (palier 2, ~20 appels / min)
+        limit: String(CONVERSATIONS_PAGE_SIZE),
         cursor,
       },
       t,
@@ -655,7 +659,7 @@ async function drain() {
       const t = await token()
       const r = await call<{ messages: { matches: Match[] } }>(
         "search.messages",
-        { query: url, count: "100", sort: "timestamp" },
+        { query: url, count: String(SEARCH_PAGE_SIZE), sort: "timestamp" },
         t,
       )
       const matches = r.messages.matches.filter((m) => mentionsUrl(m.text, url))
