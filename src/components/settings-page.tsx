@@ -1367,7 +1367,7 @@ function NotificationsCategory(props: {
       {!isWeb && (
         <div
           id={settingDomId("last")}
-          className="flex scroll-mt-24 flex-col gap-2 rounded-2xl border bg-card px-4 py-3 transition-colors duration-500 data-[highlight]:bg-primary/10 motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+          className="flex scroll-mt-24 outline-none flex-col gap-2 rounded-2xl border bg-card px-4 py-3 transition-colors duration-500 data-[highlight]:bg-primary/10 motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:gap-6"
         >
           <div className="min-w-0 text-sm">
             <span className="font-medium">{t.notifications.last}</span>
@@ -1406,7 +1406,7 @@ function NotificationsCategory(props: {
             <div
               key={key}
               id={settingDomId(key)}
-              className="-mx-2 flex scroll-mt-24 items-center justify-between gap-3 rounded-lg px-2 py-2 transition-colors duration-500 data-[highlight]:bg-primary/10 motion-reduce:transition-none"
+              className="-mx-2 flex scroll-mt-24 outline-none items-center justify-between gap-3 rounded-lg px-2 py-2 transition-colors duration-500 data-[highlight]:bg-primary/10 motion-reduce:transition-none"
             >
               <span id={`notify-${key}`} className="text-sm font-medium">
                 {t.notifications[key]}
@@ -1726,7 +1726,7 @@ function UninstallRow() {
   }
 
   return (
-    <div className="border-t py-3">
+    <div className="border-t">
       <Row
         id="uninstall"
         label={t.uninstall.label}
@@ -1740,7 +1740,7 @@ function UninstallRow() {
         )}
       </Row>
       {open && (
-        <div className="mb-1 flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+        <div className="mb-3 flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
           {!plan && state !== "error" && (
             <p className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
@@ -2361,9 +2361,10 @@ export function SettingsPage({
       behavior: reducedMotion() ? "auto" : "smooth",
       block: "center",
     })
-    el.querySelector<HTMLElement>(
-      "button:not(:disabled), input, select, a[href]",
-    )?.focus({ preventScroll: true })
+    // focus sur la ligne elle-même (sans anneau, outline-none) : Tab mène ensuite à sa commande,
+    // sans l'anneau focus-visible qu'un focus programmé sur le bouton affiche après Entrée
+    el.tabIndex = -1
+    el.focus({ preventScroll: true })
     el.dataset.highlight = ""
     clearTimeout(highlightTimer.current)
     highlightTimer.current = window.setTimeout(
@@ -2432,7 +2433,7 @@ export function SettingsPage({
           <ArrowLeft data-icon="inline-start" />
           {t.back}
         </Button>
-        <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:pb-0">
+        <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 py-1 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:py-0">
           {CATEGORIES.map((c) => {
             const Icon = CATEGORY_ICONS[c]
             return (

@@ -32,7 +32,7 @@ export function Section(props: {
     <section
       id={props.id}
       aria-labelledby={`${props.id}-title`}
-      className="scroll-mt-24 rounded-2xl outline-offset-4 transition-[outline-color] duration-500 data-[highlight]:outline-2 data-[highlight]:outline-primary/40 motion-reduce:transition-none"
+      className="scroll-mt-24 rounded-2xl ring-offset-4 ring-offset-background outline-none transition-shadow duration-500 data-[highlight]:ring-2 data-[highlight]:ring-primary/40 motion-reduce:transition-none"
     >
       <h2
         id={`${props.id}-title`}
@@ -45,7 +45,7 @@ export function Section(props: {
           <button
             type="button"
             aria-expanded={shown}
-            aria-controls={`${props.id}-body`}
+            aria-controls={shown ? `${props.id}-body` : undefined}
             onClick={() => props.onOpenChange?.(!shown)}
             className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
           >
@@ -70,9 +70,12 @@ export function Section(props: {
       {shown && (
         <div
           id={`${props.id}-body`}
+          // overflow-hidden : le surlignage d'une ligne (-mx-4, bord à bord) suit les coins arrondis ;
+          // rien n'en déborde (pas de popover, anneaux de focus dans le px-4)
           className={cn(
-            "mt-3 rounded-2xl border bg-card px-4",
-            props.destructive && "border-destructive/40",
+            "mt-3 overflow-hidden rounded-2xl border bg-card px-4",
+            props.destructive &&
+              "border-destructive/40 *:border-destructive/20",
           )}
         >
           {props.children}
@@ -96,7 +99,7 @@ export function Row(props: {
   return (
     <div
       id={props.id && settingDomId(props.id)}
-      className="-mx-4 flex scroll-mt-24 flex-col gap-2 border-t px-4 py-3 transition-colors duration-500 first:border-t-0 data-[highlight]:bg-primary/10 motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+      className="-mx-4 flex scroll-mt-24 flex-col gap-2 border-t px-4 py-3 outline-none transition-colors duration-500 first:border-t-0 data-[highlight]:bg-primary/10 motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:gap-6"
     >
       <div className="min-w-0">
         <div id={props.labelId} className="text-sm font-medium">
