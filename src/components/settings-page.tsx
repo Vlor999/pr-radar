@@ -10,13 +10,14 @@ import {
   Bell,
   Check,
   ChevronDown,
-  ChevronRight,
   ExternalLink,
   GitPullRequest,
+  Globe,
   Loader2,
   LogOut,
   Monitor,
   Moon,
+  Plug,
   Plus,
   RefreshCw,
   Search,
@@ -47,6 +48,7 @@ import { formatUntil, pause, resume, useQuiet } from "@/hooks/use-quiet"
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { Login } from "@/components/login"
+import { CLIENT_LABEL, MCP_STRINGS, McpCategory } from "@/components/mcp-page"
 import {
   Feedback,
   Row,
@@ -57,6 +59,7 @@ import {
   useConfirm,
   useFlash,
 } from "@/components/settings-ui"
+import { WEB_STRINGS, WebCategory } from "@/components/web-page"
 import { GITHUB, type Account } from "@/lib/accounts"
 import { accountAdded, refreshPrs, signOut } from "@/lib/actions"
 import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
@@ -67,6 +70,7 @@ import {
   type Profile,
 } from "@/lib/github"
 import { currentLang, locale, strings, useStrings, type Lang } from "@/lib/i18n"
+import { useMcp } from "@/lib/mcp"
 import { reducedMotion } from "@/lib/motion"
 import { openExternal } from "@/lib/open"
 import { invoke, isWeb } from "@/lib/platform"
@@ -101,16 +105,21 @@ const CATEGORIES = [
   "accounts",
   "notifications",
   "prs",
+  "mcp",
+  "web",
   "advanced",
 ] as const
 
-type Category = (typeof CATEGORIES)[number]
+export type SettingsCategory = (typeof CATEGORIES)[number]
+type Category = SettingsCategory
 
 const CATEGORY_ICONS: Record<Category, LucideIcon> = {
   general: Settings2,
   accounts: Users,
   notifications: Bell,
   prs: GitPullRequest,
+  mcp: Plug,
+  web: Globe,
   advanced: SlidersHorizontal,
 }
 
@@ -121,7 +130,6 @@ const DESKTOP_ONLY: readonly string[] = [
   "test",
   "system",
   "focus",
-  "web",
   "uninstall",
 ]
 
@@ -135,6 +143,8 @@ const S = strings(
       accounts: "Comptes",
       notifications: "Notifications",
       prs: "PR et repos",
+      mcp: "Serveur MCP",
+      web: "Version web",
       advanced: "Avancé",
     },
     sections: {
@@ -151,7 +161,6 @@ const S = strings(
       refresh: "Actualisation",
       github: "API GitHub",
       data: "Données",
-      web: "Version web",
       danger: "Zone sensible",
     },
     app: { description: "Thème, langue et démarrage." },
@@ -365,13 +374,6 @@ const S = strings(
       privacy: "Confidentialité",
       licenses: "Licences tierces",
     },
-    web: {
-      description:
-        "PR Radar dans un onglet du navigateur, servi par l'app sur cette machine uniquement.",
-      settings: "Réglages de la version web",
-      settingsDescription: "Activation, port et sessions des navigateurs.",
-      open: "Ouvrir",
-    },
     nav: "Catégories des réglages",
     back: "Retour",
   },
@@ -381,6 +383,8 @@ const S = strings(
       accounts: "Accounts",
       notifications: "Notifications",
       prs: "PRs and repos",
+      mcp: "MCP server",
+      web: "Web version",
       advanced: "Advanced",
     },
     sections: {
@@ -397,7 +401,6 @@ const S = strings(
       refresh: "Refresh",
       github: "GitHub API",
       data: "Data",
-      web: "Web version",
       danger: "Danger zone",
     },
     app: { description: "Theme, language and startup." },
@@ -607,13 +610,6 @@ const S = strings(
       report: "Report an issue",
       privacy: "Privacy",
       licenses: "Third-party licenses",
-    },
-    web: {
-      description:
-        "PR Radar in a browser tab, served by the app on this machine only.",
-      settings: "Web version settings",
-      settingsDescription: "On/off, port and browser sessions.",
-      open: "Open",
     },
     nav: "Settings categories",
     back: "Back",
@@ -1667,25 +1663,6 @@ function DangerSection() {
   )
 }
 
-/** Version web : réglages sur leur propre page (src/components/web-page.tsx). */
-function WebSection({ onOpen }: { onOpen: () => void }) {
-  const t = useStrings(S)
-  return (
-    <Section id="web" title={t.sections.web} description={t.web.description}>
-      <Row
-        id="web"
-        label={t.web.settings}
-        description={t.web.settingsDescription}
-      >
-        <Button variant="outline" size="sm" onClick={onOpen}>
-          {t.web.open}
-          <ChevronRight data-icon="inline-end" />
-        </Button>
-      </Row>
-    </Section>
-  )
-}
-
 type UninstallPlan = {
   appPath: string | null
   dataPaths: string[]
@@ -1945,8 +1922,6 @@ function AboutSection() {
   )
 }
 
-/* ---------- Page ---------- */
-
 /* ---------- Recherche ---------- */
 
 type Entry = SettingEntry<Category> & {
@@ -1960,6 +1935,9 @@ const words = (...parts: string[]) => parts.join(" ")
 function settingsIndex(
   t: (typeof S)["fr"],
   shortcuts: { label: string }[],
+  mcp: (typeof MCP_STRINGS)["fr"],
+  web: (typeof WEB_STRINGS)["fr"],
+  available: (c: Category) => boolean,
 ): Entry[] {
   const n = t.notifications
   const entries: Entry[] = [
@@ -2136,6 +2114,63 @@ function settingsIndex(
       label: t.refresh.onFocus,
     },
     {
+      id: "mcp-server",
+      category: "mcp",
+      label: mcp.state.server,
+      description: mcp.state.description,
+      keywords: words(mcp.subtitle, mcp.state.socket, "agent"),
+    },
+    {
+      id: "mcp-calls",
+      category: "mcp",
+      label: mcp.state.today,
+    },
+    {
+      id: "mcp-client",
+      category: "mcp",
+      label: mcp.install.title,
+      description: mcp.install.description,
+      keywords: words(
+        mcp.install.client,
+        mcp.install.other,
+        ...Object.values(CLIENT_LABEL),
+      ),
+    },
+    {
+      id: "mcp-tools",
+      category: "mcp",
+      label: mcp.tools.title,
+      description: mcp.tools.description,
+      keywords: "get_prs get_pr",
+    },
+    {
+      id: "mcp-history",
+      category: "mcp",
+      label: mcp.history.title,
+      description: mcp.history.description,
+      keywords: mcp.history.clear,
+    },
+    {
+      id: "web-enable",
+      category: "web",
+      label: web.enable,
+      description: web.subtitle,
+      keywords: words(web.title, web.server, web.open, "127.0.0.1"),
+    },
+    {
+      id: "web-port",
+      category: "web",
+      label: web.port,
+      description: web.portDescription,
+    },
+    {
+      id: "web-sessions",
+      category: "web",
+      label: web.secret,
+      description: web.secretDescription,
+      keywords: web.rotate,
+    },
+    {
       id: "quota",
       category: "advanced",
       label: t.refresh.quota,
@@ -2162,13 +2197,6 @@ function settingsIndex(
       keywords: t.data.forgetSeen,
     },
     {
-      id: "web",
-      category: "advanced",
-      label: t.sections.web,
-      description: t.web.description,
-      keywords: t.web.settings,
-    },
-    {
       id: "reset",
       category: "advanced",
       label: t.data.reset,
@@ -2183,7 +2211,9 @@ function settingsIndex(
       keywords: t.sections.danger,
     },
   ]
-  return entries.filter((e) => !(isWeb && DESKTOP_ONLY.includes(e.id)))
+  return entries.filter(
+    (e) => available(e.category) && !(isWeb && DESKTOP_ONLY.includes(e.id)),
+  )
 }
 
 function SearchResults(props: {
@@ -2278,20 +2308,28 @@ function SearchResults(props: {
 
 /* ---------- Page ---------- */
 
-/** catégorie affichée, gardée pendant la session (la page est démontée à la fermeture) */
-let lastCategory: Category = "general"
-
+/**
+ * Réglages plein écran. La catégorie affichée est tenue par le tableau de bord (pr-dashboard.tsx),
+ * qui les ouvre directement sur « Serveur MCP » ou « Version web » depuis ses boutons et la palette.
+ */
 export function SettingsPage({
+  category: requested,
+  onCategory,
   onClose,
-  onOpenWeb,
 }: {
+  category: Category
+  onCategory: (c: Category) => void
   onClose: () => void
-  /** page de la version web */
-  onOpenWeb: () => void
 }) {
   const t = useStrings(S)
   const shortcuts = useStrings(SHORTCUTS)
-  const [category, setCategoryState] = useState<Category>(lastCategory)
+  const mcpStrings = useStrings(MCP_STRINGS)
+  const webStrings = useStrings(WEB_STRINGS)
+  // mêmes conditions que les anciens points d'entrée : bouton MCP si le binaire le gère, version web dans l'app seulement
+  const mcpSupported = !!useMcp().info?.supported
+  const available = (c: Category) =>
+    c === "mcp" ? mcpSupported : c === "web" ? !isWeb : true
+  const category = available(requested) ? requested : "general"
   const [troubleshootOpen, setTroubleshootOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [cursor, setCursor] = useState(0)
@@ -2300,12 +2338,11 @@ export function SettingsPage({
   const target = useRef<string | null>(null)
   const highlightTimer = useRef<number>(undefined)
 
-  const setCategory = (c: Category) => {
-    lastCategory = c
-    setCategoryState(c)
-  }
-
-  const index = useMemo(() => settingsIndex(t, shortcuts), [t, shortcuts])
+  const index = useMemo(
+    () => settingsIndex(t, shortcuts, mcpStrings, webStrings, available),
+    // available ne dépend que de mcpSupported
+    [t, shortcuts, mcpStrings, webStrings, mcpSupported],
+  )
   const results = useMemo(
     () => searchSettings(index, query, category),
     [index, query, category],
@@ -2337,7 +2374,7 @@ export function SettingsPage({
         focusSearch()
         return
       }
-      if (isTyping(e.target)) return
+      if (isTyping(e.target) || e.defaultPrevented) return
       if (e.key === "Escape") onClose()
       else if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
@@ -2349,6 +2386,11 @@ export function SettingsPage({
   }, [onClose])
 
   useEffect(() => () => clearTimeout(highlightTimer.current), [])
+
+  // nouvelle catégorie (menu, bouton MCP, palette) : en haut de page ; le réglage cherché défile ensuite
+  useEffect(() => {
+    window.scrollTo({ top: 0 })
+  }, [category])
 
   // réglage choisi dans la recherche : défilement, focus sur sa commande, surlignage bref
   useEffect(() => {
@@ -2385,13 +2427,12 @@ export function SettingsPage({
     if (e.troubleshoot) setTroubleshootOpen(true)
     setQuery("")
     setCursor(0)
-    setCategory(e.category)
+    onCategory(e.category)
   }
 
   const go = (c: Category) => {
     setQuery("")
-    setCategory(c)
-    window.scrollTo({ top: 0 })
+    onCategory(c)
   }
 
   const onSearchKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -2434,10 +2475,17 @@ export function SettingsPage({
           {t.back}
         </Button>
         <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 py-1 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:py-0">
-          {CATEGORIES.map((c) => {
+          {CATEGORIES.filter(available).map((c) => {
             const Icon = CATEGORY_ICONS[c]
             return (
               <li key={c} className="shrink-0">
+                {/* Avancé à part : réglages rarement touchés et zone sensible */}
+                {c === "advanced" && (
+                  <div
+                    role="separator"
+                    className="mx-3 my-2 hidden border-t md:block"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => go(c)}
@@ -2529,11 +2577,12 @@ export function SettingsPage({
                 <RefreshSection />
               </>
             )}
+            {category === "mcp" && <McpCategory />}
+            {category === "web" && <WebCategory />}
             {category === "advanced" && (
               <>
                 <GitHubSection />
                 <DataSection />
-                {!isWeb && <WebSection onOpen={onOpenWeb} />}
                 <DangerSection />
               </>
             )}

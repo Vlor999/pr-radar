@@ -3,6 +3,7 @@ import {
   Suspense,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   useTransition,
@@ -59,6 +60,7 @@ import {
 import { formatUntil, pause, resume, useQuiet } from "@/hooks/use-quiet"
 import { useSeen } from "@/hooks/use-seen"
 import { useThumb } from "@/hooks/use-thumb"
+import type { SettingsCategory } from "@/components/settings-page"
 import {
   descendants,
   filterTree,
@@ -219,17 +221,11 @@ const trayLabels = (
   resume: dnd?.manual ? tray.resume : null,
 })
 
-// réglages, serveur MCP et version web : ouverts à la demande, chargés dans leur propre chunk
+// réglages (serveur MCP et version web compris) : ouverts à la demande, chargés dans leur propre chunk
 const SettingsPage = lazy(() =>
   import("@/components/settings-page").then((m) => ({
     default: m.SettingsPage,
   })),
-)
-const McpPage = lazy(() =>
-  import("@/components/mcp-page").then((m) => ({ default: m.McpPage })),
-)
-const WebPage = lazy(() =>
-  import("@/components/web-page").then((m) => ({ default: m.WebPage })),
 )
 
 const TABS = [
@@ -306,10 +302,19 @@ export function PrDashboard({
   const [filter, setFilter] = useState<keyof typeof S.fr.filters>("all")
   const settings = useSettings()
   const [sort, setSort] = useState<string>(() => getSettings().defaultSort)
-  // page plein écran affichée à la place du tableau de bord
-  const [page, setPage] = useState<"settings" | "mcp" | "web" | null>(null)
-  const toggle = (p: NonNullable<typeof page>) =>
-    setPage((v) => (v === p ? null : p))
+  // réglages affichés à la place du tableau de bord : catégorie ouverte, null si fermés
+  const [page, setPage] = useState<SettingsCategory | null>(null)
+  // dernière catégorie vue : la roue dentée y rouvre les réglages pendant la session
+  const lastCategory = useRef<SettingsCategory>("general")
+  const showCategory = (c: SettingsCategory | null) => {
+    if (c) lastCategory.current = c
+    setPage(c)
+  }
+  /** roue dentée et ⌘, : ouvre sur la dernière catégorie, ou ferme */
+  const toggleSettings = () => setPage((v) => (v ? null : lastCategory.current))
+  /** bouton MCP : ouvre la catégorie, ou ferme si elle est affichée */
+  const toggleCategory = (c: SettingsCategory) =>
+    page === c ? setPage(null) : showCategory(c)
   const [webError, setWebError] = useState<string | null>(null)
   const [webBusy, setWebBusy] = useState(false)
   const webErrors = useStrings(WEB_ERRORS)
@@ -320,7 +325,7 @@ export function PrDashboard({
   // la barre d'onglets disparaît pendant les réglages : re-mesurer à son retour
   const [tabBox, underline] = useThumb<HTMLElement>(
     '[aria-selected="true"]',
-    `${tab}:${page}`,
+    `${tab}:${page !== null}`,
   )
   usePrNotifications(prs)
   useReviewNotifications(reviews)
@@ -437,7 +442,7 @@ export function PrDashboard({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "," && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        toggle("settings")
+        toggleSettings()
       }
     }
     window.addEventListener("keydown", onKey)
@@ -548,8 +553,8 @@ export function PrDashboard({
             setSort(id)
           },
           refresh: () => startRefresh(() => refreshPrs()),
-          settings: () => setPage("settings"),
-          mcp: () => setPage("mcp"),
+          settings: () => setPage((v) => v ?? lastCategory.current),
+          mcp: () => showCategory("mcp"),
           repos: () => {
             setPage(null)
             if (!wide) return setReposOpen(true)
@@ -633,7 +638,7 @@ export function PrDashboard({
               aria-label={mcp.running ? t.mcpOn : t.mcp}
               title={mcp.running ? t.mcpOn : t.mcp}
               aria-pressed={page === "mcp"}
-              onClick={() => toggle("mcp")}
+              onClick={() => toggleCategory("mcp")}
               className="relative"
             >
               <Plug />
@@ -646,16 +651,16 @@ export function PrDashboard({
               busy={webBusy}
               onOpen={() => void runWeb(openWeb)}
               onToggle={() => void runWeb(toggleWeb)}
-              onSettings={() => setPage("web")}
+              onSettings={() => showCategory("web")}
             />
           )}
           <Button
-            variant={page === "settings" ? "secondary" : "ghost"}
+            variant={page !== null ? "secondary" : "ghost"}
             size="icon"
             aria-label={update ? t.settingsUpdate(update) : t.settings}
             title={update ? t.settingsTitleUpdate(update) : t.settingsTitle}
-            aria-pressed={page === "settings"}
-            onClick={() => toggle("settings")}
+            aria-pressed={page !== null}
+            onClick={() => toggleSettings()}
             className="relative"
           >
             <SettingsIcon />
@@ -680,7 +685,7 @@ export function PrDashboard({
             variant="outline"
             onClick={() => {
               setWebError(null)
-              setPage("web")
+              showCategory("web")
             }}
           >
             {t.webSettings}
@@ -697,20 +702,13 @@ export function PrDashboard({
         </div>
       )}
 
-      {page === "settings" ? (
+      {page ? (
         <Suspense fallback={null}>
           <SettingsPage
+            category={page}
+            onCategory={showCategory}
             onClose={() => setPage(null)}
-            onOpenWeb={() => setPage("web")}
           />
-        </Suspense>
-      ) : page === "mcp" ? (
-        <Suspense fallback={null}>
-          <McpPage onClose={() => setPage(null)} />
-        </Suspense>
-      ) : page === "web" ? (
-        <Suspense fallback={null}>
-          <WebPage onClose={() => setPage(null)} />
         </Suspense>
       ) : (
         <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
