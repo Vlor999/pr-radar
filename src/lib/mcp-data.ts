@@ -13,6 +13,19 @@ import type {
 /** historique local des appels MCP : les plus récents seulement */
 export const MCP_HISTORY_MAX = 50
 
+/**
+ * Fusion d'un serveur dans une config JSON, avec les seuls outils présents d'office
+ * (macOS : JavaScript for Automation ; Linux : python3). Arguments : chemin absolu
+ * du fichier, clé des serveurs, entrée JSON. Garde les autres clés et serveurs,
+ * remplace seulement `pr-radar`, crée dossier et fichier au besoin, copie l'ancien
+ * en `.bak`, et s'arrête sans rien écrire si le fichier n'est pas du JSON valide.
+ */
+const MERGE_JXA =
+  'function run(a){ObjC.import("Foundation");var f=$.NSFileManager.defaultManager,p=a[0],c={};if(f.fileExistsAtPath(p)){var t=$.NSString.stringWithContentsOfFileEncodingError(p,$.NSUTF8StringEncoding,null).js;if(t.trim())c=JSON.parse(t);f.removeItemAtPathError(p+".bak",null);if(!f.copyItemAtPathToPathError(p,p+".bak",null))throw new Error("cannot back up "+p)}else f.createDirectoryAtPathWithIntermediateDirectoriesAttributesError($(p).stringByDeletingLastPathComponent,true,$(),null);c[a[1]]=c[a[1]]||{};c[a[1]]["pr-radar"]=JSON.parse(a[2]);if(!$(JSON.stringify(c,null,2)+"\\n").writeToFileAtomicallyEncodingError(p,true,$.NSUTF8StringEncoding,null))throw new Error("cannot write "+p);return "pr-radar added to "+p}'
+
+const MERGE_PY =
+  'import json,os,shutil,sys;p=sys.argv[1];t=open(p,encoding="utf-8").read() if os.path.exists(p) else "";c=json.loads(t) if t.strip() else {};t and shutil.copyfile(p,p+".bak");os.makedirs(os.path.dirname(p),exist_ok=True);c.setdefault(sys.argv[2],{})["pr-radar"]=json.loads(sys.argv[3]);open(p,"w",encoding="utf-8").write(json.dumps(c,indent=2)+"\\n");print("pr-radar added to "+p)'
+
 export type McpTool = "get_prs" | "get_pr"
 
 export type SlackStatus = "connected" | "expired" | "disabled"
@@ -270,30 +283,113 @@ const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 
 const json = (v: unknown) => JSON.stringify(v, null, 2)
 
+/** Systèmes où tourne le serveur MCP (`McpInfo.supported` : unix seulement). */
+export type McpOs = "macos" | "linux"
+
+/** Config JSON à fusionner : fichier relatif au dossier personnel, clé des serveurs, entrée. */
+type JsonConfig = { file: string; key: string; entry: object }
+
+const jsonConfig = (
+  client: McpClient,
+  exe: string,
+  os: McpOs,
+): JsonConfig | null => {
+  const entry = { command: exe, args: ["--mcp"] }
+  switch (client) {
+    case "antigravity":
+      return {
+        file: ".gemini/config/mcp_config.json",
+        key: "mcpServers",
+        entry,
+      }
+    case "claude-desktop":
+      return {
+        file:
+          os === "macos"
+            ? "Library/Application Support/Claude/claude_desktop_config.json"
+            : ".config/Claude/claude_desktop_config.json",
+        key: "mcpServers",
+        entry,
+      }
+    case "cursor":
+      return {
+        file: ".cursor/mcp.json",
+        key: "mcpServers",
+        entry: { type: "stdio", ...entry },
+      }
+    case "windsurf":
+      return {
+        file: ".codeium/windsurf/mcp_config.json",
+        key: "mcpServers",
+        entry,
+      }
+    default:
+      return null
+  }
+}
+
+/** Commande d'une ligne qui fusionne `pr-radar` dans la config ; `$HOME` développé par le shell. */
+const mergeCommand = (c: JsonConfig, os: McpOs) => {
+  // le chemin relatif ne contient ni `"`, ni `$`, ni `\`, ni backquote : sûr entre guillemets doubles
+  const args = `"$HOME/${c.file}" ${c.key} ${shellQuote(JSON.stringify(c.entry))}`
+  return os === "macos"
+    ? `osascript -l JavaScript -e ${shellQuote(MERGE_JXA)} ${args}`
+    : `python3 -c ${shellQuote(MERGE_PY)} ${args}`
+}
+
+export type InstallSnippet = {
+  /** à copier : commande de terminal, ou bloc à coller quand aucune commande n'est sûre */
+  main: string
+  /** en secours de la commande : bloc JSON et fichier où le coller (`~/…`) */
+  manual?: { file: string; json: string }
+}
+
 /** Ce que l'utilisateur colle pour brancher son agent, avec le chemin réel du binaire. */
-export const installSnippet = (client: McpClient, exe: string) => {
-  const server = { command: exe, args: ["--mcp"] }
+export const installSnippet = (
+  client: McpClient,
+  exe: string,
+  os: McpOs,
+): InstallSnippet => {
+  const config = jsonConfig(client, exe, os)
+  if (config)
+    return {
+      main: mergeCommand(config, os),
+      manual: {
+        file: `~/${config.file}`,
+        json: json({ [config.key]: { "pr-radar": config.entry } }),
+      },
+    }
   switch (client) {
     case "claude-code":
-      return `claude mcp add --scope user pr-radar -- ${shellQuote(exe)} --mcp`
-    case "antigravity":
-    case "claude-desktop":
-    case "windsurf":
-      return json({ mcpServers: { "pr-radar": server } })
+      return {
+        main: `claude mcp add --scope user pr-radar -- ${shellQuote(exe)} --mcp`,
+      }
     case "codex":
-      return `codex mcp add pr-radar -- ${shellQuote(exe)} --mcp`
-    case "cursor":
-      return json({ mcpServers: { "pr-radar": { type: "stdio", ...server } } })
+      return { main: `codex mcp add pr-radar -- ${shellQuote(exe)} --mcp` }
     case "gemini":
       // `--` : sinon gemini lit `--mcp` comme une de ses options
-      return `gemini mcp add --scope user pr-radar ${shellQuote(exe)} -- --mcp`
+      return {
+        main: `gemini mcp add --scope user pr-radar ${shellQuote(exe)} -- --mcp`,
+      }
     case "vscode":
-      return `code --add-mcp ${shellQuote(
-        JSON.stringify({ name: "pr-radar", type: "stdio", ...server }),
-      )}`
+      return {
+        main: `code --add-mcp ${shellQuote(
+          JSON.stringify({
+            name: "pr-radar",
+            type: "stdio",
+            command: exe,
+            args: ["--mcp"],
+          }),
+        )}`,
+      }
     case "zed":
-      return json({ context_servers: { "pr-radar": server } })
-    case "other":
-      return `${shellQuote(exe)} --mcp`
+      // settings.json de Zed est du JSONC (commentaires) : pas de fusion sûre avec les outils d'office
+      return {
+        main: json({
+          context_servers: { "pr-radar": { command: exe, args: ["--mcp"] } },
+        }),
+      }
+    default:
+      return { main: `${shellQuote(exe)} --mcp` }
   }
 }
