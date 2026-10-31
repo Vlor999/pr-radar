@@ -343,3 +343,47 @@ test("installation : chemin du binaire cité pour le shell, JSON pour Claude Des
   })
   assert.equal(installSnippet("other", "/a/it's"), `'/a/it'\\''s' --mcp`)
 })
+
+test("installation : commande en une ligne pour Codex, Devin, Gemini CLI et VS Code", () => {
+  const exe = "/a b/it's"
+  const quoted = `'/a b/it'\\''s'`
+  assert.equal(
+    installSnippet("devin", exe),
+    `devin mcp add -s user pr-radar -- ${quoted} --mcp`,
+  )
+  assert.equal(
+    installSnippet("codex", exe),
+    `codex mcp add pr-radar -- ${quoted} --mcp`,
+  )
+  assert.equal(
+    installSnippet("gemini", exe),
+    `gemini mcp add --scope user pr-radar ${quoted} -- --mcp`,
+  )
+  const vscode = installSnippet("vscode", exe)
+  const prefix = "code --add-mcp '"
+  assert.ok(vscode.startsWith(prefix) && vscode.endsWith("'"))
+  const unquoted = vscode.slice(prefix.length, -1).replaceAll(`'\\''`, "'")
+  assert.deepEqual(JSON.parse(unquoted), {
+    name: "pr-radar",
+    type: "stdio",
+    command: exe,
+    args: ["--mcp"],
+  })
+})
+
+test("installation : JSON au format d'Antigravity, Cursor, Windsurf et Zed", () => {
+  const exe = '/a b/say "hi"'
+  const server = { command: exe, args: ["--mcp"] }
+  assert.deepEqual(JSON.parse(installSnippet("cursor", exe)), {
+    mcpServers: { "pr-radar": { type: "stdio", ...server } },
+  })
+  assert.deepEqual(JSON.parse(installSnippet("antigravity", exe)), {
+    mcpServers: { "pr-radar": server },
+  })
+  assert.deepEqual(JSON.parse(installSnippet("windsurf", exe)), {
+    mcpServers: { "pr-radar": server },
+  })
+  assert.deepEqual(JSON.parse(installSnippet("zed", exe)), {
+    context_servers: { "pr-radar": server },
+  })
+})
