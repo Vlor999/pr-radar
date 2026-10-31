@@ -1,17 +1,16 @@
 import { cn } from "cn"
-import {
-  ArrowLeft,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Trash2,
-  X,
-} from "lucide-react"
+import { ArrowLeft, Check, ChevronRight, Copy, Trash2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Row, Section, Toggle } from "@/components/settings-ui"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { locale, strings, useStrings } from "@/lib/i18n"
 import {
   clearMcpHistory,
@@ -251,6 +250,10 @@ function InstallSection() {
   useEffect(() => () => clearTimeout(timer.current), [])
   if (!info) return null
   const snippet = installSnippet(client, info.exe)
+  const items = CLIENTS.map((c) => ({
+    value: c,
+    label: c === "other" ? t.other : CLIENT_LABEL[c],
+  }))
   const copy = () =>
     navigator.clipboard.writeText(snippet).then(
       () => {
@@ -263,25 +266,35 @@ function InstallSection() {
   return (
     <Section id="mcp-install" title={t.title} description={t.description}>
       <Row labelId="mcp-client" label={t.client}>
-        {/* appearance-none : sinon le navigateur impose son propre style (pilule sombre) */}
-        <div className="relative">
-          <select
+        <Select
+          items={items}
+          value={client}
+          onValueChange={(v) => v && setClient(v)}
+        >
+          <SelectTrigger
+            size="sm"
             aria-labelledby="mcp-client"
-            value={client}
-            onChange={(e) => setClient(e.target.value as McpClient)}
-            className="h-8 appearance-none rounded-lg border bg-background pr-7 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+            className="rounded-lg border-border bg-background pr-2 pl-2.5"
           >
-            {CLIENTS.map((c) => (
-              <option key={c} value={c}>
-                {c === "other" ? t.other : CLIENT_LABEL[c]}
-              </option>
+            <SelectValue />
+          </SelectTrigger>
+          {/* sous le déclencheur, aligné à droite : sinon base-ui le pose dessus et il déborde de la carte */}
+          <SelectContent
+            alignItemWithTrigger={false}
+            align="end"
+            className="rounded-xl p-1"
+          >
+            {items.map((i) => (
+              <SelectItem
+                key={i.value}
+                value={i.value}
+                className="rounded-lg py-1.5 pl-2.5 focus:bg-muted data-highlighted:bg-muted"
+              >
+                {i.label}
+              </SelectItem>
             ))}
-          </select>
-          <ChevronDown
-            aria-hidden
-            className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground"
-          />
-        </div>
+          </SelectContent>
+        </Select>
       </Row>
       <div className="border-t py-3">
         <p className="text-xs text-muted-foreground">{t.hint[client]}</p>
