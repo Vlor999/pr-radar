@@ -1,4 +1,5 @@
 import { cn } from "cn"
+import { ChevronRight } from "lucide-react"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import { useThumb } from "@/hooks/use-thumb"
@@ -17,36 +18,86 @@ const CONFIRM_MS = 4_000
 export function Section(props: {
   id: string
   title: string
-  description: string
+  description?: string
+  /** zone sensible : bordure et titre rouges */
+  destructive?: boolean
+  /** repliable : contenu masqué tant que `open` est faux */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   children: ReactNode
 }) {
+  const collapsible = props.onOpenChange !== undefined
+  const shown = !collapsible || !!props.open
   return (
     <section
       id={props.id}
       aria-labelledby={`${props.id}-title`}
-      className="scroll-mt-4"
+      className="scroll-mt-24 rounded-2xl outline-offset-4 transition-[outline-color] duration-500 data-[highlight]:outline-2 data-[highlight]:outline-primary/40 motion-reduce:transition-none"
     >
-      <h2 id={`${props.id}-title`} className="text-base font-semibold">
-        {props.title}
+      <h2
+        id={`${props.id}-title`}
+        className={cn(
+          "text-base font-semibold",
+          props.destructive && "text-destructive",
+        )}
+      >
+        {collapsible ? (
+          <button
+            type="button"
+            aria-expanded={shown}
+            aria-controls={`${props.id}-body`}
+            onClick={() => props.onOpenChange?.(!shown)}
+            className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+          >
+            <ChevronRight
+              aria-hidden
+              className={cn(
+                "size-4 text-muted-foreground transition-transform motion-reduce:transition-none",
+                shown && "rotate-90",
+              )}
+            />
+            {props.title}
+          </button>
+        ) : (
+          props.title
+        )}
       </h2>
-      <p className="mt-0.5 text-sm text-muted-foreground">
-        {props.description}
-      </p>
-      <div className="mt-3 rounded-2xl border bg-card px-4">
-        {props.children}
-      </div>
+      {props.description && (
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          {props.description}
+        </p>
+      )}
+      {shown && (
+        <div
+          id={`${props.id}-body`}
+          className={cn(
+            "mt-3 rounded-2xl border bg-card px-4",
+            props.destructive && "border-destructive/40",
+          )}
+        >
+          {props.children}
+        </div>
+      )}
     </section>
   )
 }
+
+/** Id DOM d'une ligne de réglage, cible de la recherche des réglages. */
+export const settingDomId = (id: string) => `setting-${id}`
 
 export function Row(props: {
   label: ReactNode
   description?: ReactNode
   labelId?: string
+  /** id stable du réglage, repris par l'index de recherche */
+  id?: string
   children?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-2 border-t py-3 first:border-t-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+    <div
+      id={props.id && settingDomId(props.id)}
+      className="-mx-4 flex scroll-mt-24 flex-col gap-2 border-t px-4 py-3 transition-colors duration-500 first:border-t-0 data-[highlight]:bg-primary/10 motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+    >
       <div className="min-w-0">
         <div id={props.labelId} className="text-sm font-medium">
           {props.label}
