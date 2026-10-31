@@ -2255,53 +2255,72 @@ function SearchResults(props: {
   )
   if (!results.count)
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
+      <p
+        aria-live="polite"
+        className="py-8 text-center text-sm text-muted-foreground"
+      >
         {t.search.empty}
       </p>
     )
+  // listbox : seulement des groupes d'options ; compte annoncé à côté, intitulés visuels
+  // aria-hidden et repris comme noms des groupes (aria-labelledby)
   return (
-    <div
-      id="settings-results"
-      role="listbox"
-      aria-label={t.search.count(results.count)}
-      className="flex flex-col gap-6"
-    >
+    <div className="flex flex-col gap-6">
       <p aria-live="polite" className="text-xs text-muted-foreground">
         {t.search.count(results.count)}
       </p>
-      {results.current.length > 0 && (
-        <ul
-          role="group"
-          aria-label={t.categories[results.current[0].category]}
-          className="overflow-hidden rounded-2xl border bg-card"
-        >
-          {results.current.map((e) => option(e, true))}
-        </ul>
-      )}
-      {results.others.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">
-            {t.search.others}
-          </h2>
-          {results.others.map((g) => (
-            <div key={g.category}>
-              <h3
-                id={`settings-results-${g.category}`}
-                className="mb-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase"
-              >
-                {t.categories[g.category]}
-              </h3>
-              <ul
-                role="group"
-                aria-labelledby={`settings-results-${g.category}`}
-                className="overflow-hidden rounded-2xl border bg-card"
-              >
-                {g.entries.map((e) => option(e, true))}
-              </ul>
+      <div
+        id="settings-results"
+        role="listbox"
+        aria-label={t.search.count(results.count)}
+        className="flex flex-col gap-6"
+      >
+        {results.current.length > 0 && (
+          <div
+            role="group"
+            aria-label={t.categories[results.current[0].category]}
+          >
+            <ul
+              role="presentation"
+              className="overflow-hidden rounded-2xl border bg-card"
+            >
+              {results.current.map((e) => option(e, true))}
+            </ul>
+          </div>
+        )}
+        {results.others.length > 0 && (
+          <div role="presentation" className="flex flex-col gap-3">
+            <div
+              id="settings-results-others"
+              aria-hidden
+              className="text-sm font-semibold text-muted-foreground"
+            >
+              {t.search.others}
             </div>
-          ))}
-        </div>
-      )}
+            {results.others.map((g) => (
+              <div
+                key={g.category}
+                role="group"
+                aria-labelledby={`settings-results-others settings-results-${g.category}`}
+              >
+                <div
+                  id={`settings-results-${g.category}`}
+                  aria-hidden
+                  className="mb-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                >
+                  {t.categories[g.category]}
+                </div>
+                <ul
+                  role="presentation"
+                  className="overflow-hidden rounded-2xl border bg-card"
+                >
+                  {g.entries.map((e) => option(e, true))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -2516,8 +2535,10 @@ export function SettingsPage({
             id="settings-search"
             type="search"
             role="combobox"
-            aria-expanded={searching}
-            aria-controls="settings-results"
+            aria-expanded={searching && results.count > 0}
+            aria-controls={
+              searching && results.count > 0 ? "settings-results" : undefined
+            }
             aria-activedescendant={
               searching && selected ? `settings-result-${selected}` : undefined
             }
