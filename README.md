@@ -51,14 +51,14 @@ Both are off by default and run only while the app runs.
 
 **Web version.** Click the globe in the header: the app starts its local server if needed and opens `http://127.0.0.1:14200/` (default port, changeable in Web settings). The chevron next to the globe shows the status and leads to Web settings (port, start and stop, "Sign out browsers"). Account sign-in, Slack connection, updates and uninstall stay in the desktop app.
 
-**MCP server.** Click the plug icon next to the gear and turn the server on. The Setup section picks your client (Claude Code, Claude Desktop, Antigravity, Codex, Cursor, Gemini CLI, VS Code, Windsurf, Zed or any other) and gives a one-line terminal command with the real path of the app. For clients configured by a JSON file (Claude Desktop, Antigravity, Cursor, Windsurf), the command merges `pr-radar` into that file with tools present by default (`osascript` on macOS, `python3` on Linux): other servers are kept, the previous file is saved as `.bak`, and an invalid file is left untouched. The JSON stays available to paste by hand. Zed's `settings.json` allows comments, so it is pasted by hand. Examples (macOS, the path depends on your install):
+**MCP server.** Click the plug icon next to the gear and turn the server on. The Setup section picks your client (Claude Code, Claude Desktop, Antigravity, Codex, Cursor, Gemini CLI, VS Code, Windsurf, Zed or any other) and gives the ready-to-paste command or config, with the real path of the app and where to paste it. Examples (macOS, the path depends on your install):
 
 ```sh
 # Claude Code, once
 claude mcp add --scope user pr-radar -- '/Applications/PR Radar.app/Contents/MacOS/pr-radar' --mcp
 ```
 
-By hand for Claude Desktop, add this to `claude_desktop_config.json` (Settings › Developer › Edit Config), then restart Claude Desktop:
+For Claude Desktop, add this to `claude_desktop_config.json` (Settings › Developer › Edit Config), then restart Claude Desktop:
 
 ```json
 { "mcpServers": { "pr-radar": { "command": "/Applications/PR Radar.app/Contents/MacOS/pr-radar", "args": ["--mcp"] } } }
