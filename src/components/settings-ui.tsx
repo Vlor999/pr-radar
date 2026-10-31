@@ -32,7 +32,8 @@ export function Section(props: {
     <section
       id={props.id}
       aria-labelledby={`${props.id}-title`}
-      className="scroll-mt-24 rounded-2xl ring-offset-4 ring-offset-background outline-none transition-shadow duration-500 data-[highlight]:ring-2 data-[highlight]:ring-primary/40 motion-reduce:transition-none"
+      // surlignage (recherche) : sur la carte seulement, voir plus bas
+      className="scroll-mt-24 outline-none"
     >
       <h2
         id={`${props.id}-title`}
@@ -71,11 +72,14 @@ export function Section(props: {
         <div
           id={`${props.id}-body`}
           // overflow-hidden : le surlignage d'une ligne (-mx-4, bord à bord) suit les coins arrondis ;
-          // rien n'en déborde (pas de popover, anneaux de focus dans le px-4)
+          // rien n'en déborde (pas de popover, anneaux de focus dans le px-4).
+          // Section surlignée (data-highlight sur <section>) : bordure et fond teintés de la carte,
+          // même langage que la ligne surlignée, titre et description intacts.
           className={cn(
-            "mt-3 overflow-hidden rounded-2xl border bg-card px-4",
+            "mt-3 overflow-hidden rounded-2xl border bg-card px-4 transition-colors duration-500 motion-reduce:transition-none",
             props.destructive &&
               "border-destructive/40 *:border-destructive/20",
+            "in-data-[highlight]:border-primary/50 in-data-[highlight]:bg-[color-mix(in_oklch,var(--card),var(--primary)_8%)]",
           )}
         >
           {props.children}
