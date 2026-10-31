@@ -28,6 +28,7 @@ const COPIED_MS = 1_500
 const CLIENTS: McpClient[] = [
   "claude-code",
   "claude-desktop",
+  "antigravity",
   "codex",
   "cursor",
   "gemini",
@@ -38,6 +39,7 @@ const CLIENTS: McpClient[] = [
 ]
 
 const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
+  antigravity: "Antigravity",
   "claude-code": "Claude Code",
   "claude-desktop": "Claude Desktop",
   codex: "Codex",
@@ -75,6 +77,8 @@ const S = strings(
         "claude-code": "Dans un terminal, une seule fois :",
         "claude-desktop":
           "Dans claude_desktop_config.json (Réglages › Développeur › Modifier la config), puis redémarre Claude Desktop :",
+        antigravity:
+          "Dans ~/.gemini/config/mcp_config.json (IDE, app et CLI agy). Puis Refresh dans Réglages › Customizations › Installed MCP Servers, ou /mcp dans la CLI :",
         codex:
           "Dans un terminal, une seule fois (écrit dans ~/.codex/config.toml, partagé avec l'app et l'extension IDE). Relance Codex :",
         cursor:
@@ -140,6 +144,8 @@ const S = strings(
         "claude-code": "In a terminal, once:",
         "claude-desktop":
           "In claude_desktop_config.json (Settings › Developer › Edit Config), then restart Claude Desktop:",
+        antigravity:
+          "In ~/.gemini/config/mcp_config.json (IDE, app and agy CLI). Then Refresh in Settings › Customizations › Installed MCP Servers, or /mcp in the CLI:",
         codex:
           "In a terminal, once (writes ~/.codex/config.toml, shared with the app and the IDE extension). Restart Codex:",
         cursor:

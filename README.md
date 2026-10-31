@@ -17,7 +17,7 @@
 - Merge calendar: month, week, day
 - Repo picker per organization
 - Local web version: the same interface in a browser tab, served by the app on 127.0.0.1 (opt-in)
-- Local MCP server: Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code, Windsurf or Zed read your PRs and their Slack mentions, read-only (opt-in; macOS and Linux)
+- Local MCP server: Claude Code, Claude Desktop, Antigravity, Codex, Cursor, Gemini CLI, VS Code, Windsurf or Zed read your PRs and their Slack mentions, read-only (opt-in; macOS and Linux)
 - System notifications
 - Light / dark / auto theme
 - Keyboard shortcuts: `j` `k` `o` `e` `d`
@@ -51,7 +51,7 @@ Both are off by default and run only while the app runs.
 
 **Web version.** Click the globe in the header: the app starts its local server if needed and opens `http://127.0.0.1:14200/` (default port, changeable in Web settings). The chevron next to the globe shows the status and leads to Web settings (port, start and stop, "Sign out browsers"). Account sign-in, Slack connection, updates and uninstall stay in the desktop app.
 
-**MCP server.** Click the plug icon next to the gear and turn the server on. The Setup section picks your client (Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code, Windsurf, Zed or any other) and gives the ready-to-paste command or config, with the real path of the app and where to paste it. Examples (macOS, the path depends on your install):
+**MCP server.** Click the plug icon next to the gear and turn the server on. The Setup section picks your client (Claude Code, Claude Desktop, Antigravity, Codex, Cursor, Gemini CLI, VS Code, Windsurf, Zed or any other) and gives the ready-to-paste command or config, with the real path of the app and where to paste it. Examples (macOS, the path depends on your install):
 
 ```sh
 # Claude Code, once

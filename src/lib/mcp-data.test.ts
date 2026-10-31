@@ -367,11 +367,14 @@ test("installation : commande en une ligne pour Codex, Gemini CLI et VS Code", (
   })
 })
 
-test("installation : JSON au format de Cursor, Windsurf et Zed", () => {
+test("installation : JSON au format d'Antigravity, Cursor, Windsurf et Zed", () => {
   const exe = '/a b/say "hi"'
   const server = { command: exe, args: ["--mcp"] }
   assert.deepEqual(JSON.parse(installSnippet("cursor", exe)), {
     mcpServers: { "pr-radar": { type: "stdio", ...server } },
+  })
+  assert.deepEqual(JSON.parse(installSnippet("antigravity", exe)), {
+    mcpServers: { "pr-radar": server },
   })
   assert.deepEqual(JSON.parse(installSnippet("windsurf", exe)), {
     mcpServers: { "pr-radar": server },

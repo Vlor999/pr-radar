@@ -255,6 +255,7 @@ export const parseHistory = (raw: string | null): McpCall[] => {
 /* ---------- Installation ---------- */
 
 export type McpClient =
+  | "antigravity"
   | "claude-code"
   | "claude-desktop"
   | "codex"
@@ -275,6 +276,7 @@ export const installSnippet = (client: McpClient, exe: string) => {
   switch (client) {
     case "claude-code":
       return `claude mcp add --scope user pr-radar -- ${shellQuote(exe)} --mcp`
+    case "antigravity":
     case "claude-desktop":
     case "windsurf":
       return json({ mcpServers: { "pr-radar": server } })
