@@ -10,6 +10,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Coffee,
   ExternalLink,
   Loader2,
   LogOut,
@@ -24,7 +25,7 @@ import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Shortcut } from "@/components/shortcut"
+import { IS_MAC, Shortcut } from "@/components/shortcut"
 import { SHORTCUTS } from "@/hooks/use-keyboard-nav"
 import {
   testNotification,
@@ -46,6 +47,7 @@ import {
 import { GITHUB, type Account } from "@/lib/accounts"
 import { accountAdded, refreshPrs, signOut } from "@/lib/actions"
 import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
+import { BUY_ME_A_COFFEE_URL } from "@/lib/constants"
 import {
   clearCache,
   reposWithMyOpenPrs,
@@ -63,7 +65,7 @@ import {
   useAutoInterval,
   useQuota,
 } from "@/lib/quota"
-import { parseHm, systemZone } from "@/lib/quiet"
+import { MINUTE_MS, parseHm, systemZone } from "@/lib/quiet"
 import { resetSettings, updateSettings, useSettings } from "@/lib/settings"
 import { checkForUpdate, installUpdate, useUpdate } from "@/lib/updater"
 import { getRepos, reload, setRepos } from "@/lib/store"
@@ -298,6 +300,10 @@ const S = strings(
       restarting: "Redémarrage…",
       install: "Installer et redémarrer",
       check: "Rechercher une mise à jour",
+      support: "Soutenir PR Radar",
+      supportDescription:
+        "Gratuit et sans publicité. Un café aide à le faire vivre.",
+      coffee: "Offrir un café",
       links: "Liens",
       source: "Code source",
       download: "Page de téléchargement",
@@ -514,6 +520,9 @@ const S = strings(
       restarting: "Restarting…",
       install: "Install and restart",
       check: "Check for updates",
+      support: "Support PR Radar",
+      supportDescription: "Free and ad-free. A coffee helps keep it going.",
+      coffee: "Buy me a coffee",
       links: "Links",
       source: "Source code",
       download: "Download page",
@@ -537,6 +546,24 @@ const S = strings(
 const CHECK_MS = 1_500
 const DOWNLOAD_URL = "https://vlor999.github.io/pr-radar/"
 const REPO_URL = "https://github.com/Vlor999/pr-radar"
+
+const NOTIFY = [
+  "approved",
+  "changesRequested",
+  "comments",
+  "ciFailed",
+  "reviewRequested",
+] as const
+
+/** fuseaux IANA connus du moteur JS (choix du fuseau de la plage quotidienne) */
+const TIME_ZONES = Intl.supportedValuesOf("timeZone")
+
+// sur ordinateur, c'est le système qui autorise ou bloque : on renvoie vers ses réglages
+const SYSTEM_NOTIFICATION_SETTINGS = IS_MAC
+  ? "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+  : navigator.userAgent.includes("Windows")
+    ? "ms-settings:notifications"
+    : null
 
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLElement &&
@@ -992,7 +1019,7 @@ function RefreshSection() {
             {(["auto", 0, 1, 2, 5, 10, 15, 30] as const).map((m) => (
               <option key={m} value={m}>
                 {m === "auto"
-                  ? t.refresh.auto(Math.round(autoMs / 60_000))
+                  ? t.refresh.auto(Math.round(autoMs / MINUTE_MS))
                   : m === 0
                     ? t.refresh.manual
                     : `${m} min`}
@@ -1063,25 +1090,6 @@ function RefreshSection() {
     </Section>
   )
 }
-
-const NOTIFY = [
-  "approved",
-  "changesRequested",
-  "comments",
-  "ciFailed",
-  "reviewRequested",
-] as const
-
-const IS_MAC = navigator.userAgent.includes("Mac")
-/** fuseaux IANA connus du moteur JS (choix du fuseau de la plage quotidienne) */
-const TIME_ZONES = Intl.supportedValuesOf("timeZone")
-
-// sur ordinateur, c'est le système qui autorise ou bloque : on renvoie vers ses réglages
-const SYSTEM_NOTIFICATION_SETTINGS = IS_MAC
-  ? "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
-  : navigator.userAgent.includes("Windows")
-    ? "ms-settings:notifications"
-    : null
 
 /** Lancement à l'ouverture de session : l'état est celui du système, relu en revenant sur la fenêtre. */
 function LaunchAtLoginRow() {
@@ -1717,6 +1725,16 @@ function AboutSection() {
             {t.about.check}
           </Button>
         )}
+      </Row>
+      <Row label={t.about.support} description={t.about.supportDescription}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => openExternal(BUY_ME_A_COFFEE_URL)}
+        >
+          <Coffee data-icon="inline-start" />
+          {t.about.coffee}
+        </Button>
       </Row>
       {/* label above: the five links do not fit on one line next to it in French */}
       <div className="border-t py-3">

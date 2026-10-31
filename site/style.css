@@ -17,6 +17,7 @@ a{color:var(--accent)}
 .brand{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--fg);text-decoration:none}
 nav{display:flex;align-items:center;gap:20px}nav a{color:var(--muted);text-decoration:none}nav a:hover{color:var(--fg)}
 .gh{display:flex}.gh svg{width:20px;height:20px;fill:currentColor}
+.bmc svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .lang{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--card)}.lang button{font:inherit;font-size:12px;font-weight:600;padding:1px 8px;border:0;border-radius:6px;background:none;color:var(--muted);cursor:pointer}.lang button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg)}
 .nav-dl{min-height:0;padding:6px 14px;font-size:14px}
 @media(max-width:640px){nav{gap:12px}nav .nl,nav .gh{display:none}}

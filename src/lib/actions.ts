@@ -23,8 +23,13 @@ import { getRepos, reload, setRepos } from "./store"
 import { pull } from "./sync"
 import type { MergedPr } from "./types"
 
+/** message d'erreur affiché tel quel dans l'interface, tronqué au-delà */
+const MAX_ERROR_CHARS = 300
+/** GitHub refuse un corps de commentaire de plus de 65 536 caractères (limite gardée sous ce plafond) */
+const MAX_COMMENT_CHARS = 65_000
+
 const message = (e: unknown) =>
-  e instanceof Error ? e.message.slice(0, 300) : String(e)
+  e instanceof Error ? e.message.slice(0, MAX_ERROR_CHARS) : String(e)
 
 /** Liste des repos suivis relue avant d'être réécrite en entier (l'autre fenêtre a pu la changer). */
 const freshRepos = async () => {
@@ -88,7 +93,7 @@ async function post(
   const text = body.trim()
   if (!/^[\w=-]+$/.test(id)) return { error: "Identifiant GitHub invalide" }
   if (!text) return { error: "Message vide" }
-  if (text.length > 65_000) return { error: "Message trop long" }
+  if (text.length > MAX_COMMENT_CHARS) return { error: "Message trop long" }
   try {
     await send(text)
   } catch (e) {

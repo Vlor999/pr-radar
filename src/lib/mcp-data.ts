@@ -12,6 +12,27 @@ import type {
 
 /** historique local des appels MCP : les plus récents seulement */
 export const MCP_HISTORY_MAX = 50
+/** `Node.TEXT_NODE` du DOM */
+const TEXT_NODE = 3
+const BLOCKS = new Set([
+  "P",
+  "DIV",
+  "UL",
+  "OL",
+  "PRE",
+  "BLOCKQUOTE",
+  "TABLE",
+  "TR",
+  "DETAILS",
+  "SUMMARY",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "HR",
+])
 
 export type McpTool = "get_prs" | "get_pr"
 
@@ -58,27 +79,6 @@ export type HtmlNode = {
   childNodes: ArrayLike<HtmlNode>
   getAttribute?: (name: string) => string | null
 }
-
-const TEXT_NODE = 3
-const BLOCKS = new Set([
-  "P",
-  "DIV",
-  "UL",
-  "OL",
-  "PRE",
-  "BLOCKQUOTE",
-  "TABLE",
-  "TR",
-  "DETAILS",
-  "SUMMARY",
-  "H1",
-  "H2",
-  "H3",
-  "H4",
-  "H5",
-  "H6",
-  "HR",
-])
 
 const nodeText = (n: HtmlNode): string => {
   if (n.nodeType === TEXT_NODE) return n.textContent ?? ""
@@ -254,21 +254,48 @@ export const parseHistory = (raw: string | null): McpCall[] => {
 
 /* ---------- Installation ---------- */
 
-export type McpClient = "claude-code" | "claude-desktop" | "other"
+export type McpClient =
+  | "antigravity"
+  | "claude-code"
+  | "claude-desktop"
+  | "codex"
+  | "cursor"
+  | "devin"
+  | "gemini"
+  | "vscode"
+  | "windsurf"
+  | "zed"
+  | "other"
 
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 
+const json = (v: unknown) => JSON.stringify(v, null, 2)
+
 /** Ce que l'utilisateur colle pour brancher son agent, avec le chemin réel du binaire. */
 export const installSnippet = (client: McpClient, exe: string) => {
+  const server = { command: exe, args: ["--mcp"] }
   switch (client) {
     case "claude-code":
       return `claude mcp add --scope user pr-radar -- ${shellQuote(exe)} --mcp`
+    case "antigravity":
     case "claude-desktop":
-      return JSON.stringify(
-        { mcpServers: { "pr-radar": { command: exe, args: ["--mcp"] } } },
-        null,
-        2,
-      )
+    case "windsurf":
+      return json({ mcpServers: { "pr-radar": server } })
+    case "codex":
+      return `codex mcp add pr-radar -- ${shellQuote(exe)} --mcp`
+    case "devin":
+      return `devin mcp add -s user pr-radar -- ${shellQuote(exe)} --mcp`
+    case "cursor":
+      return json({ mcpServers: { "pr-radar": { type: "stdio", ...server } } })
+    case "gemini":
+      // `--` : sinon gemini lit `--mcp` comme une de ses options
+      return `gemini mcp add --scope user pr-radar ${shellQuote(exe)} -- --mcp`
+    case "vscode":
+      return `code --add-mcp ${shellQuote(
+        JSON.stringify({ name: "pr-radar", type: "stdio", ...server }),
+      )}`
+    case "zed":
+      return json({ context_servers: { "pr-radar": server } })
     case "other":
       return `${shellQuote(exe)} --mcp`
   }

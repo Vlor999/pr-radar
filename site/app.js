@@ -1,5 +1,6 @@
 (function () {
   var REPO = 'Vlor999/pr-radar';
+  var COPIED_MS = 1500;
   var ua = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.userAgent || '';
   var os = /mac/i.test(ua) ? 'mac-arm' : /win/i.test(ua) ? 'win' : /linux|x11|cros/i.test(ua) ? 'linux' : '';
   // Safari reports "Intel" on every Mac; a WebGL renderer naming an Intel GPU is the only cheap hint left.
@@ -53,7 +54,7 @@
     cap6: '<strong>À reviewer</strong>Les PR qui attendent votre review ont leur onglet et leur notification. Sur vos PR, ajoutez des reviewers depuis la carte.<span class="sr"> Animation : l\'onglet À reviewer liste deux PR de acme/api, un badge Nouveau apparaît sur la première, puis dave est ajouté comme reviewer de la PR #12, à côté de chloe qui l\'a approuvée.</span>',
     mcpq: '<b>vous</b> Lesquelles de mes PR puis-je merger ?',
     mcpa: '<b>Claude</b> acme/web#12 : approuvée, CI verte, déjà postée dans #reviews.',
-    cap7: '<strong>Serveur MCP local</strong>Claude Code ou Claude Desktop lit vos PR et leurs mentions Slack directement dans l\'app, sans aucune requête de plus. Sur activation, en lecture seule.<span class="sr"> Animation : une question à Claude, la réponse get_prs de PR Radar pour acme/web#12, puis la réponse de Claude.</span>',
+    cap7: '<strong>Serveur MCP local</strong>Claude Code, Claude Desktop, Codex, Cursor ou un autre client MCP lit vos PR et leurs mentions Slack directement dans l\'app, sans aucune requête de plus. Sur activation, en lecture seule.<span class="sr"> Animation : une question à Claude, la réponse get_prs de PR Radar pour acme/web#12, puis la réponse de Claude.</span>',
     webOn: 'Active · 127.0.0.1:14200', webSet: 'Réglages web',
     pr7: 'feat(sync): mode hors ligne', pr9: 'fix(sync): réessayer en cas de conflit', by7: 'bloquée par #7',
     cap8: '<strong>Dans votre navigateur</strong>Votre liste de PR et ses actions GitHub et Slack dans un onglet du navigateur, servis par l\'app sur votre machine. Fermez la fenêtre : l\'app continue dans la barre des menus ou la zone de notification, si votre système en affiche une, et envoie toujours les notifications.<span class="sr"> Animation : un clic sur le globe de l\'en-tête de PR Radar, une pastille verte et la bulle d\'état Active · 127.0.0.1:14200 apparaissent, puis un onglet du navigateur s\'ouvre sur 127.0.0.1:14200 avec l\'arbre des PR de globex/app.</span>',
@@ -88,16 +89,16 @@
     a7: 'Auto par défaut : l\'intervalle s\'adapte à votre quota GitHub restant (entre 1 et 15 minutes, en gardant 20 % du quota horaire en réserve). Ou un intervalle fixe de 1 à 30 minutes, ou en manuel. Les requêtes comptent dans votre quota d\'API GitHub habituel.',
     q8: 'Mon admin Slack doit-il approuver ?',
     a8: 'Oui si votre workspace l\'exige. Cliquez sur Connecter, Slack propose de demander l\'installation.',
-    q9: 'Comment brancher Claude Code ?',
-    a9: 'Cliquez sur l\'icône prise à côté de l\'engrenage et activez le serveur. La section Installation donne la commande avec le vrai chemin de l\'app, par exemple <code>claude mcp add --scope user pr-radar -- \'/Applications/PR Radar.app/Contents/MacOS/pr-radar\' --mcp</code>, ou le JSON pour Claude Desktop. PR Radar doit être lancé. macOS et Linux uniquement pour l\'instant.',
+    q9: 'Comment brancher mon agent IA (Claude Code, Codex, Cursor…) ?',
+    a9: 'Cliquez sur l\'icône prise à côté de l\'engrenage et activez le serveur. Dans la section Installation, choisissez votre client (Claude Code, Claude Desktop, Antigravity, Codex, Cursor, Devin Desktop, Gemini CLI, VS Code, Windsurf, Zed ou un autre) : elle donne la commande ou la config à coller, avec le vrai chemin de l\'app, par exemple <code>claude mcp add --scope user pr-radar -- \'/Applications/PR Radar.app/Contents/MacOS/pr-radar\' --mcp</code>. PR Radar doit être lancé. macOS et Linux uniquement pour l\'instant.',
     q10: 'Comment ouvrir PR Radar dans mon navigateur ?',
     a10: 'Cliquez sur le globe de l\'en-tête : il démarre le serveur local si besoin et ouvre la version web dans votre navigateur, par défaut sur <code>http://127.0.0.1:14200/</code> (port modifiable dans les Réglages web). Le chevron à côté affiche l\'état et mène aux Réglages web (port, démarrage et arrêt, déconnexion des navigateurs). Quand la version web tourne, l\'icône de la barre des menus ou de la zone de notification propose aussi « Ouvrir dans le navigateur ». PR Radar doit rester lancé : fermer la fenêtre le garde dans la barre des menus ou la zone de notification, si votre système en affiche une. Un favori ne marche que tant que l\'app et le serveur web tournent : redémarrer l\'app, arrêter le serveur, changer de port ou « Déconnecter les navigateurs » ferme la session ; rouvrez alors la version web depuis le globe. La connexion des comptes, la connexion Slack, les mises à jour et la désinstallation restent dans l\'app de bureau.',
     legal: 'Mentions légales',
     lg1: '<strong>Éditeur :</strong> Vlor999, particulier, à titre non professionnel. Contact : <a href="https://github.com/Vlor999/pr-radar/issues">issues GitHub</a>.',
     lg2: '<strong>Hébergeur :</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.',
     lg3: 'PR Radar est fourni tel quel, sans garantie (licence MIT). Non affilié à GitHub, Slack, Anthropic, Gitify ni PR Marmot.',
-    lg4: 'GitHub, Slack, Anthropic, Claude, Claude Code, Claude Desktop, Gitify, PR Marmot, Apple, Apple silicon, Mac, macOS, Intel, Windows, Linux, Debian, Ubuntu, Fedora et AppImage sont des marques ou des noms de leurs détenteurs respectifs.',
-    rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT', nav: 'Principal', lang: 'Langue',
+    lg4: 'GitHub, Slack, Anthropic, Claude, Claude Code, Claude Desktop, OpenAI, Codex, Cursor, Cognition, Devin, Google, Antigravity, Gemini, Microsoft, VS Code, Windsurf, Zed, Gitify, PR Marmot, Apple, Apple silicon, Mac, macOS, Intel, Windows, Linux, Debian, Ubuntu, Fedora et AppImage sont des marques ou des noms de leurs détenteurs respectifs.',
+    rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT', coffee: 'Offrir un café', nav: 'Principal', lang: 'Langue',
     ph: 'Votre réponse…'
   };
   var lang, EN = {};
@@ -180,7 +181,7 @@
     b.addEventListener('click', function () {
       if (navigator.clipboard) navigator.clipboard.writeText(c.textContent).then(function () {
         b.textContent = t('Copié', 'Copied');
-        setTimeout(function () { b.textContent = t('Copier', 'Copy'); }, 1500);
+        setTimeout(function () { b.textContent = t('Copier', 'Copy'); }, COPIED_MS);
       });
     });
     d.appendChild(c);

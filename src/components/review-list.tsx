@@ -5,6 +5,7 @@ import { Avatar } from "@/components/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { locale, strings, useStrings } from "@/lib/i18n"
+import { HOUR_MS } from "@/lib/quiet"
 import { filterReviews, groupByRepo, reviewKey, type Who } from "@/lib/review"
 import { updateSettings, useSettings } from "@/lib/settings"
 import type { ReviewPr } from "@/lib/types"
@@ -45,7 +46,7 @@ const S = strings(
 const WHO: Who[] = ["all", "me", "team"]
 
 function ago(iso: string, t: typeof S.fr) {
-  const h = Math.floor((Date.now() - Date.parse(iso)) / 3_600_000)
+  const h = Math.floor((Date.now() - Date.parse(iso)) / HOUR_MS)
   return h >= 48 ? t.agoD(Math.floor(h / 24)) : h ? t.agoH(h) : t.agoNow
 }
 

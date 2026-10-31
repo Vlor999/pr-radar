@@ -27,6 +27,20 @@ const S = strings(
   },
 )
 
+const ACCOUNTS = "pr-radar:accounts"
+// après une déconnexion, ne pas reprendre en silence le compte du CLI `gh`
+const SKIP_GH = "pr-radar:skip-gh"
+/** Source du compte unique d'avant le multi-compte : lue une fois, pour la migration. */
+const LEGACY_SOURCE = "pr-radar:auth-source"
+
+/** OAuth App « PR Radar » (device flow). L'identifiant est public, ce n'est pas un secret. */
+export const CLIENT_ID: string =
+  import.meta.env.VITE_GITHUB_CLIENT_ID || "Ov23liydg3pRjStpU4wN"
+// repo : lire les PR des repos privés et répondre aux discussions ; read:org : lister les repos des orgs
+const SCOPES = "repo read:org"
+/** device flow : `slow_down` sans `interval` → GitHub ajoute 5 s à l'intervalle de relève */
+const SLOW_DOWN_S = 5
+
 /**
  * Connexion GitHub sans serveur, un ou plusieurs comptes (github.com, GitHub Enterprise) : chaque
  * jeton vit dans le trousseau du système (commandes Rust get_token / set_token / delete_token, une
@@ -37,7 +51,6 @@ export type AuthState = {
   accounts: Account[]
 }
 
-const ACCOUNTS = "pr-radar:accounts"
 let accounts: Account[] = []
 /** comptes dont le jeton n'a pas pu être lu au démarrage : gardés dans la liste enregistrée */
 let kept: Account[] = []
@@ -68,8 +81,6 @@ export function useAuth(): AuthState {
   )
 }
 
-// après une déconnexion, ne pas reprendre en silence le compte du CLI `gh`
-const SKIP_GH = "pr-radar:skip-gh"
 const skipGh = (on: boolean) => saveItem(SKIP_GH, on ? "1" : null)
 const ghSkipped = () => {
   try {
@@ -78,9 +89,6 @@ const ghSkipped = () => {
     return false
   }
 }
-
-/** Source du compte unique d'avant le multi-compte : lue une fois, pour la migration. */
-const LEGACY_SOURCE = "pr-radar:auth-source"
 
 /** Jeton du CLI GitHub s'il est installé et connecté (commande Rust `gh_token`). */
 export const ghCliToken = () =>
@@ -186,12 +194,6 @@ export const forgetTokens = () =>
 
 /* ---------- Device flow (comme `gh auth login`) ---------- */
 
-/** OAuth App « PR Radar » (device flow). L'identifiant est public, ce n'est pas un secret. */
-export const CLIENT_ID: string =
-  import.meta.env.VITE_GITHUB_CLIENT_ID || "Ov23liydg3pRjStpU4wN"
-// repo : lire les PR des repos privés et répondre aux discussions ; read:org : lister les repos des orgs
-const SCOPES = "repo read:org"
-
 export type DeviceCode = {
   device_code: string
   user_code: string
@@ -239,7 +241,8 @@ export async function pollDeviceFlow(
       grant_type: "urn:ietf:params:oauth:grant-type:device_code",
     })
     if (res.access_token) return res.access_token
-    if (res.error === "slow_down") interval = res.interval ?? interval + 5
+    if (res.error === "slow_down")
+      interval = res.interval ?? interval + SLOW_DOWN_S
     else if (res.error === "access_denied") throw new Error(pick(S).denied)
     else if (res.error === "expired_token") break
     else if (res.error !== "authorization_pending")

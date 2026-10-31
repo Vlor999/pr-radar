@@ -31,6 +31,7 @@ import {
 import { ready, syncBranch } from "@/lib/actions"
 import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
 import { DONE_ICON, DONE_MS, pause, wait } from "@/lib/motion"
+import { HOUR_MS } from "@/lib/quiet"
 import { useSettings } from "@/lib/settings"
 import { useMentions } from "@/lib/slack"
 import { slackParts, spoofedHost } from "@/lib/slack-text"
@@ -156,6 +157,8 @@ const S = strings(
 
 /** rétractation du bouton, puis repli de la ligne (durée de CollapsibleContent, duration-200) */
 const EXIT_MS = 200
+/** durée des animations d'ouverture / fermeture de la colonne Slack (comme les panneaux repliables) */
+const SLACK_ANIM_MS = 200
 
 const STATUS: Record<string, "default" | "destructive" | "outline"> = {
   APPROVED: "default",
@@ -204,7 +207,7 @@ export const plural = (n: number, word: string) =>
   `${n} ${word}${n > 1 || (n === 0 && currentLang() === "en") ? "s" : ""}`
 
 function ago(iso: string, t: typeof S.fr) {
-  const h = Math.floor((Date.now() - Date.parse(iso)) / 3_600_000)
+  const h = Math.floor((Date.now() - Date.parse(iso)) / HOUR_MS)
   return h >= 48 ? t.agoD(Math.floor(h / 24)) : h ? t.agoH(h) : t.agoNow
 }
 
@@ -561,9 +564,6 @@ function PrActions({ pr }: { pr: PrNode }) {
 }
 
 /** Messages Slack qui citent la PR : une carte par message, en colonne à droite de la carte. */
-/** durée des animations d'ouverture / fermeture de la colonne (comme les panneaux repliables) */
-const SLACK_ANIM_MS = 200
-
 export function SlackColumn({
   url,
   open,

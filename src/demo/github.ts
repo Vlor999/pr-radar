@@ -8,6 +8,7 @@ import {
 } from "@/lib/accounts"
 import { allAccounts } from "@/lib/auth"
 import { rerunError } from "@/lib/checks"
+import { HOUR_MS } from "@/lib/quiet"
 import { trackQuota, type Quota } from "@/lib/quota"
 import type { Reviewer } from "@/lib/reviewers"
 import type {
@@ -21,6 +22,11 @@ import type {
   Thread,
 } from "@/lib/types"
 
+/** latence d'une mutation GitHub : laisse voir l'état « en cours » des boutons */
+const MUTATION_MS = 800
+/** latence de la première lecture des jobs d'une PR : laisse voir le chargement de la vue CI */
+const CHECKS_MS = 600
+
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
 export class AuthError extends Error {
@@ -32,7 +38,7 @@ export class AuthError extends Error {
   }
 }
 
-const ago = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
+const ago = (h: number) => new Date(Date.now() - h * HOUR_MS).toISOString()
 
 const REPOS = [
   "acme/web",
@@ -370,8 +376,6 @@ export const commentOnPr = async (prId: string, body: string, repo: string) => {
 }
 
 const findPr = (prId: string) => PRS.find((p) => p.id === prId)
-/** latence d'une mutation GitHub : laisse voir l'état « en cours » des boutons */
-const MUTATION_MS = 800
 const latency = () => new Promise((done) => setTimeout(done, MUTATION_MS))
 export const resolveThread = async (threadId: string, repo: string) => {
   await latency()
@@ -513,8 +517,6 @@ export const requestReviewer = async (
 
 /* ---------- Vue CI (ouverte depuis la pastille CI) ---------- */
 
-/** latence de la première lecture des jobs d'une PR : laisse voir le chargement de la vue CI */
-const CHECKS_MS = 600
 const minsAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
 /** job lancé il y a `startMin` minutes, durée `s` secondes ; `s` null : encore en cours */
 const job = (

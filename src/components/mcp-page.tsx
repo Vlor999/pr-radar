@@ -2,8 +2,15 @@ import { cn } from "cn"
 import { ArrowLeft, Check, ChevronRight, Copy, Trash2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
-import { Row, Section, Segmented, Toggle } from "@/components/settings-ui"
+import { Row, Section, Toggle } from "@/components/settings-ui"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { locale, strings, useStrings } from "@/lib/i18n"
 import {
   clearMcpHistory,
@@ -16,6 +23,34 @@ import type { McpCall } from "@/lib/types"
 
 /** durée de la coche « Copié » */
 const COPIED_MS = 1_500
+
+/** ordre du sélecteur : Claude d'abord, « Autre » en dernier */
+const CLIENTS: McpClient[] = [
+  "claude-code",
+  "claude-desktop",
+  "antigravity",
+  "codex",
+  "cursor",
+  "devin",
+  "gemini",
+  "vscode",
+  "windsurf",
+  "zed",
+  "other",
+]
+
+const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
+  antigravity: "Antigravity",
+  "claude-code": "Claude Code",
+  "claude-desktop": "Claude Desktop",
+  codex: "Codex",
+  cursor: "Cursor",
+  devin: "Devin Desktop",
+  gemini: "Gemini CLI",
+  vscode: "VS Code (Copilot)",
+  windsurf: "Windsurf",
+  zed: "Zed",
+}
 
 const S = strings(
   {
@@ -44,6 +79,21 @@ const S = strings(
         "claude-code": "Dans un terminal, une seule fois :",
         "claude-desktop":
           "Dans claude_desktop_config.json (Réglages › Développeur › Modifier la config), puis redémarre Claude Desktop :",
+        antigravity:
+          "Dans ~/.gemini/config/mcp_config.json (IDE, app et CLI agy). Puis Refresh dans Réglages › Customizations › Installed MCP Servers, ou /mcp dans la CLI :",
+        codex:
+          "Dans un terminal, une seule fois (écrit dans ~/.codex/config.toml, partagé avec l'app et l'extension IDE). Relance Codex :",
+        cursor:
+          "Dans ~/.cursor/mcp.json (fusionne avec les serveurs existants). Vérifie dans Customize › MCP :",
+        devin:
+          "Dans un terminal (CLI devin), une seule fois : écrit dans ~/.config/devin/mcp_config.json, la config de toutes tes sessions. Vérifie dans Customize › MCPs › This computer :",
+        gemini:
+          "Dans un terminal, une seule fois (écrit dans ~/.gemini/settings.json). Relance Gemini CLI :",
+        vscode:
+          "Dans un terminal (commande code dans le PATH), une seule fois. Ou colle le serveur dans « MCP: Open User Configuration », sous servers :",
+        windsurf:
+          "Dans ~/.codeium/windsurf/mcp_config.json (icône MCP › Configure › View raw config), puis Refresh dans Cascade :",
+        zed: "Dans settings.json (zed: open settings file), puis vérifie dans Settings › AI › MCP Servers :",
         other: "Commande stdio à déclarer dans ton client MCP :",
       } satisfies Record<McpClient, string>,
       copy: "Copier",
@@ -98,6 +148,21 @@ const S = strings(
         "claude-code": "In a terminal, once:",
         "claude-desktop":
           "In claude_desktop_config.json (Settings › Developer › Edit Config), then restart Claude Desktop:",
+        antigravity:
+          "In ~/.gemini/config/mcp_config.json (IDE, app and agy CLI). Then Refresh in Settings › Customizations › Installed MCP Servers, or /mcp in the CLI:",
+        codex:
+          "In a terminal, once (writes ~/.codex/config.toml, shared with the app and the IDE extension). Restart Codex:",
+        cursor:
+          "In ~/.cursor/mcp.json (merge with existing servers). Check in Customize › MCP:",
+        devin:
+          "In a terminal (devin CLI), once: writes ~/.config/devin/mcp_config.json, the config for all your sessions. Check in Customize › MCPs › This computer:",
+        gemini:
+          "In a terminal, once (writes ~/.gemini/settings.json). Restart Gemini CLI:",
+        vscode:
+          "In a terminal (code command on PATH), once. Or paste the server into “MCP: Open User Configuration”, under servers:",
+        windsurf:
+          "In ~/.codeium/windsurf/mcp_config.json (MCP icon › Configure › View raw config), then Refresh in Cascade:",
+        zed: "In settings.json (zed: open settings file), then check in Settings › AI › MCP Servers:",
         other: "Stdio command to declare in your MCP client:",
       },
       copy: "Copy",
@@ -197,6 +262,10 @@ function InstallSection() {
   useEffect(() => () => clearTimeout(timer.current), [])
   if (!info) return null
   const snippet = installSnippet(client, info.exe)
+  const items = CLIENTS.map((c) => ({
+    value: c,
+    label: c === "other" ? t.other : CLIENT_LABEL[c],
+  }))
   const copy = () =>
     navigator.clipboard.writeText(snippet).then(
       () => {
@@ -209,16 +278,36 @@ function InstallSection() {
   return (
     <Section id="mcp-install" title={t.title} description={t.description}>
       <Row labelId="mcp-client" label={t.client}>
-        <Segmented
+        <Select
+          items={items}
           value={client}
-          onChange={setClient}
-          labelledBy="mcp-client"
-          options={[
-            { value: "claude-code", label: "Claude Code" },
-            { value: "claude-desktop", label: "Claude Desktop" },
-            { value: "other", label: t.other },
-          ]}
-        />
+          onValueChange={(v) => v && setClient(v)}
+        >
+          {/* largeur fixe, popup de la même largeur : bords alignés, rien ne déborde de la carte */}
+          <SelectTrigger
+            size="sm"
+            aria-labelledby="mcp-client"
+            className="w-44 rounded-lg border-border bg-background pr-2 pl-2.5"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          {/* sous le déclencheur : sinon base-ui le pose dessus */}
+          <SelectContent
+            alignItemWithTrigger={false}
+            align="start"
+            className="w-(--anchor-width) min-w-(--anchor-width) rounded-xl p-1"
+          >
+            {items.map((i) => (
+              <SelectItem
+                key={i.value}
+                value={i.value}
+                className="rounded-lg py-1.5 pl-2.5 focus:bg-muted data-highlighted:bg-muted"
+              >
+                {i.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </Row>
       <div className="border-t py-3">
         <p className="text-xs text-muted-foreground">{t.hint[client]}</p>
