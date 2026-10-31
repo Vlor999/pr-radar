@@ -1,11 +1,9 @@
-/** poids d'un mot trouvé dans la description ou les mots-clés, par rapport au libellé */
-const REST_WEIGHT = 0.4
-/** qualité d'un mot trouvé : mot entier > début de mot > ailleurs dans le texte > faute de frappe */
-const QUALITY = { word: 1, prefix: 0.9, inside: 0.8, typo1: 0.6, typo2: 0.45 }
-/** mots de la requête plus courts : pas de tolérance aux fautes (trop de faux positifs) */
-const FUZZY_MIN_LENGTH = 4
-/** à partir de cette longueur, deux fautes tolérées au lieu d'une */
-const TWO_TYPOS_LENGTH = 8
+import {
+  SEARCH_FUZZY_MIN_LENGTH,
+  SEARCH_QUALITY,
+  SEARCH_REST_WEIGHT,
+  SEARCH_TWO_TYPOS_LENGTH,
+} from "./constants.ts" // extension : chargé aussi par node --test
 
 /** Réglage indexé pour la recherche des réglages, dans la langue de l'interface. */
 export type SettingEntry<C extends string = string> = {
@@ -54,7 +52,11 @@ export function editDistance(a: string, b: string): number {
 
 /** Fautes tolérées pour un mot de la requête : 0 sous 4 lettres, 1 jusqu'à 7, 2 au-delà. */
 const maxTypos = (q: string) =>
-  q.length < FUZZY_MIN_LENGTH ? 0 : q.length < TWO_TYPOS_LENGTH ? 1 : 2
+  q.length < SEARCH_FUZZY_MIN_LENGTH
+    ? 0
+    : q.length < SEARCH_TWO_TYPOS_LENGTH
+      ? 1
+      : 2
 
 /** Plus petite distance entre `q` et un mot du texte ou un début de ce mot (« notifcation » → « notifications »). */
 const typos = (q: string, words: string[], max: number) => {
@@ -76,14 +78,17 @@ const field = (s: string): Field => {
 
 /** Qualité du meilleur appariement de `q` dans le champ, 0 si absent ; `typo` : seulement avec une faute. */
 const quality = (q: string, f: Field): { q: number; typo: boolean } => {
-  if (f.words.includes(q)) return { q: QUALITY.word, typo: false }
+  if (f.words.includes(q)) return { q: SEARCH_QUALITY.word, typo: false }
   if (f.words.some((w) => w.startsWith(q)))
-    return { q: QUALITY.prefix, typo: false }
-  if (f.text.includes(q)) return { q: QUALITY.inside, typo: false }
+    return { q: SEARCH_QUALITY.prefix, typo: false }
+  if (f.text.includes(q)) return { q: SEARCH_QUALITY.inside, typo: false }
   const max = maxTypos(q)
   const d = max ? typos(q, f.words, max) : Infinity
   if (d > max) return { q: 0, typo: false }
-  return { q: d === 1 ? QUALITY.typo1 : QUALITY.typo2, typo: true }
+  return {
+    q: d === 1 ? SEARCH_QUALITY.typo1 : SEARCH_QUALITY.typo2,
+    typo: true,
+  }
 }
 
 /**
@@ -101,12 +106,12 @@ const score = (entry: SettingEntry, words: string[]) => {
     const l = quality(w, label)
     const r = quality(w, rest)
     if (!l.q && !r.q) return null
-    if (l.q >= r.q * REST_WEIGHT) {
+    if (l.q >= r.q * SEARCH_REST_WEIGHT) {
       labelHit = true
       sum += l.q
     } else {
       if (!r.typo) exactRest = true
-      sum += r.q * REST_WEIGHT
+      sum += r.q * SEARCH_REST_WEIGHT
     }
   }
   return { tier: labelHit ? 2 : exactRest ? 1 : 0, value: sum / words.length }

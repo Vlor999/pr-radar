@@ -64,7 +64,7 @@ import { WEB_STRINGS, WebCategory } from "@/components/web-page"
 import { GITHUB, type Account } from "@/lib/accounts"
 import { accountAdded, refreshPrs, signOut } from "@/lib/actions"
 import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
-import { BUY_ME_A_COFFEE_URL } from "@/lib/constants"
+import { BUY_ME_A_COFFEE_URL, SETTING_HIGHLIGHT_MS } from "@/lib/constants"
 import {
   clearCache,
   reposWithMyOpenPrs,
@@ -134,9 +134,6 @@ const DESKTOP_ONLY: readonly string[] = [
   "focus",
   "uninstall",
 ]
-
-/** durée du surlignage d'un réglage ouvert depuis la recherche */
-const HIGHLIGHT_MS = 1_600
 
 const S = strings(
   {
@@ -2473,11 +2470,14 @@ export function SettingsPage({
     // sans l'anneau focus-visible qu'un focus programmé sur le bouton affiche après Entrée
     el.tabIndex = -1
     el.focus({ preventScroll: true })
-    // résultat précédent encore surligné (deux résultats à moins de HIGHLIGHT_MS) : éteint d'abord
+    // résultat précédent encore surligné (deux résultats à moins de SETTING_HIGHLIGHT_MS) : éteint d'abord
     clearHighlight()
     el.dataset.highlight = ""
     highlighted.current = el
-    highlightTimer.current = window.setTimeout(clearHighlight, HIGHLIGHT_MS)
+    highlightTimer.current = window.setTimeout(
+      clearHighlight,
+      SETTING_HIGHLIGHT_MS,
+    )
   })
 
   useEffect(() => {
