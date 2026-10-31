@@ -1901,7 +1901,11 @@ function AboutSection() {
           </Button>
         )}
       </Row>
-      <Row label={t.about.support} description={t.about.supportDescription}>
+      <Row
+        id="support"
+        label={t.about.support}
+        description={t.about.supportDescription}
+      >
         <Button
           variant="outline"
           size="sm"
@@ -1998,6 +2002,16 @@ function settingsIndex(
         t.about.report,
         t.about.privacy,
         t.about.licenses,
+      ),
+    },
+    {
+      id: "support",
+      category: "general",
+      label: t.about.support,
+      description: t.about.supportDescription,
+      keywords: words(
+        t.about.coffee,
+        "buy me a coffee café coffee soutenir support don donate sponsor",
       ),
     },
     {
