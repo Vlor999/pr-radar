@@ -10,6 +10,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Coffee,
   ExternalLink,
   Loader2,
   LogOut,
@@ -46,6 +47,7 @@ import {
 import { GITHUB, type Account } from "@/lib/accounts"
 import { accountAdded, refreshPrs, signOut } from "@/lib/actions"
 import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
+import { BUY_ME_A_COFFEE_URL } from "@/lib/constants"
 import {
   clearCache,
   reposWithMyOpenPrs,
@@ -298,6 +300,10 @@ const S = strings(
       restarting: "Redémarrage…",
       install: "Installer et redémarrer",
       check: "Rechercher une mise à jour",
+      support: "Soutenir PR Radar",
+      supportDescription:
+        "Gratuit et sans publicité. Un café aide à le faire vivre.",
+      coffee: "Offrir un café",
       links: "Liens",
       source: "Code source",
       download: "Page de téléchargement",
@@ -514,6 +520,9 @@ const S = strings(
       restarting: "Restarting…",
       install: "Install and restart",
       check: "Check for updates",
+      support: "Support PR Radar",
+      supportDescription: "Free and ad-free. A coffee helps keep it going.",
+      coffee: "Buy me a coffee",
       links: "Links",
       source: "Source code",
       download: "Download page",
@@ -1716,6 +1725,16 @@ function AboutSection() {
             {t.about.check}
           </Button>
         )}
+      </Row>
+      <Row label={t.about.support} description={t.about.supportDescription}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => openExternal(BUY_ME_A_COFFEE_URL)}
+        >
+          <Coffee data-icon="inline-start" />
+          {t.about.coffee}
+        </Button>
       </Row>
       {/* label above: the five links do not fit on one line next to it in French */}
       <div className="border-t py-3">
