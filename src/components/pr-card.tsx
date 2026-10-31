@@ -156,6 +156,8 @@ const S = strings(
 
 /** rétractation du bouton, puis repli de la ligne (durée de CollapsibleContent, duration-200) */
 const EXIT_MS = 200
+/** durée des animations d'ouverture / fermeture de la colonne Slack (comme les panneaux repliables) */
+const SLACK_ANIM_MS = 200
 
 const STATUS: Record<string, "default" | "destructive" | "outline"> = {
   APPROVED: "default",
@@ -561,9 +563,6 @@ function PrActions({ pr }: { pr: PrNode }) {
 }
 
 /** Messages Slack qui citent la PR : une carte par message, en colonne à droite de la carte. */
-/** durée des animations d'ouverture / fermeture de la colonne (comme les panneaux repliables) */
-const SLACK_ANIM_MS = 200
-
 export function SlackColumn({
   url,
   open,

@@ -8,7 +8,7 @@ import { Shortcut } from "@/components/shortcut"
 import { comment, reply, resolve } from "@/lib/actions"
 import { strings, useStrings } from "@/lib/i18n"
 import { isExternalHref } from "@/lib/links"
-import { DONE_ICON, pause, wait } from "@/lib/motion"
+import { DONE_ICON, DONE_MS, pause, wait } from "@/lib/motion"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
@@ -26,8 +26,6 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 
 /** initiales affichées dans l'en-tête d'une discussion, au-delà : un « +N » */
 const MAX_INITIALS = 3
-/** coche « Résolu » affichée avant que le fil se replie */
-const DONE_MS = 700
 /** repli du fil résolu : durée de CollapsibleContent (duration-200) */
 const EXIT_MS = 200
 

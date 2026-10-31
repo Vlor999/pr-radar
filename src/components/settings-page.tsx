@@ -24,7 +24,7 @@ import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Shortcut } from "@/components/shortcut"
+import { IS_MAC, Shortcut } from "@/components/shortcut"
 import { SHORTCUTS } from "@/hooks/use-keyboard-nav"
 import {
   testNotification,
@@ -537,6 +537,24 @@ const S = strings(
 const CHECK_MS = 1_500
 const DOWNLOAD_URL = "https://vlor999.github.io/pr-radar/"
 const REPO_URL = "https://github.com/Vlor999/pr-radar"
+
+const NOTIFY = [
+  "approved",
+  "changesRequested",
+  "comments",
+  "ciFailed",
+  "reviewRequested",
+] as const
+
+/** fuseaux IANA connus du moteur JS (choix du fuseau de la plage quotidienne) */
+const TIME_ZONES = Intl.supportedValuesOf("timeZone")
+
+// sur ordinateur, c'est le système qui autorise ou bloque : on renvoie vers ses réglages
+const SYSTEM_NOTIFICATION_SETTINGS = IS_MAC
+  ? "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+  : navigator.userAgent.includes("Windows")
+    ? "ms-settings:notifications"
+    : null
 
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLElement &&
@@ -1063,25 +1081,6 @@ function RefreshSection() {
     </Section>
   )
 }
-
-const NOTIFY = [
-  "approved",
-  "changesRequested",
-  "comments",
-  "ciFailed",
-  "reviewRequested",
-] as const
-
-const IS_MAC = navigator.userAgent.includes("Mac")
-/** fuseaux IANA connus du moteur JS (choix du fuseau de la plage quotidienne) */
-const TIME_ZONES = Intl.supportedValuesOf("timeZone")
-
-// sur ordinateur, c'est le système qui autorise ou bloque : on renvoie vers ses réglages
-const SYSTEM_NOTIFICATION_SETTINGS = IS_MAC
-  ? "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
-  : navigator.userAgent.includes("Windows")
-    ? "ms-settings:notifications"
-    : null
 
 /** Lancement à l'ouverture de session : l'état est celui du système, relu en revenant sur la fenêtre. */
 function LaunchAtLoginRow() {
