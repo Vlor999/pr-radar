@@ -6,6 +6,11 @@ import { strings, useStrings } from "@/lib/i18n"
 
 const S = strings({ done: "Fait" }, { done: "Done" })
 
+/** durée du libellé « Fait » après une action */
+const FLASH_MS = 2_000
+/** fenêtre du second clic d'une confirmation */
+const CONFIRM_MS = 4_000
+
 // Briques des pages plein écran (réglages, serveur MCP, version web) : section, ligne, interrupteur,
 // choix segmenté, confirmation, retour « Fait ».
 
@@ -150,7 +155,7 @@ export function useFlash(): [string | null, (msg?: string) => void] {
     (m = t.done) => {
       setMsg(m)
       clearTimeout(timer.current)
-      timer.current = window.setTimeout(() => setMsg(null), 2000)
+      timer.current = window.setTimeout(() => setMsg(null), FLASH_MS)
     },
   ]
 }
@@ -169,7 +174,7 @@ export function useConfirm(): [boolean, (action: () => void) => void] {
         action()
       } else {
         setArmed(true)
-        timer.current = window.setTimeout(() => setArmed(false), 4000)
+        timer.current = window.setTimeout(() => setArmed(false), CONFIRM_MS)
       }
     },
   ]

@@ -12,6 +12,27 @@ import type {
 
 /** historique local des appels MCP : les plus récents seulement */
 export const MCP_HISTORY_MAX = 50
+/** `Node.TEXT_NODE` du DOM */
+const TEXT_NODE = 3
+const BLOCKS = new Set([
+  "P",
+  "DIV",
+  "UL",
+  "OL",
+  "PRE",
+  "BLOCKQUOTE",
+  "TABLE",
+  "TR",
+  "DETAILS",
+  "SUMMARY",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "HR",
+])
 
 export type McpTool = "get_prs" | "get_pr"
 
@@ -58,27 +79,6 @@ export type HtmlNode = {
   childNodes: ArrayLike<HtmlNode>
   getAttribute?: (name: string) => string | null
 }
-
-const TEXT_NODE = 3
-const BLOCKS = new Set([
-  "P",
-  "DIV",
-  "UL",
-  "OL",
-  "PRE",
-  "BLOCKQUOTE",
-  "TABLE",
-  "TR",
-  "DETAILS",
-  "SUMMARY",
-  "H1",
-  "H2",
-  "H3",
-  "H4",
-  "H5",
-  "H6",
-  "HR",
-])
 
 const nodeText = (n: HtmlNode): string => {
   if (n.nodeType === TEXT_NODE) return n.textContent ?? ""
