@@ -64,7 +64,7 @@ For Claude Desktop, add this to `claude_desktop_config.json` (Settings › Devel
 { "mcpServers": { "pr-radar": { "command": "/Applications/PR Radar.app/Contents/MacOS/pr-radar", "args": ["--mcp"] } } }
 ```
 
-Any other MCP client: declare `<path to pr-radar> --mcp` as a stdio command. Tools are read-only: `get_prs` (open PRs with CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions; yours plus other people's PRs where you are assigned, mentioned or involved, with an `involved` field; and the "To review" tab) and `get_pr` (unresolved review threads and conversation of one PR of the tree). The last 50 calls are listed in the app, without the content of the replies.
+For the other clients, copy the command or config shown in the app's Setup section. Any other MCP client: declare `<path to pr-radar> --mcp` as a stdio command. Tools are read-only: `get_prs` (open PRs with CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions; yours plus other people's PRs where you are assigned, mentioned or involved, with an `involved` field; and the "To review" tab) and `get_pr` (unresolved review threads and conversation of one PR of the tree). The last 50 calls are listed in the app, without the content of the replies.
 
 ## Privacy
 
