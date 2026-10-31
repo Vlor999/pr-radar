@@ -7,6 +7,13 @@ import type { Pr, SlackConversation, SlackMention } from "@/lib/types"
 type Team = { id: string; name: string }
 export type SlackState = { team: Team | null; expired: boolean }
 
+/** latence simulée de la connexion OAuth */
+const CONNECT_MS = 800
+/** une PR toutes les 3 s, comme THROTTLE_MS de src/lib/slack.ts */
+const THROTTLE_MS = 3_000
+/** prochaine relecture des mentions, comme CACHE_TTL_MS de src/lib/slack.ts */
+const CACHE_TTL_MS = 10 * 60_000
+
 const ACME: Team = { id: "T0ACME", name: "acme" }
 let state: SlackState = { team: ACME, expired: false }
 const listeners = new Set<() => void>()
@@ -22,7 +29,7 @@ const set = (next: SlackState) => {
 export const useSlack = () => useSyncExternalStore(subscribe, () => state)
 
 export async function connectSlack() {
-  await new Promise((r) => setTimeout(r, 800))
+  await new Promise((r) => setTimeout(r, CONNECT_MS))
   set({ team: ACME, expired: false })
 }
 
@@ -162,12 +169,12 @@ export function forceRefreshMentions() {
       done,
       total: KNOWN,
       ...(!running && {
-        nextAt: Date.now() + 10 * 60_000,
+        nextAt: Date.now() + CACHE_TTL_MS,
         completedAt: Date.now(),
       }),
     }
     listeners.forEach((l) => l())
-    if (running) setTimeout(() => tick(done + 1), 3000)
+    if (running) setTimeout(() => tick(done + 1), THROTTLE_MS)
   }
   if (!progress.running) tick(0)
 }
