@@ -4,7 +4,7 @@
 
 <p align="center">Your open GitHub pull requests, as a tree: stacks, reviews, threads and merges, in a lightweight desktop app for macOS, Windows and Linux.</p>
 
-<p align="center"><a href="https://vlor999.github.io/pr-radar/">Website</a> · <a href="https://github.com/Vlor999/pr-radar/releases/latest">Download</a> · <code>brew install --cask vlor999/tap/pr-radar</code></p>
+<p align="center"><a href="https://vlor999.github.io/pr-radar/">Website</a> · <a href="https://github.com/Vlor999/pr-radar/releases/latest">Download</a> · <a href="https://buymeacoffee.com/Vlor999">Buy me a coffee</a> · <code>brew install --cask vlor999/tap/pr-radar</code></p>
 
 ## Features
 
