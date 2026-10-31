@@ -1,5 +1,6 @@
 (function () {
   var REPO = 'Vlor999/pr-radar';
+  var COPIED_MS = 1500;
   var ua = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.userAgent || '';
   var os = /mac/i.test(ua) ? 'mac-arm' : /win/i.test(ua) ? 'win' : /linux|x11|cros/i.test(ua) ? 'linux' : '';
   // Safari reports "Intel" on every Mac; a WebGL renderer naming an Intel GPU is the only cheap hint left.
@@ -180,7 +181,7 @@
     b.addEventListener('click', function () {
       if (navigator.clipboard) navigator.clipboard.writeText(c.textContent).then(function () {
         b.textContent = t('Copié', 'Copied');
-        setTimeout(function () { b.textContent = t('Copier', 'Copy'); }, 1500);
+        setTimeout(function () { b.textContent = t('Copier', 'Copy'); }, COPIED_MS);
       });
     });
     d.appendChild(c);
