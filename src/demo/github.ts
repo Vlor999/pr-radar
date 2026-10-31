@@ -1,4 +1,4 @@
-// Démo navigateur : même API que src/lib/github.ts, données fictives (org « acme »).
+// Démo navigateur : même API que src/lib/github.ts, données fictives (orgs « acme », « globex »).
 // Un compte GitHub Enterprise ajouté dans les réglages (hôte au choix, jeton quelconque) voit `globex/ledger`.
 import {
   DEFAULT_ID,
@@ -198,6 +198,52 @@ const PRS: Pr[] = [
     deletions: 12,
     files: 14,
   }),
+  // PR des autres qui me concernent (motif en pastille), dans l'arbre avec les miennes
+  pr({
+    repo: "acme/web",
+    number: 420,
+    title: "Checkout : traductions du formulaire",
+    head: "feat/checkout-i18n",
+    base: "feat/checkout", // stackée sur ma #412
+    involved: { reason: "assigned", author: "alice" },
+    decision: "APPROVED", // approuvée, mais pas « prête à merger » : ce n'est pas la mienne
+    reviews: [{ who: "bob", state: "APPROVED" }],
+    requested: [],
+    updated: ago(6),
+  }),
+  pr({
+    repo: "acme/web",
+    number: 423,
+    title: "Cache des images produit",
+    head: "perf/image-cache",
+    // aussi dans « À reviewer » (re-request) : j'ai déjà reviewé, donc impliqué
+    involved: { reason: "involved", author: "bob" },
+    reviews: [{ who: "me", state: "COMMENTED" }],
+    requested: [{ who: "me" }],
+    updated: ago(3),
+  }),
+  pr({
+    repo: "acme/api",
+    number: 93,
+    title: "Logs structurés des workers",
+    involved: { reason: "mentioned", author: "carol" },
+    comments: 4,
+    requested: [{ who: "dave" }],
+    updated: ago(10),
+  }),
+  pr({
+    repo: "globex/billing",
+    number: 9,
+    title: "Arrondi des montants en JPY",
+    head: "main", // branche main d'un fork : ne devient pas la base de mes PR
+    fork: true,
+    involved: { reason: "involved", author: "erin" },
+    ci: "FAILURE",
+    decision: "CHANGES_REQUESTED",
+    reviews: [{ who: "me", state: "CHANGES_REQUESTED" }],
+    requested: [],
+    updated: ago(28),
+  }),
   // repo public hors de listRepos() : non suivi dans la démo (voir la graine plus bas),
   // visible dans le panneau avec le point vert
   pr({
@@ -294,7 +340,10 @@ export const fetchPrs = async (repos: string[]) => {
   }
 }
 export const reposWithMyOpenPrs = async () => [
-  ...new Set([...PRS.map((p) => p.repo), ...otherRepos()]),
+  ...new Set([
+    ...PRS.filter((p) => !p.involved).map((p) => p.repo),
+    ...otherRepos(),
+  ]),
 ]
 export const fetchMerged = async (repos: string[], from: string, to: string) =>
   MERGED.filter(

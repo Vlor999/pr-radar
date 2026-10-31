@@ -40,6 +40,16 @@ test("réglage brouillons décoché : une demande de review sur un brouillon n'e
   )
 })
 
+test("PR d'un autre : approbation, changements demandés et CI rouge ne sont pas notifiés", () => {
+  const theirs = {
+    ...pr(false),
+    involved: { reason: "assigned" as const, author: "bob" },
+  }
+  for (const kind of ["approved", "changesRequested", "ciFailed"] as const)
+    assert.equal(shouldNotify(DEFAULT_SETTINGS, theirs, kind), false)
+  assert.equal(shouldNotify(DEFAULT_SETTINGS, theirs, "comments"), true)
+})
+
 test("fréquence enregistrée : auto et minutes entières >= 0 gardées", () => {
   assert.equal(refreshMinutesOf("auto"), "auto")
   assert.equal(refreshMinutesOf(0), 0)

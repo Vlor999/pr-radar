@@ -1,4 +1,5 @@
 import {
+  AtSign,
   ChevronRight,
   CircleCheck,
   Clock,
@@ -9,7 +10,9 @@ import {
   Layers,
   Loader2,
   MessageSquare,
+  MessagesSquare,
   RefreshCw,
+  UserCheck,
 } from "lucide-react"
 import { cn } from "cn"
 import { useEffect, useState, useTransition } from "react"
@@ -38,7 +41,7 @@ import {
   nativeStack,
   needsAttention,
 } from "@/lib/tree"
-import type { PrNode } from "@/lib/types"
+import type { PrNode, Reason } from "@/lib/types"
 
 const S = strings(
   {
@@ -84,6 +87,16 @@ const S = strings(
     updateBranchTitle: (base: string) => `Merge ${base} dans la branche`,
     showCi: "Afficher les jobs de la CI",
     hideCi: "Masquer les jobs de la CI",
+    reason: {
+      assigned: "Assignée",
+      mentioned: "Mentionné",
+      involved: "Impliqué",
+    } as Record<Reason, string>,
+    reasonTitle: {
+      assigned: (who: string) => `PR de ${who}, assignée à toi`,
+      mentioned: (who: string) => `PR de ${who}, où tu es mentionné`,
+      involved: (who: string) => `PR de ${who}, où tu as commenté ou reviewé`,
+    } as Record<Reason, (who: string) => string>,
   },
   {
     status: {
@@ -127,6 +140,17 @@ const S = strings(
     updateBranchTitle: (base: string) => `Merge ${base} into the branch`,
     showCi: "Show CI jobs",
     hideCi: "Hide CI jobs",
+    reason: {
+      assigned: "Assigned",
+      mentioned: "Mentioned",
+      involved: "Involved",
+    },
+    reasonTitle: {
+      assigned: (who: string) => `PR by ${who}, assigned to you`,
+      mentioned: (who: string) => `PR by ${who}, where you are mentioned`,
+      involved: (who: string) =>
+        `PR by ${who}, where you commented or reviewed`,
+    },
   },
 )
 
@@ -139,6 +163,12 @@ const STATUS: Record<string, "default" | "destructive" | "outline"> = {
   REVIEW_REQUIRED: "outline",
   NONE: "outline",
 }
+const REASON_ICON: Record<Reason, typeof AtSign> = {
+  assigned: UserCheck,
+  mentioned: AtSign,
+  involved: MessagesSquare,
+}
+
 const CI: Record<string, { label: string; bad?: boolean }> = {
   SUCCESS: { label: "CI ✓" },
   FAILURE: { label: "CI ✗", bad: true },
@@ -260,6 +290,7 @@ export function PrCard({
             if (!(e.target as Element).closest("button")) onOpenChange(!open)
           }}
         >
+          {pr.involved && <ReasonBadge {...pr.involved} />}
           {merge?.kind === "ready" && (
             <Badge>
               <GitMerge />
@@ -382,7 +413,9 @@ export function PrCard({
                 {pr.reviews.length + pr.requested.length === 0 && t.noReviewer}
               </li>
             </ul>
-            {(pr.draft || pr.canUpdateBranch) && <PrActions pr={pr} />}
+            {((pr.draft && !pr.involved) || pr.canUpdateBranch) && (
+              <PrActions pr={pr} />
+            )}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <MessageSquare className="size-3.5" />
@@ -411,6 +444,18 @@ export function PrCard({
   )
 }
 
+/** Pourquoi la PR d'un autre est là ; l'auteur au survol. */
+function ReasonBadge({ reason, author }: NonNullable<PrNode["involved"]>) {
+  const t = useStrings(S)
+  const Icon = REASON_ICON[reason]
+  return (
+    <Badge variant="outline" title={t.reasonTitle[reason](author)}>
+      <Icon />
+      {t.reason[reason]}
+    </Badge>
+  )
+}
+
 type PrAction = "ready" | "update"
 
 /** Actions d'écriture sur la PR : sortir du draft, mettre la branche à jour ; erreur de GitHub affichée dessous.
@@ -423,7 +468,7 @@ function PrActions({ pr }: { pr: PrNode }) {
   const [done, setDone] = useState<PrAction>()
   const [gone, setGone] = useState<PrAction[]>([])
   const shown = [
-    pr.draft && ("ready" as const),
+    pr.draft && !pr.involved && ("ready" as const), // sortir du draft : décision de l'auteur
     pr.canUpdateBranch && ("update" as const),
   ].filter((a): a is PrAction => !!a)
   const open = shown.some((a) => !gone.includes(a))

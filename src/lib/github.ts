@@ -28,6 +28,7 @@ import {
   type RepoNode,
 } from "./graphql"
 import { pick, strings } from "./i18n"
+import { mentionedIds, reasonOf, uniqueById } from "./involved"
 import {
   toConversation,
   withStackFallback,
@@ -46,6 +47,9 @@ const ASSIGNABLE_PAGE = 20 // assez pour un popover ; la recherche affine au-del
 // la recherche GitHub renvoie parfois 0 résultat sans erreur (~1 appel sur 3) : un vide est relu avant d'être cru.
 // Reste ~1/27 par recherche (un lot de 5 repos), absorbé par `keepVanished` dans store.reload.
 const EMPTY_SEARCH_RETRIES = 2
+// recherche des mentions : un vide est courant (PR seulement commentée) ; une relance limite le motif
+// « Impliqué » affiché à tort à la place de « Mentionné » (cosmétique, corrigé au chargement suivant)
+const MENTION_SEARCH_RETRIES = 1
 
 const S = strings(
   {
@@ -135,6 +139,9 @@ type RawPr = RawConversation & {
   deletions: number
   changedFiles: number
   repository: { nameWithOwner: string }
+  isCrossRepository: boolean
+  author: { login: string } | null
+  assignees: { nodes: { login: string }[] }
   comments: { nodes: Login[] }
   reviewThreads: {
     nodes: {
@@ -225,7 +232,13 @@ function me(a: Account): Promise<string> {
   return v
 }
 
-function toPr(p: RawPr, login: string, account: string): Pr {
+function toPr(
+  p: RawPr,
+  login: string,
+  account: string,
+  mentioned: Set<string>,
+): Pr {
+  const reason = reasonOf(who(p), login, mentioned.has(p.id))
   const others = (nodes: Login[]) =>
     nodes.filter((n) => n.author?.login !== login).length
   const threads = p.reviewThreads.nodes
@@ -280,8 +293,17 @@ function toPr(p: RawPr, login: string, account: string): Pr {
     ...(p.stackEntry && {
       stack: { ...p.stackEntry.stack, position: p.stackEntry.position },
     }),
+    ...(p.isCrossRepository && { fork: true }),
+    ...(reason && {
+      involved: { reason, author: p.author?.login ?? "ghost" },
+    }),
   }
 }
+
+const who = (p: RawPr) => ({
+  author: p.author?.login ?? null,
+  assignees: p.assignees.nodes.map((n) => n.login),
+})
 
 // ponytail: caches en mémoire de la fenêtre, suffisent pour une app mono-utilisateur
 const caches = new Map<string, Entry<unknown>>()
@@ -327,7 +349,19 @@ const perFollowed = <T>(
 // comptes dont GitHub a refusé `stackEntry` : la session continue sans les stacks natifs
 const withoutStack = new Set<string>()
 
-/** Mes PR ouvertes ; `errors` : comptes en échec, les autres sont gardés. */
+// ids seulement : ~1 point par page, contre ~21 pour une page de la requête complète
+const MENTIONS_QUERY = `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
+  pageInfo { hasNextPage endCursor } nodes { ... on PullRequest { id } } } }`
+
+/**
+ * PR ouvertes des repos suivis qui me concernent : les miennes, et celles des autres où je suis assigné,
+ * mentionné ou impliqué (commentaire, review). `errors` : comptes en échec, les autres sont gardés.
+ *
+ * Coût : `involves:@me` (auteur OU assigné OU mentionné OU commentateur) remplace `author:@me`, même nombre de
+ * recherches complètes. Auteur et assignés sont lus dans la réponse ; seul « mentionné » n'a pas de champ
+ * GraphQL : une recherche légère `mentions:@me` (ids seulement), lancée uniquement s'il reste une PR d'un
+ * autre où je ne suis pas assigné.
+ */
 export function fetchPrs(
   repos: string[],
 ): Promise<{ data: Pr[]; errors: AccountError[] }> {
@@ -335,19 +369,34 @@ export function fetchPrs(
     perFollowed(repos, async (a, names) => {
       const login = await me(a)
       const parts = await Promise.all(
-        chunk(names, REPOS_PER_QUERY).map((c) => {
-          const q =
-            "is:pr is:open author:@me " + c.map((r) => "repo:" + r).join(" ")
+        chunk(names, REPOS_PER_QUERY).map(async (c) => {
+          const filter = c.map((r) => "repo:" + r).join(" ")
           // ponytail: au premier chargement, chaque requête parallèle peut relancer une fois (accepté)
-          return withStackFallback(
-            a.host,
-            withoutStack.has(a.id),
-            (query) => searchAll<RawPr>(conn(a), query, q),
-            () => withoutStack.add(a.id),
+          const nodes = uniqueById(
+            await withStackFallback(
+              a.host,
+              withoutStack.has(a.id),
+              (query) =>
+                searchAll<RawPr>(
+                  conn(a),
+                  query,
+                  "is:pr is:open involves:@me " + filter,
+                ),
+              () => withoutStack.add(a.id),
+            ),
           )
+          const ids = await mentionedIds(nodes.map(who), login, () =>
+            searchAll<{ id: string }>(
+              conn(a),
+              MENTIONS_QUERY,
+              "is:pr is:open mentions:@me " + filter,
+              MENTION_SEARCH_RETRIES,
+            ),
+          )
+          return nodes.map((p) => toPr(p, login, a.id, ids))
         }),
       )
-      return parts.flat().map((p) => toPr(p, login, a.id))
+      return parts.flat()
     }),
   )
 }

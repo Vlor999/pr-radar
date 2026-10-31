@@ -588,7 +588,7 @@ let reading: string | null = null
 let total = 0
 /** fin de la dernière lecture arrivée au bout de sa file */
 let completedAt: number | null = null
-/** PR affichées par le tableau de bord (dernier appel à `refreshMentions`) */
+/** mes PR affichées par le tableau de bord (dernier appel à `refreshMentions`) */
 let shown: string[] = []
 /** change à chaque connexion / déconnexion : les résultats d'une recherche lancée avant sont jetés */
 let generation = 0
@@ -705,9 +705,10 @@ function enqueue(urls: string[]) {
   if (!draining) void drain()
 }
 
-/** Relit les mentions des PR pas vues depuis 10 min (appelé à chaque actualisation GitHub). */
+/** Relit les mentions des PR pas vues depuis 10 min (appelé à chaque actualisation GitHub). Mes PR seulement :
+ * celles des autres (assignée, mentionné, impliqué) ne sont pas cherchées sur Slack. */
 export function refreshMentions(prs: Pr[]) {
-  shown = prs.map((p) => p.url)
+  shown = prs.filter((p) => !p.involved).map((p) => p.url)
   if (active()) enqueue(dueUrls(shown, mentions, Date.now()))
   setProgress()
 }
