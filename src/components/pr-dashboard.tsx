@@ -35,6 +35,7 @@ import { RunningDot } from "@/components/running-dot"
 import { WebMenu } from "@/components/web-menu"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
 import { invoke, isWeb, listen } from "@/lib/platform"
+import { HOUR_MS, MINUTE_MS } from "@/lib/quiet"
 import { useAutoInterval } from "@/lib/quota"
 import { getSettings, useSettings } from "@/lib/settings"
 import { refreshMentions, useSlack } from "@/lib/slack"
@@ -71,9 +72,9 @@ import { reviewCount, type Reviews } from "@/lib/review"
 import type { Pr, PrNode, RepoTree, WebStatus } from "@/lib/types"
 
 /** délai minimal entre deux actualisations au retour sur la fenêtre, en mode manuel */
-const FOCUS_REFRESH_MIN_MS = 5 * 60_000
+const FOCUS_REFRESH_MIN_MS = 5 * MINUTE_MS
 /** vérification des mises à jour, en plus de celle du lancement */
-const UPDATE_CHECK_MS = 6 * 3_600_000
+const UPDATE_CHECK_MS = 6 * HOUR_MS
 // même seuil que `lg:` : en dessous, le panneau des repos passe dans un tiroir
 const WIDE = "(min-width: 64rem)"
 
@@ -393,7 +394,7 @@ export function PrDashboard({
   const intervalMs =
     settings.refreshMinutes === "auto"
       ? autoMs
-      : settings.refreshMinutes * 60_000
+      : settings.refreshMinutes * MINUTE_MS
   // version web : pas d'actualisation automatique tant que l'onglet est caché (l'app, elle, continue)
   const paused = useHidden() && isWeb
   useEffect(() => {
@@ -609,7 +610,7 @@ export function PrDashboard({
               )}
               ,{" "}
               {settings.refreshMinutes === "auto"
-                ? t.autoMode(Math.round(autoMs / 60_000))
+                ? t.autoMode(Math.round(autoMs / MINUTE_MS))
                 : settings.refreshMinutes
                   ? t.auto(settings.refreshMinutes)
                   : t.manual}

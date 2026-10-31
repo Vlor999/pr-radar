@@ -1,6 +1,7 @@
 // Démo navigateur : même API que src/lib/slack.ts, workspace fictif « acme », aucun appel réseau.
 import { useSyncExternalStore } from "react"
 
+import { HOUR_MS } from "@/lib/quiet"
 import { updateSettings, useSettings } from "@/lib/settings"
 import type { Pr, SlackConversation, SlackMention } from "@/lib/types"
 
@@ -50,7 +51,7 @@ export const listConversations = async (
   _onNamed: (list: SlackConversation[]) => void,
 ) => CONVS
 
-const ago = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
+const ago = (h: number) => new Date(Date.now() - h * HOUR_MS).toISOString()
 const at = (
   channelId: string,
   author: string,

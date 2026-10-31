@@ -31,6 +31,7 @@ import {
 import { ready, syncBranch } from "@/lib/actions"
 import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
 import { DONE_ICON, DONE_MS, pause, wait } from "@/lib/motion"
+import { HOUR_MS } from "@/lib/quiet"
 import { useSettings } from "@/lib/settings"
 import { useMentions } from "@/lib/slack"
 import { slackParts, spoofedHost } from "@/lib/slack-text"
@@ -206,7 +207,7 @@ export const plural = (n: number, word: string) =>
   `${n} ${word}${n > 1 || (n === 0 && currentLang() === "en") ? "s" : ""}`
 
 function ago(iso: string, t: typeof S.fr) {
-  const h = Math.floor((Date.now() - Date.parse(iso)) / 3_600_000)
+  const h = Math.floor((Date.now() - Date.parse(iso)) / HOUR_MS)
   return h >= 48 ? t.agoD(Math.floor(h / 24)) : h ? t.agoH(h) : t.agoNow
 }
 

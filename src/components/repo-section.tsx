@@ -13,6 +13,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { strings, useStrings } from "@/lib/i18n"
+import { HOUR_MS } from "@/lib/quiet"
 import { useSettings } from "@/lib/settings"
 import { descendants, needsAttention } from "@/lib/tree"
 import type { MergedPr, PrNode, RepoTree } from "@/lib/types"
@@ -128,7 +129,7 @@ export const RepoSection = memo(function RepoSection({
 })
 
 function mergedAgo(iso: string, t: typeof S.fr) {
-  const h = Math.floor((Date.now() - Date.parse(iso)) / 3_600_000)
+  const h = Math.floor((Date.now() - Date.parse(iso)) / HOUR_MS)
   return h >= 24 ? t.agoD(Math.floor(h / 24)) : h ? t.agoH(h) : t.agoNow
 }
 

@@ -5,8 +5,8 @@ import type { Settings } from "./settings"
  * Heures de la plage et « jusqu'à demain » : dans le fuseau choisi, celui du système par défaut.
  */
 
-const HOUR_MS = 3_600_000
-const MINUTE_MS = 60_000
+export const HOUR_MS = 3_600_000
+export const MINUTE_MS = 60_000
 /** « Jusqu'à demain » : reprise au prochain matin, à cette heure */
 const MORNING_HOUR = 8
 

@@ -63,7 +63,7 @@ import {
   useAutoInterval,
   useQuota,
 } from "@/lib/quota"
-import { parseHm, systemZone } from "@/lib/quiet"
+import { MINUTE_MS, parseHm, systemZone } from "@/lib/quiet"
 import { resetSettings, updateSettings, useSettings } from "@/lib/settings"
 import { checkForUpdate, installUpdate, useUpdate } from "@/lib/updater"
 import { getRepos, reload, setRepos } from "@/lib/store"
@@ -1010,7 +1010,7 @@ function RefreshSection() {
             {(["auto", 0, 1, 2, 5, 10, 15, 30] as const).map((m) => (
               <option key={m} value={m}>
                 {m === "auto"
-                  ? t.refresh.auto(Math.round(autoMs / 60_000))
+                  ? t.refresh.auto(Math.round(autoMs / MINUTE_MS))
                   : m === 0
                     ? t.refresh.manual
                     : `${m} min`}

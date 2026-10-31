@@ -8,6 +8,7 @@ import {
 } from "@/lib/accounts"
 import { allAccounts } from "@/lib/auth"
 import { rerunError } from "@/lib/checks"
+import { HOUR_MS } from "@/lib/quiet"
 import { trackQuota, type Quota } from "@/lib/quota"
 import type { Reviewer } from "@/lib/reviewers"
 import type {
@@ -37,7 +38,7 @@ export class AuthError extends Error {
   }
 }
 
-const ago = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
+const ago = (h: number) => new Date(Date.now() - h * HOUR_MS).toISOString()
 
 const REPOS = [
   "acme/web",
