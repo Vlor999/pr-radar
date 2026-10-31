@@ -89,14 +89,14 @@
     q8: 'Mon admin Slack doit-il approuver ?',
     a8: 'Oui si votre workspace l\'exige. Cliquez sur Connecter, Slack propose de demander l\'installation.',
     q9: 'Comment brancher Claude Code ?',
-    a9: 'Cliquez sur l\'icône prise à côté de l\'engrenage et activez le serveur. La section Installation donne la commande avec le vrai chemin de l\'app, par exemple <code>claude mcp add --scope user pr-radar -- \'/Applications/PR Radar.app/Contents/MacOS/pr-radar\' --mcp</code>, ou le JSON pour Claude Desktop. PR Radar doit être lancé. macOS et Linux uniquement pour l\'instant.',
+    a9: 'Cliquez sur l\'icône prise à côté de l\'engrenage et activez le serveur. La section Installation donne la commande avec le vrai chemin de l\'app, par exemple <code>claude mcp add --scope user pr-radar -- \'/Applications/PR Radar.app/Contents/MacOS/pr-radar\' --mcp</code>, ou la config pour Claude Desktop, Codex, Cursor, Gemini CLI, VS Code, Windsurf ou Zed. PR Radar doit être lancé. macOS et Linux uniquement pour l\'instant.',
     q10: 'Comment ouvrir PR Radar dans mon navigateur ?',
     a10: 'Cliquez sur le globe de l\'en-tête : il démarre le serveur local si besoin et ouvre la version web dans votre navigateur, par défaut sur <code>http://127.0.0.1:14200/</code> (port modifiable dans les Réglages web). Le chevron à côté affiche l\'état et mène aux Réglages web (port, démarrage et arrêt, déconnexion des navigateurs). Quand la version web tourne, l\'icône de la barre des menus ou de la zone de notification propose aussi « Ouvrir dans le navigateur ». PR Radar doit rester lancé : fermer la fenêtre le garde dans la barre des menus ou la zone de notification, si votre système en affiche une. Un favori ne marche que tant que l\'app et le serveur web tournent : redémarrer l\'app, arrêter le serveur, changer de port ou « Déconnecter les navigateurs » ferme la session ; rouvrez alors la version web depuis le globe. La connexion des comptes, la connexion Slack, les mises à jour et la désinstallation restent dans l\'app de bureau.',
     legal: 'Mentions légales',
     lg1: '<strong>Éditeur :</strong> Vlor999, particulier, à titre non professionnel. Contact : <a href="https://github.com/Vlor999/pr-radar/issues">issues GitHub</a>.',
     lg2: '<strong>Hébergeur :</strong> GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.',
     lg3: 'PR Radar est fourni tel quel, sans garantie (licence MIT). Non affilié à GitHub, Slack, Anthropic, Gitify ni PR Marmot.',
-    lg4: 'GitHub, Slack, Anthropic, Claude, Claude Code, Claude Desktop, Gitify, PR Marmot, Apple, Apple silicon, Mac, macOS, Intel, Windows, Linux, Debian, Ubuntu, Fedora et AppImage sont des marques ou des noms de leurs détenteurs respectifs.',
+    lg4: 'GitHub, Slack, Anthropic, Claude, Claude Code, Claude Desktop, OpenAI, Codex, Cursor, Google, Gemini, Microsoft, VS Code, GitHub Copilot, Windsurf, Zed, Gitify, PR Marmot, Apple, Apple silicon, Mac, macOS, Intel, Windows, Linux, Debian, Ubuntu, Fedora et AppImage sont des marques ou des noms de leurs détenteurs respectifs.',
     rels: 'Versions', bug: 'Signaler un bug', mit: 'Licence MIT', nav: 'Principal', lang: 'Langue',
     ph: 'Votre réponse…'
   };
