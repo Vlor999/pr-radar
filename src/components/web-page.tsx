@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react"
+import { ExternalLink, Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import {
@@ -25,9 +25,9 @@ import {
 const MIN_PORT = 1024 // en dessous : ports réservés au système
 const MAX_PORT = 65_535
 
-const S = strings(
+/** Textes de la catégorie, repris par l'index de recherche des réglages. */
+export const WEB_STRINGS = strings(
   {
-    back: "Retour",
     title: "Version web",
     subtitle:
       "Ouvre PR Radar dans un onglet du navigateur, servi par l'app sur cette machine uniquement (127.0.0.1). La fenêtre peut ensuite être fermée : l'app reste dans la barre des menus et envoie les notifications.",
@@ -50,7 +50,6 @@ const S = strings(
     confirmRotate: "Confirmer",
   },
   {
-    back: "Back",
     title: "Web version",
     subtitle:
       "Opens PR Radar in a browser tab, served by the app on this machine only (127.0.0.1). The window can then be closed: the app stays in the menu bar and sends the notifications.",
@@ -78,7 +77,7 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** Version web locale : serveur de l'app sur 127.0.0.1, ouvert dans le navigateur (src-tauri/src/web.rs). */
 function ServerSection() {
-  const t = useStrings(S)
+  const t = useStrings(WEB_STRINGS)
   const errors = useStrings(WEB_ERRORS)
   const status = useWebStatus()
   const [port, setPort] = useState("")
@@ -123,6 +122,7 @@ function ServerSection() {
   return (
     <Section id="web-server" title={t.server} description={t.serverDescription}>
       <Row
+        id="web-enable"
         label={t.enable}
         labelId="web-enable-label"
         description={status.running ? t.running(url) : t.stopped}
@@ -134,6 +134,7 @@ function ServerSection() {
         />
       </Row>
       <Row
+        id="web-port"
         label={t.port}
         labelId="web-port-label"
         description={t.portDescription}
@@ -169,7 +170,7 @@ function ServerSection() {
         </p>
       )}
       {status.running && (
-        <Row label={t.open} description={t.openDescription}>
+        <Row id="web-open" label={t.open} description={t.openDescription}>
           <Button
             variant="outline"
             size="sm"
@@ -184,7 +185,7 @@ function ServerSection() {
           </Button>
         </Row>
       )}
-      <Row label={t.secret} description={t.secretDescription}>
+      <Row id="web-sessions" label={t.secret} description={t.secretDescription}>
         <Feedback msg={secretMsg} />
         <Button
           variant={armed ? "destructive" : "outline"}
@@ -205,30 +206,13 @@ function ServerSection() {
   )
 }
 
-export function WebPage({ onClose }: { onClose: () => void }) {
-  const t = useStrings(S)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      // Échap dans le champ du port : reste sur la page
-      if (e.key === "Escape" && !(e.target instanceof HTMLInputElement))
-        onClose()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
+/** Catégorie « Version web » des réglages, appli de bureau seulement (titre et fermeture : settings-page.tsx). */
+export function WebCategory() {
+  const t = useStrings(WEB_STRINGS)
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-4 pb-16 md:px-6">
-      <div>
-        <Button variant="ghost" size="sm" onClick={onClose} className="-ml-2">
-          <ArrowLeft data-icon="inline-start" />
-          {t.back}
-        </Button>
-        <h1 className="mt-2 font-heading text-xl font-semibold tracking-tight">
-          {t.title}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t.subtitle}</p>
-      </div>
+    <>
+      <p className="-mt-3 text-sm text-muted-foreground">{t.subtitle}</p>
       <ServerSection />
-    </div>
+    </>
   )
 }

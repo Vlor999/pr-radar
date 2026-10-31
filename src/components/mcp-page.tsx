@@ -1,8 +1,8 @@
 import { cn } from "cn"
-import { ArrowLeft, Check, ChevronRight, Copy, Trash2, X } from "lucide-react"
+import { Check, ChevronRight, Copy, Trash2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
-import { Row, Section, Toggle } from "@/components/settings-ui"
+import { Row, Section, settingDomId, Toggle } from "@/components/settings-ui"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -39,7 +39,7 @@ const CLIENTS: McpClient[] = [
   "other",
 ]
 
-const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
+export const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
   antigravity: "Antigravity",
   "claude-code": "Claude Code",
   "claude-desktop": "Claude Desktop",
@@ -52,9 +52,9 @@ const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
   zed: "Zed",
 }
 
-const S = strings(
+/** Textes de la catégorie, repris par l'index de recherche des réglages. */
+export const MCP_STRINGS = strings(
   {
-    back: "Retour",
     title: "Serveur MCP",
     subtitle:
       "Un agent local (Claude Code, Claude Desktop…) lit tes PR et leurs mentions Slack, déjà chargées par PR Radar. Lecture seule, rien ne sort de ta machine.",
@@ -123,7 +123,6 @@ const S = strings(
     },
   },
   {
-    back: "Back",
     title: "MCP server",
     subtitle:
       "A local agent (Claude Code, Claude Desktop…) reads your PRs and their Slack mentions, already loaded by PR Radar. Read-only, nothing leaves your machine.",
@@ -212,12 +211,13 @@ const when = (at: string) => {
 }
 
 function StateSection() {
-  const t = useStrings(S).state
+  const t = useStrings(MCP_STRINGS).state
   const { info, running, error } = useMcp()
   const history = useMcpHistory()
   return (
     <Section id="mcp-state" title={t.title} description={t.description}>
       <Row
+        id="mcp-server"
         labelId="mcp-toggle"
         label={t.server}
         description={
@@ -236,7 +236,7 @@ function StateSection() {
           labelledBy="mcp-toggle"
         />
       </Row>
-      <Row label={t.today}>
+      <Row id="mcp-calls" label={t.today}>
         <span className="text-sm tabular-nums">
           {callsToday(history, new Date())}
         </span>
@@ -254,7 +254,7 @@ function StateSection() {
 }
 
 function InstallSection() {
-  const t = useStrings(S).install
+  const t = useStrings(MCP_STRINGS).install
   const { info } = useMcp()
   const [client, setClient] = useState<McpClient>("claude-code")
   const [copied, setCopied] = useState(false)
@@ -277,7 +277,7 @@ function InstallSection() {
     )
   return (
     <Section id="mcp-install" title={t.title} description={t.description}>
-      <Row labelId="mcp-client" label={t.client}>
+      <Row id="mcp-client" labelId="mcp-client" label={t.client}>
         <Select
           items={items}
           value={client}
@@ -331,9 +331,13 @@ function InstallSection() {
 }
 
 function ToolsSection() {
-  const t = useStrings(S).tools
+  const t = useStrings(MCP_STRINGS).tools
   return (
-    <Section id="mcp-tools" title={t.title} description={t.description}>
+    <Section
+      id={settingDomId("mcp-tools")}
+      title={t.title}
+      description={t.description}
+    >
       <Row
         label={<code className="font-mono">get_prs</code>}
         description={t.getPrs}
@@ -347,7 +351,7 @@ function ToolsSection() {
 }
 
 function HistoryRow({ call }: { call: McpCall }) {
-  const t = useStrings(S).history
+  const t = useStrings(MCP_STRINGS).history
   const [open, setOpen] = useState(false)
   return (
     <li className="border-t first:border-t-0">
@@ -404,10 +408,14 @@ function HistoryRow({ call }: { call: McpCall }) {
 }
 
 function HistorySection() {
-  const t = useStrings(S).history
+  const t = useStrings(MCP_STRINGS).history
   const history = useMcpHistory()
   return (
-    <Section id="mcp-history" title={t.title} description={t.description}>
+    <Section
+      id={settingDomId("mcp-history")}
+      title={t.title}
+      description={t.description}
+    >
       {history.length ? (
         <>
           <ul>
@@ -429,31 +437,16 @@ function HistorySection() {
   )
 }
 
-export function McpPage({ onClose }: { onClose: () => void }) {
-  const t = useStrings(S)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
+/** Catégorie « Serveur MCP » des réglages (titre et fermeture : settings-page.tsx). */
+export function McpCategory() {
+  const t = useStrings(MCP_STRINGS)
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-4 pb-16 md:px-6">
-      <div>
-        <Button variant="ghost" size="sm" onClick={onClose} className="-ml-2">
-          <ArrowLeft data-icon="inline-start" />
-          {t.back}
-        </Button>
-        <h1 className="mt-2 font-heading text-xl font-semibold tracking-tight">
-          {t.title}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t.subtitle}</p>
-      </div>
+    <>
+      <p className="-mt-3 text-sm text-muted-foreground">{t.subtitle}</p>
       <StateSection />
       <InstallSection />
       <ToolsSection />
       <HistorySection />
-    </div>
+    </>
   )
 }

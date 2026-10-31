@@ -7,21 +7,35 @@ import {
 import { cn } from "cn"
 import {
   ArrowLeft,
+  Bell,
   Check,
   ChevronDown,
-  ChevronRight,
   Coffee,
   ExternalLink,
+  GitPullRequest,
+  Globe,
   Loader2,
   LogOut,
   Monitor,
   Moon,
+  Plug,
   Plus,
   RefreshCw,
+  Search,
+  Settings2,
+  SlidersHorizontal,
   Sun,
   Trash2,
+  Users,
+  type LucideIcon,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,19 +49,22 @@ import { formatUntil, pause, resume, useQuiet } from "@/hooks/use-quiet"
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { Login } from "@/components/login"
+import { CLIENT_LABEL, MCP_STRINGS, McpCategory } from "@/components/mcp-page"
 import {
   Feedback,
   Row,
   Section,
   Segmented,
+  settingDomId,
   Toggle,
   useConfirm,
   useFlash,
 } from "@/components/settings-ui"
+import { WEB_STRINGS, WebCategory } from "@/components/web-page"
 import { GITHUB, type Account } from "@/lib/accounts"
 import { accountAdded, refreshPrs, signOut } from "@/lib/actions"
 import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"
-import { BUY_ME_A_COFFEE_URL } from "@/lib/constants"
+import { BUY_ME_A_COFFEE_URL, SETTING_HIGHLIGHT_MS } from "@/lib/constants"
 import {
   clearCache,
   reposWithMyOpenPrs,
@@ -55,6 +72,7 @@ import {
   type Profile,
 } from "@/lib/github"
 import { currentLang, locale, strings, useStrings, type Lang } from "@/lib/i18n"
+import { useMcp } from "@/lib/mcp"
 import { reducedMotion } from "@/lib/motion"
 import { openExternal } from "@/lib/open"
 import { invoke, isWeb } from "@/lib/platform"
@@ -67,6 +85,11 @@ import {
 } from "@/lib/quota"
 import { MINUTE_MS, parseHm, systemZone } from "@/lib/quiet"
 import { resetSettings, updateSettings, useSettings } from "@/lib/settings"
+import {
+  flatResults,
+  searchSettings,
+  type SettingEntry,
+} from "@/lib/settings-search"
 import { checkForUpdate, installUpdate, useUpdate } from "@/lib/updater"
 import { getRepos, reload, setRepos } from "@/lib/store"
 import {
@@ -79,38 +102,81 @@ import {
 } from "@/lib/slack"
 import type { SlackConversation } from "@/lib/types"
 
-const SECTIONS = [
-  "compte",
-  "slack",
-  "apparence",
-  "actualisation",
+const CATEGORIES = [
+  "general",
+  "accounts",
   "notifications",
-  "affichage",
-  "repos",
-  "donnees",
+  "prs",
+  "mcp",
   "web",
-  "raccourcis",
-  "a-propos",
+  "advanced",
 ] as const
 
-/** Sections masquées dans la version web (navigateur) : elles pilotent l'app elle-même. */
-const DESKTOP_ONLY: readonly string[] = ["web"]
-const SHOWN = SECTIONS.filter((id) => !(isWeb && DESKTOP_ONLY.includes(id)))
+export type SettingsCategory = (typeof CATEGORIES)[number]
+type Category = SettingsCategory
+
+const CATEGORY_ICONS: Record<Category, LucideIcon> = {
+  general: Settings2,
+  accounts: Users,
+  notifications: Bell,
+  prs: GitPullRequest,
+  mcp: Plug,
+  web: Globe,
+  advanced: SlidersHorizontal,
+}
+
+/** Réglages masqués dans la version web (navigateur) : ils pilotent l'app elle-même. */
+const DESKTOP_ONLY: readonly string[] = [
+  "launch",
+  "last",
+  "test",
+  "system",
+  "focus",
+  "uninstall",
+]
 
 const S = strings(
   {
-    sections: {
-      compte: "Compte",
-      slack: "Slack",
-      apparence: "Apparence",
-      actualisation: "Actualisation",
+    categories: {
+      general: "Général",
+      accounts: "Comptes",
       notifications: "Notifications",
-      affichage: "Affichage des PR",
-      repos: "Repos suivis",
-      donnees: "Données",
+      prs: "PR et repos",
+      mcp: "Serveur MCP",
       web: "Version web",
-      raccourcis: "Raccourcis clavier",
-      "a-propos": "À propos",
+      advanced: "Avancé",
+    },
+    sections: {
+      app: "Application",
+      shortcuts: "Raccourcis clavier",
+      about: "À propos",
+      accounts: "Comptes GitHub",
+      slack: "Slack",
+      when: "Quand notifier",
+      pause: "Pause",
+      troubleshoot: "Dépannage",
+      display: "Affichage des PR",
+      repos: "Repos suivis",
+      refresh: "Actualisation",
+      github: "API GitHub",
+      data: "Données",
+      danger: "Zone sensible",
+    },
+    app: { description: "Thème, langue et démarrage." },
+    pause: {
+      description: "Coupe les notifications un moment ou chaque jour.",
+    },
+    troubleshoot: {
+      description:
+        "Rien ne s'affiche ? Teste l'envoi et vérifie les réglages du système.",
+    },
+    github: { description: "Quota de l'API et relecture complète." },
+    danger: { description: "Ces actions effacent tes réglages ou l'app." },
+    search: {
+      placeholder: "Rechercher un réglage",
+      count: (n: number) => `${n} résultat${n > 1 ? "s" : ""}`,
+      others: "Autres catégories",
+      empty: "Aucun réglage trouvé",
     },
     failed: "Échec",
     account: {
@@ -162,7 +228,6 @@ const S = strings(
       },
     },
     appearance: {
-      description: "Le thème de l'interface.",
       theme: "Thème",
       shortcut: "Raccourci : d",
       light: "Clair",
@@ -288,6 +353,7 @@ const S = strings(
       description: "Actifs hors des champs de saisie.",
       openSettings: "ouvrir les réglages",
       closeSettings: "fermer les réglages",
+      searchSettings: "rechercher un réglage",
     },
     about: {
       description:
@@ -311,29 +377,50 @@ const S = strings(
       privacy: "Confidentialité",
       licenses: "Licences tierces",
     },
-    web: {
-      description:
-        "PR Radar dans un onglet du navigateur, servi par l'app sur cette machine uniquement.",
-      settings: "Réglages de la version web",
-      settingsDescription: "Activation, port et sessions des navigateurs.",
-      open: "Ouvrir",
-    },
-    nav: "Sections des réglages",
+    nav: "Catégories des réglages",
     back: "Retour",
   },
   {
-    sections: {
-      compte: "Account",
-      slack: "Slack",
-      apparence: "Appearance",
-      actualisation: "Refresh",
+    categories: {
+      general: "General",
+      accounts: "Accounts",
       notifications: "Notifications",
-      affichage: "PR display",
-      repos: "Tracked repos",
-      donnees: "Data",
+      prs: "PRs and repos",
+      mcp: "MCP server",
       web: "Web version",
-      raccourcis: "Keyboard shortcuts",
-      "a-propos": "About",
+      advanced: "Advanced",
+    },
+    sections: {
+      app: "App",
+      shortcuts: "Keyboard shortcuts",
+      about: "About",
+      accounts: "GitHub accounts",
+      slack: "Slack",
+      when: "When to notify",
+      pause: "Pause",
+      troubleshoot: "Troubleshooting",
+      display: "PR display",
+      repos: "Tracked repos",
+      refresh: "Refresh",
+      github: "GitHub API",
+      data: "Data",
+      danger: "Danger zone",
+    },
+    app: { description: "Theme, language and startup." },
+    pause: {
+      description: "Silences notifications for a while or every day.",
+    },
+    troubleshoot: {
+      description:
+        "Nothing shows up? Send a test and check the system settings.",
+    },
+    github: { description: "API quota and full reload." },
+    danger: { description: "These actions erase your settings or the app." },
+    search: {
+      placeholder: "Search settings",
+      count: (n: number) => `${n} result${n > 1 ? "s" : ""}`,
+      others: "Other categories",
+      empty: "No setting found",
     },
     failed: "Failed",
     account: {
@@ -386,7 +473,6 @@ const S = strings(
       },
     },
     appearance: {
-      description: "The interface theme.",
       theme: "Theme",
       shortcut: "Shortcut: d",
       light: "Light",
@@ -508,6 +594,7 @@ const S = strings(
       description: "Active outside text fields.",
       openSettings: "open settings",
       closeSettings: "close settings",
+      searchSettings: "search settings",
     },
     about: {
       description:
@@ -530,14 +617,7 @@ const S = strings(
       privacy: "Privacy",
       licenses: "Third-party licenses",
     },
-    web: {
-      description:
-        "PR Radar in a browser tab, served by the app on this machine only.",
-      settings: "Web version settings",
-      settingsDescription: "On/off, port and browser sessions.",
-      open: "Open",
-    },
-    nav: "Settings sections",
+    nav: "Settings categories",
     back: "Back",
   },
 )
@@ -577,8 +657,8 @@ function AccountSection() {
   const [adding, setAdding] = useState(false)
   return (
     <Section
-      id="compte"
-      title={t.sections.compte}
+      id={settingDomId("accounts")}
+      title={t.sections.accounts}
       description={t.account.description}
     >
       {accounts.map((a) => (
@@ -750,6 +830,7 @@ function SlackSection() {
     >
       <>
         <Row
+          id="slack"
           label={t.slack.workspace}
           description={
             <>
@@ -943,17 +1024,14 @@ function SlackRefreshButton(props: {
   )
 }
 
-function AppearanceSection() {
+function AppSection() {
   const { theme, setTheme } = useTheme()
   const { lang } = useSettings()
   const t = useStrings(S)
   return (
-    <Section
-      id="apparence"
-      title={t.sections.apparence}
-      description={t.appearance.description}
-    >
+    <Section id="app" title={t.sections.app} description={t.app.description}>
       <Row
+        id="theme"
         label={t.appearance.theme}
         labelId="theme-label"
         description={t.appearance.shortcut}
@@ -969,7 +1047,7 @@ function AppearanceSection() {
           ]}
         />
       </Row>
-      <Row label="Langue · Language" labelId="lang-label">
+      <Row id="lang" label="Langue · Language" labelId="lang-label">
         <Segmented<Lang>
           labelledBy="lang-label"
           value={currentLang(lang)}
@@ -980,28 +1058,22 @@ function AppearanceSection() {
           ]}
         />
       </Row>
+      {!isWeb && <LaunchAtLoginRow />}
     </Section>
   )
 }
 
 function RefreshSection() {
   const s = useSettings()
-  const quota = useQuota()
   const autoMs = useAutoInterval()
   const t = useStrings(S)
-  const [busy, setBusy] = useState(false)
-  const refresh = async () => {
-    setBusy(true)
-    await refreshPrs().finally(() => setBusy(false))
-  }
   return (
     <Section
-      id="actualisation"
-      title={t.sections.actualisation}
+      id="refresh"
+      title={t.sections.refresh}
       description={t.refresh.description}
     >
-      {!isWeb && <LaunchAtLoginRow />}
-      <Row label={t.refresh.frequency} labelId="refresh-label">
+      <Row id="frequency" label={t.refresh.frequency} labelId="refresh-label">
         {/* appearance-none : sinon le navigateur impose son propre style (pilule sombre) */}
         <div className="relative">
           <select
@@ -1029,14 +1101,36 @@ function RefreshSection() {
           <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         </div>
       </Row>
-      <Row label={t.refresh.onFocus} labelId="focus-label">
+      <Row id="on-focus" label={t.refresh.onFocus} labelId="focus-label">
         <Toggle
           labelledBy="focus-label"
           checked={s.refreshOnFocus}
           onChange={(v) => updateSettings({ refreshOnFocus: v })}
         />
       </Row>
-      <Row label={t.refresh.quota} description={t.refresh.quotaDescription}>
+    </Section>
+  )
+}
+
+function GitHubSection() {
+  const quota = useQuota()
+  const t = useStrings(S)
+  const [busy, setBusy] = useState(false)
+  const refresh = async () => {
+    setBusy(true)
+    await refreshPrs().finally(() => setBusy(false))
+  }
+  return (
+    <Section
+      id="github"
+      title={t.sections.github}
+      description={t.github.description}
+    >
+      <Row
+        id="quota"
+        label={t.refresh.quota}
+        description={t.refresh.quotaDescription}
+      >
         {quota ? (
           <div className="flex w-full flex-col gap-1.5 sm:w-64">
             <div
@@ -1069,7 +1163,7 @@ function RefreshSection() {
           <span className="text-sm">{t.refresh.quotaUnknown}</span>
         )}
       </Row>
-      <Row label={t.refresh.reloadAll}>
+      <Row id="reload-all" label={t.refresh.reloadAll}>
         <Button
           variant="outline"
           size="sm"
@@ -1112,6 +1206,7 @@ function LaunchAtLoginRow() {
   }
   return (
     <Row
+      id="launch"
       label={t.refresh.launch}
       description={
         error ? t.refresh.launchError(error) : t.refresh.launchDescription
@@ -1153,6 +1248,7 @@ function DoNotDisturbRows() {
   return (
     <>
       <Row
+        id="dnd"
         label={t.notifications.dnd}
         description={
           quiet.until
@@ -1180,6 +1276,7 @@ function DoNotDisturbRows() {
         )}
       </Row>
       <Row
+        id="quiet-hours"
         label={t.notifications.quietHours}
         description={t.notifications.quietHoursDescription}
         labelId="quiet-hours"
@@ -1199,6 +1296,7 @@ function DoNotDisturbRows() {
         />
       </Row>
       <Row
+        id="time-zone"
         label={t.notifications.timeZone}
         description={t.notifications.timeZoneDescription}
         labelId="quiet-zone"
@@ -1230,13 +1328,18 @@ function DoNotDisturbRows() {
   )
 }
 
-function NotificationsSection() {
+type TestState =
+  { state: "sending" | "sent" } | { state: "error"; message: string } | null
+
+/** Notifications : état en tête, quand notifier, pause, puis dépannage replié. */
+function NotificationsCategory(props: {
+  troubleshootOpen: boolean
+  onTroubleshootOpen: (open: boolean) => void
+}) {
   const s = useSettings()
   const last = useLastNotification()
   const t = useStrings(S)
-  const [test, setTest] = useState<
-    { state: "sending" | "sent" } | { state: "error"; message: string } | null
-  >(null)
+  const [test, setTest] = useState<TestState>(null)
   const send = () => {
     setTest({ state: "sending" })
     testNotification().then(
@@ -1244,86 +1347,140 @@ function NotificationsSection() {
       (e: unknown) => setTest({ state: "error", message: String(e) }),
     )
   }
-  return (
-    <Section
-      id="notifications"
-      title={t.sections.notifications}
-      description={t.notifications.description}
+  const feedback =
+    test?.state === "sent"
+      ? t.notifications.sent
+      : test?.state === "error"
+        ? t.notifications.error(test.message)
+        : null
+  const testButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={test?.state === "sending"}
+      onClick={send}
     >
+      {t.notifications.sendTest}
+    </Button>
+  )
+  return (
+    <>
       {/* version web : les notifications partent de l'app, pas de l'onglet */}
       {!isWeb && (
-        <>
-          <Row
-            label={t.notifications.test}
-            description={
-              test?.state === "sent"
-                ? t.notifications.sent
-                : test?.state === "error"
-                  ? t.notifications.error(test.message)
-                  : t.notifications.testHint
-            }
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={test?.state === "sending"}
-              onClick={send}
-            >
-              {t.notifications.sendTest}
-            </Button>
-          </Row>
-          <Row
-            label={t.notifications.last}
-            description={
-              last
-                ? `${last.title} · ${new Date(last.at).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })}`
-                : t.notifications.none
-            }
-          />
-        </>
-      )}
-      {!isWeb && SYSTEM_NOTIFICATION_SETTINGS && (
-        <Row
-          label={t.notifications.system}
-          description={t.notifications.systemDescription}
+        <div
+          id={settingDomId("last")}
+          className="flex scroll-mt-24 outline-none flex-col gap-2 rounded-2xl border bg-card px-4 py-3 transition-colors duration-500 data-[highlight]:bg-primary/10 motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:gap-6"
         >
+          <div className="min-w-0 text-sm">
+            <span className="font-medium">{t.notifications.last}</span>
+            <span className="text-muted-foreground">
+              {" · "}
+              {last
+                ? `${last.title} · ${new Date(last.at).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })}`
+                : t.notifications.none}
+            </span>
+            {feedback && (
+              <p
+                aria-live="polite"
+                className="mt-0.5 text-xs text-muted-foreground"
+              >
+                {feedback}
+              </p>
+            )}
+          </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => openExternal(SYSTEM_NOTIFICATION_SETTINGS)}
+            disabled={test?.state === "sending"}
+            onClick={send}
           >
-            {t.notifications.openSystem}
+            {t.notifications.test}
           </Button>
-        </Row>
+        </div>
       )}
-      {!isWeb && IS_MAC && (
+      <Section
+        id="when"
+        title={t.sections.when}
+        description={t.notifications.description}
+      >
+        <div className="grid gap-x-6 py-1 sm:grid-cols-2">
+          {NOTIFY.map((key) => (
+            <div
+              key={key}
+              id={settingDomId(key)}
+              className="-mx-2 flex scroll-mt-24 outline-none items-center justify-between gap-3 rounded-lg px-2 py-2 transition-colors duration-500 data-[highlight]:bg-primary/10 motion-reduce:transition-none"
+            >
+              <span id={`notify-${key}`} className="text-sm font-medium">
+                {t.notifications[key]}
+              </span>
+              <Toggle
+                labelledBy={`notify-${key}`}
+                checked={s.notify[key]}
+                onChange={(v) => updateSettings({ notify: { [key]: v } })}
+              />
+            </div>
+          ))}
+        </div>
         <Row
-          label={t.notifications.focus}
-          description={t.notifications.focusDescription}
-        />
-      )}
-      <DoNotDisturbRows />
-      {NOTIFY.map((key) => (
-        <Row key={key} label={t.notifications[key]} labelId={`notify-${key}`}>
+          id="drafts"
+          label={t.notifications.drafts}
+          description={t.notifications.draftsDescription}
+          labelId="notify-drafts"
+        >
           <Toggle
-            labelledBy={`notify-${key}`}
-            checked={s.notify[key]}
-            onChange={(v) => updateSettings({ notify: { [key]: v } })}
+            labelledBy="notify-drafts"
+            checked={s.notifyDrafts}
+            onChange={(v) => updateSettings({ notifyDrafts: v })}
           />
         </Row>
-      ))}
-      <Row
-        label={t.notifications.drafts}
-        description={t.notifications.draftsDescription}
-        labelId="notify-drafts"
+      </Section>
+      <Section
+        id="pause"
+        title={t.sections.pause}
+        description={t.pause.description}
       >
-        <Toggle
-          labelledBy="notify-drafts"
-          checked={s.notifyDrafts}
-          onChange={(v) => updateSettings({ notifyDrafts: v })}
-        />
-      </Row>
-    </Section>
+        <DoNotDisturbRows />
+      </Section>
+      {!isWeb && (
+        <Section
+          id="troubleshoot"
+          title={t.sections.troubleshoot}
+          description={t.troubleshoot.description}
+          open={props.troubleshootOpen}
+          onOpenChange={props.onTroubleshootOpen}
+        >
+          <Row
+            id="test"
+            label={t.notifications.test}
+            description={feedback ?? t.notifications.testHint}
+          >
+            {testButton}
+          </Row>
+          {SYSTEM_NOTIFICATION_SETTINGS && (
+            <Row
+              id="system"
+              label={t.notifications.system}
+              description={t.notifications.systemDescription}
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openExternal(SYSTEM_NOTIFICATION_SETTINGS)}
+              >
+                {t.notifications.openSystem}
+              </Button>
+            </Row>
+          )}
+          {IS_MAC && (
+            <Row
+              id="focus"
+              label={t.notifications.focus}
+              description={t.notifications.focusDescription}
+            />
+          )}
+        </Section>
+      )}
+    </>
   )
 }
 
@@ -1334,11 +1491,11 @@ function DisplaySection() {
     n.map((d) => ({ value: d, label: t.display.days(d) }))
   return (
     <Section
-      id="affichage"
-      title={t.sections.affichage}
+      id="display"
+      title={t.sections.display}
       description={t.display.description}
     >
-      <Row label={t.display.sort} labelId="sort-label">
+      <Row id="sort" label={t.display.sort} labelId="sort-label">
         <Segmented
           labelledBy="sort-label"
           value={s.defaultSort}
@@ -1351,6 +1508,7 @@ function DisplaySection() {
         />
       </Row>
       <Row
+        id="stale"
         label={t.display.stale}
         labelId="stale-label"
         description={t.display.staleDescription}
@@ -1363,6 +1521,7 @@ function DisplaySection() {
         />
       </Row>
       <Row
+        id="merged"
         label={t.display.merged}
         labelId="merged-label"
         description={t.display.mergedDescription}
@@ -1407,7 +1566,11 @@ function ReposSection() {
       title={t.sections.repos}
       description={t.repos.description}
     >
-      <Row label={t.sections.repos} description={t.repos.count(count)}>
+      <Row
+        id="repos"
+        label={t.sections.repos}
+        description={t.repos.count(count)}
+      >
         <Feedback msg={msg} />
         <Button
           variant={armed ? "destructive" : "outline"}
@@ -1431,16 +1594,14 @@ function ReposSection() {
 function DataSection() {
   const [cacheMsg, flashCache] = useFlash()
   const [seenMsg, flashSeen] = useFlash()
-  const [resetMsg, flashReset] = useFlash()
-  const [armed, confirm] = useConfirm()
   const t = useStrings(S)
   return (
-    <Section
-      id="donnees"
-      title={t.sections.donnees}
-      description={t.data.description}
-    >
-      <Row label={t.data.cache} description={t.data.cacheDescription}>
+    <Section id="data" title={t.sections.data} description={t.data.description}>
+      <Row
+        id="cache"
+        label={t.data.cache}
+        description={t.data.cacheDescription}
+      >
         <Feedback msg={cacheMsg} />
         <Button
           variant="outline"
@@ -1454,7 +1615,7 @@ function DataSection() {
           {t.data.clearCache}
         </Button>
       </Row>
-      <Row label={t.data.seen} description={t.data.seenDescription}>
+      <Row id="seen" label={t.data.seen} description={t.data.seenDescription}>
         <Feedback msg={seenMsg} />
         <Button
           variant="outline"
@@ -1467,11 +1628,32 @@ function DataSection() {
           {t.data.forgetSeen}
         </Button>
       </Row>
-      <Row label={t.data.settings} description={t.data.settingsDescription}>
+    </Section>
+  )
+}
+
+/** Zone sensible : réinitialisation des réglages et désinstallation. */
+function DangerSection() {
+  const [resetMsg, flashReset] = useFlash()
+  const [armed, confirm] = useConfirm()
+  const t = useStrings(S)
+  return (
+    <Section
+      id="danger"
+      title={t.sections.danger}
+      description={t.danger.description}
+      destructive
+    >
+      <Row
+        id="reset"
+        label={t.data.settings}
+        description={t.data.settingsDescription}
+      >
         <Feedback msg={resetMsg} />
         <Button
           variant={armed ? "destructive" : "outline"}
           size="sm"
+          className={cn(!armed && "text-destructive hover:text-destructive")}
           onClick={() =>
             confirm(() => {
               resetSettings()
@@ -1483,21 +1665,6 @@ function DataSection() {
         </Button>
       </Row>
       {!isWeb && <UninstallRow />}
-    </Section>
-  )
-}
-
-/** Version web : réglages sur leur propre page (src/components/web-page.tsx). */
-function WebSection({ onOpen }: { onOpen: () => void }) {
-  const t = useStrings(S)
-  return (
-    <Section id="web" title={t.sections.web} description={t.web.description}>
-      <Row label={t.web.settings} description={t.web.settingsDescription}>
-        <Button variant="outline" size="sm" onClick={onOpen}>
-          {t.web.open}
-          <ChevronRight data-icon="inline-end" />
-        </Button>
-      </Row>
     </Section>
   )
 }
@@ -1542,8 +1709,12 @@ function UninstallRow() {
   }
 
   return (
-    <div className="border-t py-3">
-      <Row label={t.uninstall.label} description={t.uninstall.description}>
+    <div className="border-t">
+      <Row
+        id="uninstall"
+        label={t.uninstall.label}
+        description={t.uninstall.description}
+      >
         {!open && (
           <Button variant="destructive" size="sm" onClick={show}>
             <Trash2 />
@@ -1552,7 +1723,7 @@ function UninstallRow() {
         )}
       </Row>
       {open && (
-        <div className="mb-1 flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+        <div className="mb-3 flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
           {!plan && state !== "error" && (
             <p className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
@@ -1637,11 +1808,12 @@ function ShortcutsSection() {
     ...useStrings(SHORTCUTS),
     { keys: ["mod", ","], label: t.shortcuts.openSettings },
     { keys: ["esc"], label: t.shortcuts.closeSettings },
+    { keys: [["/"], ["mod", "F"]], label: t.shortcuts.searchSettings },
   ]
   return (
     <Section
-      id="raccourcis"
-      title={t.sections.raccourcis}
+      id={settingDomId("shortcuts")}
+      title={t.sections.shortcuts}
       description={t.shortcuts.description}
     >
       <table className="w-full text-sm">
@@ -1673,11 +1845,11 @@ function AboutSection() {
     update.status === "ready"
   return (
     <Section
-      id="a-propos"
-      title={t.sections["a-propos"]}
+      id="about"
+      title={t.sections.about}
       description={t.about.description}
     >
-      <Row label="PR Radar" description={t.about.version(version)}>
+      <Row id="version" label="PR Radar" description={t.about.version(version)}>
         <span aria-live="polite" className="text-xs">
           {update.status === "up-to-date" && (
             <span className="text-muted-foreground">{t.about.upToDate}</span>
@@ -1726,7 +1898,11 @@ function AboutSection() {
           </Button>
         )}
       </Row>
-      <Row label={t.about.support} description={t.about.supportDescription}>
+      <Row
+        id="support"
+        label={t.about.support}
+        description={t.about.supportDescription}
+      >
         <Button
           variant="outline"
           size="sm"
@@ -1766,48 +1942,586 @@ function AboutSection() {
   )
 }
 
-/* ---------- Page ---------- */
+/* ---------- Recherche ---------- */
 
-export function SettingsPage({
-  onClose,
-  onOpenWeb,
-}: {
-  onClose: () => void
-  /** page de la version web */
-  onOpenWeb: () => void
+type Entry = SettingEntry<Category> & {
+  /** ligne dans le groupe repliable « Dépannage » */
+  troubleshoot?: boolean
+}
+
+const words = (...parts: string[]) => parts.join(" ")
+
+/** Index statique des réglages dans la langue affichée (l'id est celui de la ligne, `settingDomId`). */
+function settingsIndex(
+  t: (typeof S)["fr"],
+  shortcuts: { label: string }[],
+  mcp: (typeof MCP_STRINGS)["fr"],
+  web: (typeof WEB_STRINGS)["fr"],
+  available: (c: Category) => boolean,
+): Entry[] {
+  const n = t.notifications
+  const entries: Entry[] = [
+    {
+      id: "theme",
+      category: "general",
+      label: t.appearance.theme,
+      description: t.appearance.shortcut,
+      keywords: words(t.appearance.light, t.appearance.dark, t.appearance.auto),
+    },
+    {
+      id: "lang",
+      category: "general",
+      label: "Langue · Language",
+      keywords: "français english",
+    },
+    {
+      id: "launch",
+      category: "general",
+      label: t.refresh.launch,
+      description: t.refresh.launchDescription,
+    },
+    {
+      id: "shortcuts",
+      category: "general",
+      label: t.sections.shortcuts,
+      description: t.shortcuts.description,
+      keywords: words(...shortcuts.map((s) => s.label)),
+    },
+    {
+      id: "version",
+      category: "general",
+      label: t.sections.about,
+      description: t.about.version(null),
+      keywords: words(
+        "PR Radar",
+        t.about.check,
+        t.about.source,
+        t.about.report,
+        t.about.privacy,
+        t.about.licenses,
+      ),
+    },
+    {
+      id: "support",
+      category: "general",
+      label: t.about.support,
+      description: t.about.supportDescription,
+      keywords: words(
+        t.about.coffee,
+        "buy me a coffee café coffee soutenir support don donate sponsor",
+      ),
+    },
+    {
+      id: "accounts",
+      category: "accounts",
+      label: t.sections.accounts,
+      description: t.account.description,
+      keywords: words(
+        t.account.add,
+        t.account.logout,
+        t.account.manage,
+        t.account.oauth,
+        t.account.pat,
+        t.account.gh,
+      ),
+    },
+    {
+      id: "slack",
+      category: "accounts",
+      label: t.sections.slack,
+      description: t.slack.description,
+      keywords: words(
+        t.slack.connect,
+        t.slack.disconnect,
+        t.slack.mentions,
+        t.slack.all,
+      ),
+    },
+    {
+      id: "last",
+      category: "notifications",
+      label: n.last,
+      keywords: n.test,
+    },
+    ...NOTIFY.map((key): Entry => ({
+      id: key,
+      category: "notifications",
+      label: n[key],
+      keywords: t.sections.when,
+    })),
+    {
+      id: "drafts",
+      category: "notifications",
+      label: n.drafts,
+      description: n.draftsDescription,
+    },
+    {
+      id: "dnd",
+      category: "notifications",
+      label: n.dnd,
+      description: n.dndOff,
+      keywords: words(t.sections.pause, n.pauseHour, n.pauseTomorrow),
+    },
+    {
+      id: "quiet-hours",
+      category: "notifications",
+      label: n.quietHours,
+      description: n.quietHoursDescription,
+    },
+    {
+      id: "time-zone",
+      category: "notifications",
+      label: n.timeZone,
+      description: n.timeZoneDescription,
+    },
+    {
+      id: "test",
+      category: "notifications",
+      label: n.test,
+      description: n.testHint,
+      keywords: words(n.sendTest, t.sections.troubleshoot),
+      troubleshoot: true,
+    },
+    ...(SYSTEM_NOTIFICATION_SETTINGS
+      ? [
+          {
+            id: "system",
+            category: "notifications",
+            label: n.system,
+            description: n.systemDescription,
+            keywords: t.sections.troubleshoot,
+            troubleshoot: true,
+          } satisfies Entry,
+        ]
+      : []),
+    ...(IS_MAC
+      ? [
+          {
+            id: "focus",
+            category: "notifications",
+            label: n.focus,
+            description: n.focusDescription,
+            keywords: t.sections.troubleshoot,
+            troubleshoot: true,
+          } satisfies Entry,
+        ]
+      : []),
+    {
+      id: "sort",
+      category: "prs",
+      label: t.display.sort,
+      keywords: words(t.display.priority, t.display.oldest, t.display.recent),
+    },
+    {
+      id: "stale",
+      category: "prs",
+      label: t.display.stale,
+      description: t.display.staleDescription,
+    },
+    {
+      id: "merged",
+      category: "prs",
+      label: t.display.merged,
+      description: t.display.mergedDescription,
+    },
+    {
+      id: "repos",
+      category: "prs",
+      label: t.sections.repos,
+      description: t.repos.description,
+      keywords: t.repos.follow,
+    },
+    {
+      id: "frequency",
+      category: "prs",
+      label: t.refresh.frequency,
+      description: t.refresh.description,
+      keywords: words(t.sections.refresh, t.refresh.manual),
+    },
+    {
+      id: "on-focus",
+      category: "prs",
+      label: t.refresh.onFocus,
+    },
+    {
+      id: "mcp-server",
+      category: "mcp",
+      label: mcp.state.server,
+      description: mcp.state.description,
+      keywords: words(mcp.subtitle, mcp.state.socket, "agent"),
+    },
+    {
+      id: "mcp-calls",
+      category: "mcp",
+      label: mcp.state.today,
+    },
+    {
+      id: "mcp-client",
+      category: "mcp",
+      label: mcp.install.title,
+      description: mcp.install.description,
+      keywords: words(
+        mcp.install.client,
+        mcp.install.other,
+        ...Object.values(CLIENT_LABEL),
+      ),
+    },
+    {
+      id: "mcp-tools",
+      category: "mcp",
+      label: mcp.tools.title,
+      description: mcp.tools.description,
+      keywords: "get_prs get_pr",
+    },
+    {
+      id: "mcp-history",
+      category: "mcp",
+      label: mcp.history.title,
+      description: mcp.history.description,
+      keywords: mcp.history.clear,
+    },
+    {
+      id: "web-enable",
+      category: "web",
+      label: web.enable,
+      description: web.subtitle,
+      keywords: words(web.title, web.server, web.open, "127.0.0.1"),
+    },
+    {
+      id: "web-port",
+      category: "web",
+      label: web.port,
+      description: web.portDescription,
+    },
+    {
+      id: "web-sessions",
+      category: "web",
+      label: web.secret,
+      description: web.secretDescription,
+      keywords: web.rotate,
+    },
+    {
+      id: "quota",
+      category: "advanced",
+      label: t.refresh.quota,
+      description: t.refresh.quotaDescription,
+    },
+    {
+      id: "reload-all",
+      category: "advanced",
+      label: t.refresh.reloadAll,
+      keywords: t.refresh.reloadNow,
+    },
+    {
+      id: "cache",
+      category: "advanced",
+      label: t.data.cache,
+      description: t.data.cacheDescription,
+      keywords: t.data.clearCache,
+    },
+    {
+      id: "seen",
+      category: "advanced",
+      label: t.data.seen,
+      description: t.data.seenDescription,
+      keywords: t.data.forgetSeen,
+    },
+    {
+      id: "reset",
+      category: "advanced",
+      label: t.data.reset,
+      description: t.data.settingsDescription,
+      keywords: words(t.data.settings, t.sections.danger),
+    },
+    {
+      id: "uninstall",
+      category: "advanced",
+      label: t.uninstall.label,
+      description: t.uninstall.description,
+      keywords: t.sections.danger,
+    },
+  ]
+  return entries.filter(
+    (e) => available(e.category) && !(isWeb && DESKTOP_ONLY.includes(e.id)),
+  )
+}
+
+function SearchResults(props: {
+  results: ReturnType<typeof searchSettings<Category>>
+  selected: string | undefined
+  onSelect: (e: Entry) => void
+  onHover: (id: string) => void
 }) {
   const t = useStrings(S)
-  const [active, setActive] = useState<string>(SHOWN[0])
+  const { results } = props
+  const option = (e: Entry, withCategory: boolean) => (
+    <li
+      key={e.id}
+      id={`settings-result-${e.id}`}
+      role="option"
+      aria-selected={props.selected === e.id}
+      onClick={() => props.onSelect(e)}
+      onMouseMove={() => props.onHover(e.id)}
+      className={cn(
+        "cursor-pointer border-t px-4 py-2.5 first:border-t-0",
+        props.selected === e.id && "bg-muted",
+      )}
+    >
+      <div className="text-sm font-medium">
+        {e.label}
+        {withCategory && e.troubleshoot && (
+          <span className="font-normal text-muted-foreground">
+            {" · "}
+            {t.sections.troubleshoot}
+          </span>
+        )}
+      </div>
+      {e.description && (
+        <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+          {e.description}
+        </div>
+      )}
+    </li>
+  )
+  if (!results.count)
+    return (
+      <p
+        aria-live="polite"
+        className="py-8 text-center text-sm text-muted-foreground"
+      >
+        {t.search.empty}
+      </p>
+    )
+  // listbox : seulement des groupes d'options ; compte annoncé à côté, intitulés visuels
+  // aria-hidden et repris comme noms des groupes (aria-labelledby)
+  return (
+    <div className="flex flex-col gap-6">
+      <p aria-live="polite" className="text-xs text-muted-foreground">
+        {t.search.count(results.count)}
+      </p>
+      <div
+        id="settings-results"
+        role="listbox"
+        aria-label={t.search.count(results.count)}
+        className="flex flex-col gap-6"
+      >
+        {results.current.length > 0 && (
+          <div
+            role="group"
+            aria-label={t.categories[results.current[0].category]}
+          >
+            <ul
+              role="presentation"
+              className="overflow-hidden rounded-2xl border bg-card"
+            >
+              {results.current.map((e) => option(e, true))}
+            </ul>
+          </div>
+        )}
+        {results.others.length > 0 && (
+          <div role="presentation" className="flex flex-col gap-3">
+            <div
+              id="settings-results-others"
+              aria-hidden
+              className="text-sm font-semibold text-muted-foreground"
+            >
+              {t.search.others}
+            </div>
+            {results.others.map((g) => (
+              <div
+                key={g.category}
+                role="group"
+                aria-labelledby={`settings-results-others settings-results-${g.category}`}
+              >
+                <div
+                  id={`settings-results-${g.category}`}
+                  aria-hidden
+                  className="mb-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                >
+                  {t.categories[g.category]}
+                </div>
+                <ul
+                  role="presentation"
+                  className="overflow-hidden rounded-2xl border bg-card"
+                >
+                  {g.entries.map((e) => option(e, true))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Page ---------- */
+
+/**
+ * Réglages plein écran. La catégorie affichée est tenue par le tableau de bord (pr-dashboard.tsx),
+ * qui les ouvre directement sur « Serveur MCP » ou « Version web » depuis ses boutons et la palette.
+ */
+export function SettingsPage({
+  category: requested,
+  onCategory,
+  onClose,
+}: {
+  category: Category
+  onCategory: (c: Category) => void
+  onClose: () => void
+}) {
+  const t = useStrings(S)
+  const shortcuts = useStrings(SHORTCUTS)
+  const mcpStrings = useStrings(MCP_STRINGS)
+  const webStrings = useStrings(WEB_STRINGS)
+  // mêmes conditions que les anciens points d'entrée : bouton MCP si le binaire le gère, version web dans l'app seulement
+  const mcpInfo = useMcp().info
+  const mcpSupported = !!mcpInfo?.supported
+  const available = (c: Category) =>
+    c === "mcp" ? mcpSupported : c === "web" ? !isWeb : true
+  const category = available(requested) ? requested : "general"
+  // catégorie indisponible pour de bon : le tableau de bord se recale sur Général. Infos MCP encore
+  // en chargement (info null au lancement) : on garde « mcp » demandé, affiché dès qu'il est confirmé.
+  const settled = requested !== "mcp" || mcpInfo !== null
+  useEffect(() => {
+    if (category !== requested && settled) onCategory(category)
+  }, [category, requested, settled, onCategory])
+  const [troubleshootOpen, setTroubleshootOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [cursor, setCursor] = useState(0)
+  const search = useRef<HTMLInputElement>(null)
+  /** réglage à montrer après le rendu de sa catégorie */
+  const target = useRef<string | null>(null)
+  const highlightTimer = useRef<number>(undefined)
+  /** élément surligné en ce moment */
+  const highlighted = useRef<HTMLElement | null>(null)
+  const clearHighlight = () => {
+    clearTimeout(highlightTimer.current)
+    if (highlighted.current) delete highlighted.current.dataset.highlight
+    highlighted.current = null
+  }
+
+  const index = useMemo(
+    () => settingsIndex(t, shortcuts, mcpStrings, webStrings, available),
+    // available ne dépend que de mcpSupported
+    [t, shortcuts, mcpStrings, webStrings, mcpSupported],
+  )
+  const results = useMemo(
+    () => searchSettings(index, query, category),
+    [index, query, category],
+  )
+  const flat = flatResults(results)
+  const searching = query.trim() !== ""
+  const selected = flat[Math.min(cursor, flat.length - 1)]?.id
 
   useEffect(() => {
+    const focusSearch = () => {
+      search.current?.focus()
+      search.current?.select()
+    }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isTyping(e.target)) onClose()
+      // palette de commandes ouverte : ses touches restent les siennes
+      if (
+        (e.target as HTMLElement | null)?.closest?.(
+          "[data-slot=dialog-content]",
+        )
+      )
+        return
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === "f"
+      ) {
+        e.preventDefault()
+        focusSearch()
+        return
+      }
+      if (isTyping(e.target) || e.defaultPrevented) return
+      if (e.key === "Escape") onClose()
+      else if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        focusSearch()
+      }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [onClose])
 
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const hit = entries.find((e) => e.isIntersecting)
-        if (hit) setActive(hit.target.id)
-      },
-      { rootMargin: "0px 0px -70% 0px" },
-    )
-    SHOWN.forEach((id) => {
-      const el = document.getElementById(id)
-      if (el) obs.observe(el)
-    })
-    return () => obs.disconnect()
-  }, [])
+  useEffect(() => () => clearTimeout(highlightTimer.current), [])
 
-  const go = (id: string) => {
-    setActive(id)
-    document.getElementById(id)?.scrollIntoView({
+  // nouvelle catégorie (menu, bouton MCP, palette) : en haut de page ; le réglage cherché défile ensuite
+  useEffect(() => {
+    window.scrollTo({ top: 0 })
+  }, [category])
+
+  // réglage choisi dans la recherche : défilement, focus sur sa commande, surlignage bref
+  useEffect(() => {
+    const id = target.current
+    if (!id) return
+    target.current = null
+    const el = document.getElementById(settingDomId(id))
+    if (!el) return
+    el.scrollIntoView({
       behavior: reducedMotion() ? "auto" : "smooth",
-      block: "start",
+      block: "center",
     })
+    // focus sur la ligne elle-même (sans anneau, outline-none) : Tab mène ensuite à sa commande,
+    // sans l'anneau focus-visible qu'un focus programmé sur le bouton affiche après Entrée
+    el.tabIndex = -1
+    el.focus({ preventScroll: true })
+    // résultat précédent encore surligné (deux résultats à moins de SETTING_HIGHLIGHT_MS) : éteint d'abord
+    clearHighlight()
+    el.dataset.highlight = ""
+    highlighted.current = el
+    highlightTimer.current = window.setTimeout(
+      clearHighlight,
+      SETTING_HIGHLIGHT_MS,
+    )
+  })
+
+  useEffect(() => {
+    if (selected)
+      document
+        .getElementById(`settings-result-${selected}`)
+        ?.scrollIntoView({ block: "nearest" })
+  }, [selected])
+
+  const open = (e: Entry) => {
+    target.current = e.id
+    if (e.troubleshoot) setTroubleshootOpen(true)
+    setQuery("")
+    setCursor(0)
+    onCategory(e.category)
+  }
+
+  const go = (c: Category) => {
+    setQuery("")
+    onCategory(c)
+  }
+
+  const onSearchKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (!flat.length) return
+      e.preventDefault()
+      const i = Math.min(cursor, flat.length - 1)
+      setCursor(
+        e.key === "ArrowDown"
+          ? Math.min(i + 1, flat.length - 1)
+          : Math.max(i - 1, 0),
+      )
+    } else if (e.key === "Enter") {
+      const hit = flat.find((r) => r.id === selected)
+      if (hit) {
+        e.preventDefault()
+        open(hit)
+      }
+    } else if (e.key === "Escape") {
+      // 1er Échap : vide la recherche ; 2e : quitte le champ (la page reste ouverte)
+      if (query) setQuery("")
+      else e.currentTarget.blur()
+      setCursor(0)
+    }
   }
 
   return (
@@ -1825,38 +2539,122 @@ export function SettingsPage({
           <ArrowLeft data-icon="inline-start" />
           {t.back}
         </Button>
-        <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:pb-0">
-          {SHOWN.map((id) => (
-            <li key={id} className="shrink-0">
-              <button
-                type="button"
-                onClick={() => go(id)}
-                aria-current={active === id ? "true" : undefined}
-                className={cn(
-                  "w-full rounded-lg px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/30 motion-reduce:transition-none",
-                  active === id
-                    ? "bg-muted font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+        <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 py-1 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:py-0">
+          {CATEGORIES.filter(available).map((c) => {
+            const Icon = CATEGORY_ICONS[c]
+            return (
+              <li key={c} className="shrink-0">
+                {/* Avancé à part : réglages rarement touchés et zone sensible */}
+                {c === "advanced" && (
+                  <div
+                    role="separator"
+                    className="mx-3 my-2 hidden border-t md:block"
+                  />
                 )}
-              >
-                {t.sections[id]}
-              </button>
-            </li>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => go(c)}
+                  aria-current={category === c ? "page" : undefined}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/30 motion-reduce:transition-none",
+                    category === c
+                      ? "bg-muted font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                  )}
+                >
+                  <Icon aria-hidden className="size-4 shrink-0" />
+                  {t.categories[c]}
+                </button>
+              </li>
+            )
+          })}
         </ul>
       </nav>
       <div className="flex w-full max-w-2xl min-w-0 flex-col gap-8 pb-16">
-        <AccountSection />
-        <SlackSection />
-        <AppearanceSection />
-        <RefreshSection />
-        <NotificationsSection />
-        <DisplaySection />
-        <ReposSection />
-        <DataSection />
-        {!isWeb && <WebSection onOpen={onOpenWeb} />}
-        <ShortcutsSection />
-        <AboutSection />
+        <div className="relative">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            ref={search}
+            id="settings-search"
+            type="search"
+            role="combobox"
+            aria-expanded={searching && results.count > 0}
+            aria-controls={
+              searching && results.count > 0 ? "settings-results" : undefined
+            }
+            aria-activedescendant={
+              searching && selected ? `settings-result-${selected}` : undefined
+            }
+            aria-autocomplete="list"
+            autoComplete="off"
+            spellCheck={false}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setCursor(0)
+            }}
+            onKeyDown={onSearchKey}
+            placeholder={t.search.placeholder}
+            aria-label={t.search.placeholder}
+            className="pr-16 pl-8 [&::-webkit-search-cancel-button]:hidden"
+          />
+          <Shortcut
+            keys={["/"]}
+            className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2"
+          />
+        </div>
+        {searching ? (
+          <SearchResults
+            results={results}
+            selected={selected}
+            onSelect={open}
+            onHover={(id) => setCursor(flat.findIndex((r) => r.id === id))}
+          />
+        ) : (
+          <>
+            <h1 className="-mb-4 text-xl font-semibold">
+              {t.categories[category]}
+            </h1>
+            {category === "general" && (
+              <>
+                <AppSection />
+                <ShortcutsSection />
+                <AboutSection />
+              </>
+            )}
+            {category === "accounts" && (
+              <>
+                <AccountSection />
+                <SlackSection />
+              </>
+            )}
+            {category === "notifications" && (
+              <NotificationsCategory
+                troubleshootOpen={troubleshootOpen}
+                onTroubleshootOpen={setTroubleshootOpen}
+              />
+            )}
+            {category === "prs" && (
+              <>
+                <DisplaySection />
+                <ReposSection />
+                <RefreshSection />
+              </>
+            )}
+            {category === "mcp" && <McpCategory />}
+            {category === "web" && <WebCategory />}
+            {category === "advanced" && (
+              <>
+                <GitHubSection />
+                <DataSection />
+                <DangerSection />
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   )
