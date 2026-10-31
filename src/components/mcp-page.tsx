@@ -277,18 +277,19 @@ function InstallSection() {
           value={client}
           onValueChange={(v) => v && setClient(v)}
         >
+          {/* largeur fixe, popup de la même largeur : bords alignés, rien ne déborde de la carte */}
           <SelectTrigger
             size="sm"
             aria-labelledby="mcp-client"
-            className="rounded-lg border-border bg-background pr-2 pl-2.5"
+            className="w-44 rounded-lg border-border bg-background pr-2 pl-2.5"
           >
             <SelectValue />
           </SelectTrigger>
-          {/* sous le déclencheur, aligné à droite : sinon base-ui le pose dessus et il déborde de la carte */}
+          {/* sous le déclencheur : sinon base-ui le pose dessus */}
           <SelectContent
             alignItemWithTrigger={false}
-            align="end"
-            className="rounded-xl p-1"
+            align="start"
+            className="w-(--anchor-width) min-w-(--anchor-width) rounded-xl p-1"
           >
             {items.map((i) => (
               <SelectItem
