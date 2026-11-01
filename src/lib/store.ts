@@ -91,8 +91,9 @@ export function useData(): Data {
 /**
  * (Re)charge tout depuis GitHub. Les réponses d'un chargement dépassé sont ignorées.
  * `measure` : chargement sans cache (actualisation), son coût en quota sert au mode « auto ».
+ * `delta` : actualisation automatique, seules les PR changées depuis la lecture précédente sont relues en entier.
  */
-export async function reload({ measure = false } = {}) {
+export async function reload({ measure = false, delta = false } = {}) {
   const id = ++seq
   const start = performance.now()
   const ms = () => Math.round(performance.now() - start)
@@ -117,21 +118,22 @@ export async function reload({ measure = false } = {}) {
       from: day(new Date(now.getTime() - getSettings().mergedDays * DAY_MS)),
       to: day(now),
     }
-    const [{ data: fetched, errors }, merged, found] = await Promise.all([
-      fetchPrs(repos),
-      fetchMerged(repos, mergedWindow.from, mergedWindow.to).then(
-        (list) => ({ list, error: undefined }),
-        (e: unknown) => ({
-          list: [] as MergedPr[],
-          error: e instanceof Error ? e.message.slice(0, 300) : String(e),
-        }),
-      ),
-      // tous les comptes en échec : même traitement qu'un échec partiel
-      fetchReviews().catch((error: unknown) => ({
-        data: [],
-        errors: queried.map((account) => ({ account, error })),
-      })),
-    ])
+    const [{ data: fetched, errors, full, refetched }, merged, found] =
+      await Promise.all([
+        fetchPrs(repos, { delta }),
+        fetchMerged(repos, mergedWindow.from, mergedWindow.to).then(
+          (list) => ({ list, error: undefined }),
+          (e: unknown) => ({
+            list: [] as MergedPr[],
+            error: e instanceof Error ? e.message.slice(0, 300) : String(e),
+          }),
+        ),
+        // tous les comptes en échec : même traitement qu'un échec partiel
+        fetchReviews().catch((error: unknown) => ({
+          data: [],
+          errors: queried.map((account) => ({ account, error })),
+        })),
+      ])
     if (id !== seq) return
     // compte dont seule la recherche des reviews échoue : nommé lui aussi dans le bandeau
     const shown = [
@@ -173,6 +175,8 @@ export async function reload({ measure = false } = {}) {
     log(shown.length ? "warn" : "info", "refresh", {
       ms: ms(),
       measure,
+      mode: full ? "full" : "delta",
+      refetched,
       repos: live.length,
       prs: prs.length,
       reviews: reviews.known.reviews.length,
@@ -184,7 +188,11 @@ export async function reload({ measure = false } = {}) {
     if (measure && getSettings().refreshMinutes === "auto")
       log("info", "refresh.quota", {
         // compte déconnecté pendant l'actualisation : ignoré
-        accounts: recordCosts(spent.filter(([a]) => findAccount(a))),
+        accounts: recordCosts(
+          spent.filter(([a]) => findAccount(a)),
+          Date.now(),
+          full,
+        ),
       })
   } catch (e) {
     if (id !== seq) return

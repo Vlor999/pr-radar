@@ -18,6 +18,29 @@ test("le marqueur STACK ne reste jamais dans la requête", () => {
   assert.doesNotMatch(queryFor("github.com", true), /STACK\b/)
 })
 
+test("le sondage lit l'empreinte, pas les textes ; les deux requêtes suivent le repli des stacks", () => {
+  assert.match(queryFor("github.com", false, "probe"), /search\(/)
+  assert.doesNotMatch(queryFor("github.com", false, "probe"), /bodyHTML/)
+  assert.match(queryFor("github.com", false, "nodes"), /nodes\(ids: \$ids\)/)
+  assert.doesNotMatch(queryFor("github.com", true, "probe"), /stackEntry/)
+})
+
+test("un refus de stackEntry au sondage relance le sondage sans le champ", async () => {
+  const queries: string[] = []
+  await withStackFallback(
+    "github.com",
+    false,
+    async (q) => {
+      queries.push(q)
+      if (q.includes("stackEntry")) throw FIELD_ERROR
+    },
+    () => {},
+    "probe",
+  )
+  assert.equal(queries.length, 2)
+  assert.ok(queries.every((q) => q.includes("search(")))
+})
+
 test("sans les stacks une fois le champ refusé", () => {
   assert.doesNotMatch(queryFor("github.com", true), /stackEntry/)
 })

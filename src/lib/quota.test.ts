@@ -12,6 +12,7 @@ import {
   getQuota,
   measureCost,
   recordCosts,
+  solveInterval,
   spentBy,
   trackQuota,
   validQuota,
@@ -189,4 +190,31 @@ test("compte déconnecté : l'intervalle auto est recalculé sans lui, 5 min san
   assert.equal(getAutoInterval(), 2 * MIN)
   forgetQuota("rapide", NOW)
   assert.equal(getAutoInterval(), AUTO_DEFAULT_MS)
+})
+
+test("coût par différence inconnu : chaque actualisation compte comme complète", () => {
+  assert.equal(solveInterval(1_000, 100), 100_000)
+})
+
+test("coût par différence connu : une relecture complète amortie sur 10 min", () => {
+  // 20 points par tick + 100 tous les 10 min, 3000 ms par point : T = 20 × 3000 / (1 − 100 × 3000 / 600000) = 2 min
+  assert.equal(solveInterval(3_000, 100, 20), 2 * MIN)
+})
+
+test("budget trop serré pour amortir : intervalle au-delà de 10 min, chaque tick relit tout", () => {
+  // (2 + 100) × 6000 ms = 10,2 min
+  assert.equal(solveInterval(6_000, 100, 2), 612_000)
+})
+
+test("tick par différence : son coût rangé à part, l'intervalle n'hérite pas du coût d'un sondage", () => {
+  // complète : 400 points, 1600 de budget sur 40 min → 10 min
+  refresh("mix", 400, 2600)
+  assert.equal(getAutoInterval(), 10 * MIN)
+  const before = spentBy("mix")
+  addCost("mix", 4)
+  trackQuota(headers(2596), "mix")
+  recordCosts([["mix", before]], NOW, false)
+  // 4 points par tick + 400 par 10 min, budget 1596 : bien au-dessus de AUTO_MIN_MS
+  assert.ok(getAutoInterval() > 5 * MIN)
+  forgetQuota("mix", NOW)
 })

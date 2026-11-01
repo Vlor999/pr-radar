@@ -411,7 +411,10 @@ export function PrDashboard({
   const paused = useHidden() && isWeb
   useEffect(() => {
     if (!intervalMs || refreshing || paused) return
-    const id = setTimeout(() => startRefresh(() => refreshPrs()), intervalMs)
+    const id = setTimeout(
+      () => startRefresh(() => refreshPrs({ auto: true })),
+      intervalMs,
+    )
     return () => clearTimeout(id)
   }, [intervalMs, refreshing, fetchedAt, paused])
 
@@ -419,7 +422,7 @@ export function PrDashboard({
   useEffect(() => {
     if (paused || !isWeb || !intervalMs || refreshing) return
     if (Date.now() - Date.parse(fetchedAt) > intervalMs)
-      startRefresh(() => refreshPrs())
+      startRefresh(() => refreshPrs({ auto: true }))
   }, [paused]) // seulement au changement de visibilité
 
   useEffect(() => {
@@ -428,7 +431,7 @@ export function PrDashboard({
       // pas plus souvent que l'actualisation automatique (5 min en mode manuel)
       const min = intervalMs || FOCUS_REFRESH_MIN_MS
       if (Date.now() - Date.parse(fetchedAt) > min)
-        startRefresh(() => refreshPrs())
+        startRefresh(() => refreshPrs({ auto: true }))
     }
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
