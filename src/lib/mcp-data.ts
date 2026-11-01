@@ -1,4 +1,6 @@
 // Serveur MCP local : logique pure (testée). Le câblage Tauri est dans `mcp.ts`.
+import { ATTENTION_AGE_HOURS_MAX, ATTENTION_URGENT } from "./constants.ts"
+import { HOUR_MS, MINUTE_MS } from "./quiet.ts"
 import type {
   McpCall,
   Note,
@@ -34,7 +36,7 @@ const BLOCKS = new Set([
   "HR",
 ])
 
-export type McpTool = "get_prs" | "get_pr"
+export type McpTool = "get_prs" | "get_pr" | "get_attention"
 
 export type SlackStatus = "connected" | "expired" | "disabled"
 
@@ -335,6 +337,99 @@ export const prsPayload = (
     reviews: outReviews.kept,
     // éléments au-delà de `limit`, par liste
     truncated: { prs: outPrs.cut, reviews: outReviews.cut },
+  }) as Record<string, unknown>
+}
+
+/* ---------- `get_attention` ---------- */
+
+const ATTENTION_ARGS = new Set(["repo"])
+
+/** Arguments de `get_attention` (déjà validés par le shim, revus ici par défense) ; `null` vaut absent. */
+export const parseAttentionArgs = (
+  args: unknown,
+): { ok: true; repo?: string } | { ok: false; error: string } => {
+  if (args == null) return { ok: true }
+  if (typeof args !== "object" || Array.isArray(args))
+    return { ok: false, error: "get_attention: arguments must be an object" }
+  const a = args as Record<string, unknown>
+  const unknown = Object.keys(a).find((k) => !ATTENTION_ARGS.has(k))
+  if (unknown)
+    return {
+      ok: false,
+      error: `get_attention: unknown argument \`${unknown}\``,
+    }
+  const { repo } = a
+  if (repo != null && typeof repo !== "string")
+    return { ok: false, error: "get_attention: `repo` must be a string" }
+  return { ok: true, ...(repo != null && { repo }) }
+}
+
+/** Durée courte : `45m`, `5h`, `3d` (heures jusqu'à 48 h). */
+export const ageLabel = (ms: number) => {
+  const hours = Math.floor(ms / HOUR_MS)
+  if (hours < 1) return `${Math.max(0, Math.floor(ms / MINUTE_MS))}m`
+  return hours < ATTENTION_AGE_HOURS_MAX
+    ? `${hours}h`
+    : `${Math.floor(hours / 24)}d`
+}
+
+type AttentionItem = {
+  url: string
+  repo: string
+  number: number
+  title: string
+  reasons: ActionReason[]
+  /** depuis quand : demande de review (file « À reviewer »), sinon dernière mise à jour de la PR */
+  since: string
+}
+
+/**
+ * `get_attention` : une entrée par PR qui attend une action de ma part (raisons de `actionReasons`).
+ * Une PR à la fois dans la file « À reviewer » et dans l'arbre : raisons réunies, date de la demande.
+ * Tri : review demandée ou CI en échec d'abord, puis la plus ancienne. Valeurs par défaut omises.
+ */
+export const attentionPayload = (
+  ctx: McpContext,
+  prs: Pr[],
+  reviews: ReviewPr[],
+  me: string[],
+  now: number,
+  repo?: string,
+) => {
+  const needle = repo?.toLowerCase() ?? ""
+  const items = new Map<string, AttentionItem>()
+  const add = (p: Pr | ReviewPr, reasons: ActionReason[], since: string) => {
+    if (!reasons.length || !p.repo.toLowerCase().includes(needle)) return
+    const key = normalizeUrl(p.url)
+    const prev = items.get(key)
+    if (prev) prev.reasons = [...new Set([...prev.reasons, ...reasons])]
+    else
+      items.set(key, {
+        url: p.url,
+        repo: p.repo,
+        number: p.number,
+        title: p.title,
+        reasons,
+        since,
+      })
+  }
+  // file « À reviewer » d'abord : sa date de demande l'emporte sur la mise à jour de la PR
+  for (const r of reviews) add(r, actionReasons({ review: r }, me), r.since)
+  for (const p of prs) add(p, actionReasons({ pr: p }, me), p.updated)
+  const urgent = (i: AttentionItem) =>
+    i.reasons.some((r) => ATTENTION_URGENT.includes(r)) ? 0 : 1
+  const sorted = [...items.values()].sort(
+    (a, b) =>
+      urgent(a) - urgent(b) || Date.parse(a.since) - Date.parse(b.since),
+  )
+  return omitDefaults({
+    fetchedAt: ctx.fetchedAt,
+    loading: ctx.loading,
+    error: ctx.error,
+    items: sorted.map(({ since, ...i }) => ({
+      ...i,
+      age: ageLabel(now - Date.parse(since)),
+    })),
   }) as Record<string, unknown>
 }
 
