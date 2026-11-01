@@ -653,7 +653,9 @@ export const leadTimeStats = (ms: number[]) => {
 /**
  * `get_merged` : mes PR mergées chargées (`RepoTree.merged`, fenêtre `mergedDays`), filtrées par jour de merge
  * (UTC, bornes incluses) et repo, plus récentes d'abord, avec le délai ouverture → merge (`leadTime`, format de
- * `ageLabel`) et ses stats. Plage hors de la fenêtre chargée : `outsideWindow` le dit. Valeurs par défaut omises.
+ * `ageLabel`) et ses stats. Bornes absentes : celles de la fenêtre. Plage vide, inversée ou hors de la fenêtre
+ * chargée : `outsideWindow` le dit. Lecture en échec (`loadError`) ou pas encore faite : `notLoaded`, sans liste.
+ * Valeurs par défaut omises.
  */
 export const mergedPayload = (
   ctx: McpContext,
@@ -693,8 +695,8 @@ export const mergedPayload = (
     ...head,
     window,
     outsideWindow:
-      from < window.from || to > window.to
-        ? `Requested range ${from}..${to} goes beyond the merged PRs loaded in PR Radar (${window.from}..${window.to}, setting "Recently merged"): only merges inside the loaded window are listed.`
+      from > to || from < window.from || to > window.to
+        ? `Requested range ${from}..${to} (a missing bound defaults to the loaded window) is empty or goes beyond the merged PRs loaded in PR Radar (${window.from}..${window.to}, setting "Recently merged"): only merges inside the loaded window are listed.`
         : null,
     stats: {
       count: kept.length,

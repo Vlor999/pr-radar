@@ -1136,6 +1136,18 @@ test("merged : plage au-delà de la fenêtre chargée → outsideWindow nomme la
   assert.equal(mergedPayload(ctx, [merged(1)], WINDOW).outsideWindow, undefined)
 })
 
+test("merged : une seule borne qui inverse la plage → outsideWindow, aucune PR", () => {
+  for (const f of [{ to: "2025-12-31" }, { from: "2026-01-09" }]) {
+    const r = mergedPayload(ctx, [merged(1)], WINDOW, f)
+    assert.match(
+      String(r.outsideWindow),
+      /is empty or goes beyond/,
+      JSON.stringify(f),
+    )
+    assert.equal(r.prs, undefined, JSON.stringify(f))
+  }
+})
+
 test("merged : lecture en échec → notLoaded avec l'erreur, sans liste", () => {
   const r = mergedPayload(ctx, [], undefined, {}, "HTTP 502")
   assert.deepEqual(r, {
