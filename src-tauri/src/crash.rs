@@ -1,8 +1,8 @@
 //! Détection des plantages : un marqueur « session en cours » (`session.json`, dossier de données de
 //! l'app) est écrit au lancement et supprimé à la fermeture propre. Présent au lancement suivant : la
 //! session précédente s'est mal terminée. Un panic Rust est noté dans ce marqueur et dans le journal.
-//! Le marqueur garde aussi l'heure de démarrage du système : un marqueur d'un démarrage précédent (arrêt
-//! ou fermeture de session du système sans `RunEvent::Exit`) n'est pas un plantage, sauf s'il note un panic.
+//! Un marqueur d'une session lancée avant le démarrage actuel du système (arrêt ou fermeture de session
+//! sans `RunEvent::Exit`) n'est pas un plantage, sauf s'il note un panic.
 //! Rien n'est envoyé : l'interface propose seulement d'ouvrir une issue préremplie.
 
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ const MARKER: &str = "session.json";
 const LOG_DIR_FILE: &str = "log-dir.txt";
 /// message de panic et backtrace tronqués au-delà
 const MAX_PANIC_CHARS: usize = 2_000;
-/// écart toléré entre deux calculs de l'heure de démarrage du système (horloge réglée, NTP)
+/// marge sur l'heure de démarrage du système (dérivée de l'horloge : NTP, réglage)
 const BOOT_TOLERANCE_MS: i64 = 120_000;
 
 /// Panic noté par le hook (le dernier de la session).
@@ -38,18 +38,14 @@ pub struct Panic {
 pub struct Session {
     /// lancement (ms depuis l'époque Unix) ; 0 : marqueur illisible
     pub started_at: i64,
-    /// démarrage du système (ms depuis l'époque Unix), None si inconnu
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub boot: Option<i64>,
     #[serde(default)]
     pub panic: Option<Panic>,
 }
 
 impl Session {
-    fn new(started_at: i64, boot: Option<i64>) -> Self {
+    fn new(started_at: i64) -> Self {
         Self {
             started_at,
-            boot,
             panic: None,
         }
     }
@@ -67,8 +63,6 @@ static LOG_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 static PREVIOUS: Mutex<Option<Session>> = Mutex::new(None);
 /// lancement de cette session
 static STARTED_AT: OnceLock<i64> = OnceLock::new();
-/// démarrage du système, lu au lancement
-static BOOT: OnceLock<Option<i64>> = OnceLock::new();
 
 fn now_ms() -> i64 {
     SystemTime::now()
@@ -77,6 +71,10 @@ fn now_ms() -> i64 {
 }
 
 /// Heure de démarrage du système (ms depuis l'époque Unix), None si elle ne peut pas être lue.
+/// Windows : avec le démarrage rapide (réglage par défaut), « Arrêter » met le système en veille
+/// prolongée sans remettre `GetTickCount64` à zéro ; la session suivante est alors vue dans le même
+/// démarrage et un arrêt normal peut afficher le bandeau (faux positif accepté, texte neutre :
+/// « PR Radar a été fermé de façon inattendue »). Un redémarrage remet bien le compteur à zéro.
 #[cfg(target_os = "macos")]
 fn boot_ms() -> Option<i64> {
     let mut tv = libc::timeval {
@@ -136,16 +134,21 @@ fn write_marker(data: &Path, s: &Session) -> Result<(), String> {
 fn read_marker(data: &Path) -> Option<Session> {
     let text = fs::read_to_string(data.join(MARKER)).ok()?;
     // présent mais illisible (écriture interrompue) : session mal terminée quand même
-    Some(serde_json::from_str(&text).unwrap_or(Session::new(0, None)))
+    Some(serde_json::from_str(&text).unwrap_or(Session::new(0)))
 }
 
 /// Marqueur resté d'un démarrage précédent du système, sans panic : arrêt ou fermeture de session
 /// (l'app n'a pas reçu `RunEvent::Exit`), pas un plantage.
+/// Comparaison avec le lancement de la session (et non deux heures de démarrage dérivées de l'horloge) :
+/// un saut d'horloge entre deux lancements du même démarrage ne fait pas passer un plantage pour un arrêt,
+/// sauf saut en avant plus grand que le temps écoulé entre le démarrage et ce lancement.
 fn is_crash(prev: &Session, boot: Option<i64>) -> bool {
-    match (prev.boot, boot) {
+    match boot {
         _ if prev.panic.is_some() => true,
-        (Some(a), Some(b)) => (a - b).abs() <= BOOT_TOLERANCE_MS,
-        _ => true,
+        // marqueur illisible : lancement inconnu
+        _ if prev.started_at <= 0 => true,
+        Some(b) => prev.started_at >= b - BOOT_TOLERANCE_MS,
+        None => true,
     }
 }
 
@@ -153,7 +156,7 @@ fn is_crash(prev: &Session, boot: Option<i64>) -> bool {
 /// de cette session.
 fn begin(data: &Path, now: i64, boot: Option<i64>) -> Option<Session> {
     let previous = read_marker(data).filter(|p| is_crash(p, boot));
-    let _ = write_marker(data, &Session::new(now, boot));
+    let _ = write_marker(data, &Session::new(now));
     previous
 }
 
@@ -163,8 +166,8 @@ fn end(data: &Path) {
 }
 
 /// Panic noté dans le marqueur (recréé s'il manque : le prochain lancement le verra).
-fn note_panic(data: &Path, started_at: i64, boot: Option<i64>, panic: Panic) {
-    let mut s = read_marker(data).unwrap_or(Session::new(started_at, boot));
+fn note_panic(data: &Path, started_at: i64, panic: Panic) {
+    let mut s = read_marker(data).unwrap_or(Session::new(started_at));
     s.panic = Some(panic);
     let _ = write_marker(data, &s);
 }
@@ -225,7 +228,6 @@ fn on_panic(info: &std::panic::PanicHookInfo) {
     note_panic(
         &paths.data,
         STARTED_AT.get().copied().unwrap_or(ts),
-        BOOT.get().copied().flatten(),
         Panic {
             ts,
             message: message.clone(),
@@ -264,7 +266,6 @@ pub fn init(app: &AppHandle) {
     let now = now_ms();
     let boot = boot_ms();
     let _ = STARTED_AT.set(now);
-    let _ = BOOT.set(boot);
     *LOG_DIR.lock().unwrap_or_else(|e| e.into_inner()) = load_log_dir(&data);
     *PREVIOUS.lock().unwrap_or_else(|e| e.into_inner()) = begin(&data, now, boot);
     let _ = PATHS.set(Paths { data, default_log });
@@ -277,7 +278,8 @@ pub fn init(app: &AppHandle) {
 
 /// Fermeture propre (`RunEvent::Exit` : Quitter, désinstallation, redémarrage après mise à jour, SIGTERM
 /// et SIGHUP sur unix). Restent sans fermeture propre : kill -9, fin de tâche (Windows), coupure de
-/// courant ; et sous Windows une fermeture de session sans redémarrage.
+/// courant ; sous Windows, une fermeture de session sans redémarrage. Faux positif restant : l'arrêt avec
+/// démarrage rapide de Windows (voir `boot_ms`).
 pub fn shutdown() {
     if let Some(p) = PATHS.get() {
         end(&p.data);
@@ -331,10 +333,7 @@ pub fn session_clean(clean: bool) -> Result<(), String> {
     } else {
         write_marker(
             &p.data,
-            &Session::new(
-                STARTED_AT.get().copied().unwrap_or(0),
-                BOOT.get().copied().flatten(),
-            ),
+            &Session::new(STARTED_AT.get().copied().unwrap_or(0)),
         )
     }
 }
@@ -358,45 +357,75 @@ mod tests {
         }
     }
 
+    /// démarrage du système ; sessions lancées après
     const BOOT: Option<i64> = Some(1_000_000);
+    const T1: i64 = 2_000_000;
+    const T2: i64 = 3_000_000;
 
     #[test]
     fn clean_exit_leaves_no_previous_session() {
         let data = tmp("clean");
-        assert_eq!(begin(&data, 1, BOOT), None);
+        assert_eq!(begin(&data, T1, BOOT), None);
         end(&data);
-        assert_eq!(begin(&data, 2, BOOT), None);
+        assert_eq!(begin(&data, T2, BOOT), None);
         fs::remove_dir_all(data).unwrap();
     }
 
     #[test]
     fn unclean_exit_is_reported_once() {
         let data = tmp("unclean");
-        begin(&data, 1, BOOT);
-        assert_eq!(begin(&data, 2, BOOT), Some(Session::new(1, BOOT)));
+        begin(&data, T1, BOOT);
+        assert_eq!(begin(&data, T2, BOOT), Some(Session::new(T1)));
         end(&data);
-        assert_eq!(begin(&data, 3, BOOT), None);
+        assert_eq!(begin(&data, T2 + 1, BOOT), None);
         fs::remove_dir_all(data).unwrap();
     }
 
     #[test]
     fn marker_from_previous_boot_is_a_system_shutdown() {
         let data = tmp("reboot");
-        begin(&data, 1, BOOT);
-        assert_eq!(begin(&data, 2, Some(9_000_000)), None);
+        begin(&data, T1, BOOT);
+        // système redémarré après ce lancement
+        assert_eq!(begin(&data, T2 + 10_000_000, Some(T2)), None);
         fs::remove_dir_all(data).unwrap();
     }
 
     #[test]
-    fn boot_comparison() {
-        let s = Session::new(1, Some(1_000_000));
-        assert!(is_crash(&s, Some(1_000_000 + BOOT_TOLERANCE_MS)));
-        assert!(!is_crash(&s, Some(1_000_000 + BOOT_TOLERANCE_MS + 1)));
-        assert!(is_crash(&s, None));
-        assert!(is_crash(&Session::new(1, None), Some(5)));
-        let mut panicked = Session::new(1, Some(0));
+    fn session_started_before_current_boot_is_not_a_crash() {
+        let boot = 10_000_000;
+        assert!(!is_crash(
+            &Session::new(boot - BOOT_TOLERANCE_MS - 1),
+            Some(boot)
+        ));
+        // marge : heure de démarrage dérivée de l'horloge
+        assert!(is_crash(
+            &Session::new(boot - BOOT_TOLERANCE_MS),
+            Some(boot)
+        ));
+        assert!(is_crash(&Session::new(boot + 1), Some(boot)));
+    }
+
+    #[test]
+    fn clock_step_within_the_same_boot_keeps_the_crash() {
+        let real_boot = 10_000_000;
+        let prev = Session::new(real_boot + 3_600_000);
+        // horloge reculée de 10 min : heure de démarrage calculée plus tôt
+        assert!(is_crash(&prev, Some(real_boot - 600_000)));
+        // horloge avancée de 10 min (moins que l'heure écoulée entre le démarrage et le lancement)
+        assert!(is_crash(&prev, Some(real_boot + 600_000)));
+    }
+
+    #[test]
+    fn unknown_boot_or_start_counts_as_a_crash() {
+        assert!(is_crash(&Session::new(T1), None));
+        assert!(is_crash(&Session::new(0), BOOT));
+    }
+
+    #[test]
+    fn panic_counts_as_a_crash_even_after_a_reboot() {
+        let mut panicked = Session::new(T1);
         panicked.panic = Some(panic_at(5));
-        assert!(is_crash(&panicked, Some(9_000_000)));
+        assert!(is_crash(&panicked, Some(T2 * 10)));
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -418,20 +447,20 @@ mod tests {
     #[test]
     fn panic_is_kept_for_next_launch() {
         let data = tmp("panic");
-        begin(&data, 1, BOOT);
-        note_panic(&data, 1, BOOT, panic_at(5));
-        let mut expected = Session::new(1, BOOT);
+        begin(&data, T1, BOOT);
+        note_panic(&data, T1, panic_at(5));
+        let mut expected = Session::new(T1);
         expected.panic = Some(panic_at(5));
         // même après un redémarrage du système : un panic reste un plantage
-        assert_eq!(begin(&data, 9, Some(9_000_000)), Some(expected));
+        assert_eq!(begin(&data, T2 * 10, Some(T2 * 5)), Some(expected));
         fs::remove_dir_all(data).unwrap();
     }
 
     #[test]
     fn panic_recreates_missing_marker() {
         let data = tmp("recreate");
-        note_panic(&data, 4, BOOT, panic_at(5));
-        assert_eq!(begin(&data, 9, BOOT).unwrap().started_at, 4);
+        note_panic(&data, T1, panic_at(5));
+        assert_eq!(begin(&data, T2, BOOT).unwrap().started_at, T1);
         fs::remove_dir_all(data).unwrap();
     }
 
@@ -440,13 +469,13 @@ mod tests {
         let data = tmp("corrupt");
         fs::create_dir_all(&data).unwrap();
         fs::write(data.join(MARKER), "{\"startedAt\":").unwrap();
-        assert_eq!(begin(&data, 9, BOOT), Some(Session::new(0, None)));
+        assert_eq!(begin(&data, T2, BOOT), Some(Session::new(0)));
         fs::remove_dir_all(data).unwrap();
     }
 
     #[test]
     fn status_is_read_once() {
-        *PREVIOUS.lock().unwrap() = Some(Session::new(1, None));
+        *PREVIOUS.lock().unwrap() = Some(Session::new(1));
         assert!(crash_status().unwrap().previous.is_some());
         assert!(crash_status().unwrap().previous.is_none());
     }
