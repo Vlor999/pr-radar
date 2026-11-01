@@ -123,6 +123,42 @@ export const parentsOf = (trees: RepoTree[]) => {
   return out
 }
 
+/** Défaut d'un champ JSON : `null`, `false`, `0`, `[]` ou `{}` (absent de la réponse). */
+const isDefault = (v: unknown) =>
+  v == null ||
+  v === false ||
+  v === 0 ||
+  (Array.isArray(v)
+    ? v.length === 0
+    : typeof v === "object" && !Object.keys(v).length)
+
+/** Retire récursivement les champs à leur valeur par défaut : moins de tokens pour l'agent, absent = défaut. Les éléments des tableaux sont gardés. */
+export const omitDefaults = (v: unknown): unknown => {
+  if (Array.isArray(v)) return v.map(omitDefaults)
+  if (!v || typeof v !== "object") return v
+  const out: Record<string, unknown> = {}
+  for (const [k, x] of Object.entries(v)) {
+    const c = omitDefaults(x)
+    if (!isDefault(c)) out[k] = c
+  }
+  return out
+}
+
+/** `CHANGES_REQUESTED` → `changesRequested` */
+const camel = (state: string) =>
+  state.toLowerCase().replace(/_(\w)/g, (_, c: string) => c.toUpperCase())
+
+/** Reviewers en listes de logins : une par état de review, puis les demandes (personnes, équipes). */
+const reviewersOf = (p: Pr) => {
+  const byState: Record<string, string[]> = {}
+  for (const r of p.reviews) (byState[camel(r.state)] ??= []).push(r.who)
+  return {
+    ...byState,
+    requested: p.requested.filter((r) => !r.team).map((r) => r.who),
+    requestedTeams: p.requested.filter((r) => r.team).map((r) => r.who),
+  }
+}
+
 const compactPr = (
   p: Pr,
   parents: Map<string, number | null>,
@@ -146,27 +182,33 @@ const compactPr = (
     unresolved: p.unresolved,
     comments: p.comments,
     updated: p.updated,
-    reviewers: { reviews: p.reviews, requested: p.requested },
-    stack: { parent: parents.get(p.url) ?? null, native: p.stack ?? null },
-    // PR d'un autre (assignée, mentionné, impliqué) ; null : une de mes PR
-    involved: p.involved ?? null,
-    slack: slack?.list ?? null,
-    slackCheckedAt: slack ? new Date(slack.at).toISOString() : null,
+    reviewers: reviewersOf(p),
+    // numéro de la PR sur laquelle elle est stackée
+    parent: parents.get(p.url),
+    stack: p.stack,
+    // PR d'un autre (assignée, mentionné, impliqué) ; absent : une de mes PR
+    involved: p.involved,
+    // absent : pas cherchées ; `{checkedAt}` seul : cherchées, aucune mention
+    slack: slack && {
+      checkedAt: new Date(slack.at).toISOString(),
+      mentions: slack.list,
+    },
   }
 }
 
-/** `get_prs` : mes PR ouvertes et celles des autres qui me concernent (avec mentions Slack) et l'onglet « À reviewer » (`slack: null`). */
+/** `get_prs` : mes PR ouvertes et celles des autres qui me concernent (avec mentions Slack) et l'onglet « À reviewer ». Valeurs par défaut omises. */
 export const prsPayload = (
   ctx: McpContext,
   prs: Pr[],
   reviews: ReviewPr[],
   parents: Map<string, number | null>,
   mentionsOf: MentionsOf,
-) => ({
-  ...ctx,
-  prs: prs.map((p) => compactPr(p, parents, mentionsOf)),
-  reviews: reviews.map((r) => ({ ...r, slack: null })),
-})
+) =>
+  omitDefaults({
+    ...ctx,
+    prs: prs.map((p) => compactPr(p, parents, mentionsOf)),
+    reviews,
+  }) as Record<string, unknown>
 
 /** URL de PR comparable : sans `#…`, `?…`, `/files`, `/commits`, `/` final, casse ignorée. */
 export const normalizeUrl = (url: string) =>
@@ -177,7 +219,7 @@ export const normalizeUrl = (url: string) =>
     .replace(/\/+$/, "")
     .toLowerCase()
 
-/** `get_pr` : une PR ouverte de l'arbre (à moi, ou d'un autre qui me concerne), fils non résolus et conversation en texte. */
+/** `get_pr` : une PR ouverte de l'arbre (à moi, ou d'un autre qui me concerne), fils non résolus et conversation en texte. Valeurs par défaut omises. */
 export const prPayload = (
   ctx: McpContext,
   url: string,
@@ -205,7 +247,7 @@ export const prPayload = (
   })
   return {
     ok: true,
-    data: {
+    data: omitDefaults({
       ...ctx,
       pr: {
         ...compactPr(pr, parents, mentionsOf),
@@ -218,7 +260,7 @@ export const prPayload = (
         })),
         conversation: pr.conversation.map(comment),
       },
-    },
+    }),
   }
 }
 

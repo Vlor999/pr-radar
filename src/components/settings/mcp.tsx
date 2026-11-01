@@ -2,6 +2,7 @@ import { cn } from "cn"
 import { Check, ChevronRight, Copy, Trash2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
+import { HarnessLogo } from "@/components/harness-logo"
 import { words, type SettingsEntry } from "@/components/settings/category"
 import { Row, Section, settingDomId, Toggle } from "@/components/settings/ui"
 import { Button } from "@/components/ui/button"
@@ -377,7 +378,10 @@ function HistoryRow({ call }: { call: McpCall }) {
         <span className="shrink-0 text-muted-foreground tabular-nums">
           {when(call.at)}
         </span>
-        <span className="min-w-0 truncate">{call.client}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <HarnessLogo client={call.client} />
+          <span className="truncate">{call.client}</span>
+        </span>
         <code className="shrink-0 font-mono text-xs">{call.tool}</code>
         <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
           {call.ms} ms

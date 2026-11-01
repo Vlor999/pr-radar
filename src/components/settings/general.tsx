@@ -4,7 +4,15 @@ import {
   enable as enableAutostart,
   isEnabled as isAutostartEnabled,
 } from "@tauri-apps/plugin-autostart"
-import { Coffee, ExternalLink, Loader2, Monitor, Moon, Sun } from "lucide-react"
+import {
+  Coffee,
+  ExternalLink,
+  Loader2,
+  MessageSquare,
+  Monitor,
+  Moon,
+  Sun,
+} from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { words, type SettingsEntry } from "@/components/settings/category"
@@ -19,10 +27,11 @@ import { Shortcut } from "@/components/shortcut"
 import { Button } from "@/components/ui/button"
 import { SHORTCUTS } from "@/hooks/use-keyboard-nav"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
-import { BUY_ME_A_COFFEE_URL } from "@/lib/constants"
+import { BUY_ME_A_COFFEE_URL, REPO_URL } from "@/lib/constants"
 import { currentLang, strings, useStrings, type Lang } from "@/lib/i18n"
 import { openExternal } from "@/lib/open"
 import { isWeb } from "@/lib/platform"
+import { feedbackUrl, osName } from "@/lib/report"
 import { updateSettings, useSettings } from "@/lib/settings"
 import { checkForUpdate, installUpdate, useUpdate } from "@/lib/updater"
 
@@ -69,6 +78,10 @@ const S = strings(
       supportDescription:
         "Gratuit et sans publicité. Un café aide à le faire vivre.",
       coffee: "Offrir un café",
+      feedback: "Envoyer un avis",
+      feedbackDescription:
+        "Une idée, une question, un bug ? Ouvre une discussion GitHub préremplie, à écrire et publier dans le navigateur.",
+      feedbackButton: "Donner mon avis",
       links: "Liens",
       source: "Code source",
       download: "Page de téléchargement",
@@ -118,6 +131,10 @@ const S = strings(
       support: "Support PR Radar",
       supportDescription: "Free and ad-free. A coffee helps keep it going.",
       coffee: "Buy me a coffee",
+      feedback: "Send feedback",
+      feedbackDescription:
+        "An idea, a question, a bug? Opens a prefilled GitHub discussion, to write and post in your browser.",
+      feedbackButton: "Give feedback",
       links: "Links",
       source: "Source code",
       download: "Download page",
@@ -129,7 +146,6 @@ const S = strings(
 )
 
 const DOWNLOAD_URL = "https://vlor999.github.io/pr-radar/"
-const REPO_URL = "https://github.com/Vlor999/pr-radar"
 
 /** Catégorie « Général » : application, raccourcis clavier, à propos. */
 export function GeneralCategory() {
@@ -196,6 +212,16 @@ export function generalEntries(lang: Lang): SettingsEntry[] {
       keywords: words(
         t.about.coffee,
         "buy me a coffee café coffee soutenir support don donate sponsor",
+      ),
+    },
+    {
+      id: "feedback",
+      category: "general",
+      label: t.about.feedback,
+      description: t.about.feedbackDescription,
+      keywords: words(
+        t.about.feedbackButton,
+        "feedback avis suggestion idée idea bug discussion github retour",
       ),
     },
   ]
@@ -307,6 +333,7 @@ function ShortcutsSection() {
 
 function AboutSection() {
   const [version, setVersion] = useState<string | null>(null)
+  const { lang } = useSettings()
   const update = useUpdate()
   const t = useStrings(S)
   useEffect(() => {
@@ -383,6 +410,27 @@ function AboutSection() {
         >
           <Coffee data-icon="inline-start" />
           {t.about.coffee}
+        </Button>
+      </Row>
+      <Row
+        id="feedback"
+        label={t.about.feedback}
+        description={t.about.feedbackDescription}
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            openExternal(
+              feedbackUrl(
+                { version, os: osName(navigator.userAgent), web: isWeb },
+                currentLang(lang),
+              ),
+            )
+          }
+        >
+          <MessageSquare data-icon="inline-start" />
+          {t.about.feedbackButton}
         </Button>
       </Row>
       {/* label above: the five links do not fit on one line next to it in French */}
