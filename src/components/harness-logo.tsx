@@ -39,7 +39,7 @@ export function HarnessLogo({
   client,
   className,
 }: {
-  /** `clientInfo.name` brut, aussi libellé accessible */
+  /** `clientInfo.name` brut ; logo décoratif, le nom est affiché à côté */
   client: string
   className?: string
 }) {
@@ -49,8 +49,7 @@ export function HarnessLogo({
   if (path)
     return (
       <svg
-        role="img"
-        aria-label={client}
+        aria-hidden
         viewBox="0 0 24 24"
         fill="currentColor"
         className={classes}
@@ -59,5 +58,5 @@ export function HarnessLogo({
       </svg>
     )
   const Icon = (harness && FALLBACK[harness]) || Bot
-  return <Icon role="img" aria-label={client} className={classes} />
+  return <Icon aria-hidden className={classes} />
 }
