@@ -47,7 +47,7 @@ Only radius and the card shadow were edited. Everything else stays as shadcn gen
 ## Color
 
 - Solid `primary` badge = "Ready to merge" only. Approved = `outline` badge + `Check` in `text-green-600 dark:text-green-400`.
-- Unseen PR ("New") = `size-2 rounded-full bg-emerald-500` dot before the title, with `role="img"`, `aria-label` and `title` (FR + EN). Same emerald dot for "has open PRs" and "requested from me".
+- Unseen PR ("New") = `size-2 rounded-full bg-emerald-500` dot before the title, with `role="img"`, `aria-label` and `title` (FR + EN). Same dot for "has open PRs" (sidebar). Inside a badge that already has a text label ("requested from me"): `size-1.5`, `aria-hidden`.
 - Card status edge: 3px inset bar (`before:w-0.75 before:inset-y-3`), `bg-destructive` = needs action, `bg-primary` = ready to merge. No `border-l-4`.
 - Surfaces stay neutral (mist). Semantic colours (green/red/amber) carry meaning only.
 
