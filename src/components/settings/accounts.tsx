@@ -1,5 +1,6 @@
 import { cn } from "cn"
 import {
+  Building2,
   Check,
   ExternalLink,
   Loader2,
@@ -51,6 +52,7 @@ const S = strings(
       pat: "Jeton personnel",
       gh: "CLI gh",
       unknown: "Inconnu",
+      enterprise: "Hôte GitHub Enterprise",
       session: "Session",
       manage: "Gérer l'accès sur GitHub",
       logout: "Se déconnecter",
@@ -105,6 +107,7 @@ const S = strings(
       pat: "Personal token",
       gh: "gh CLI",
       unknown: "Unknown",
+      enterprise: "GitHub Enterprise host",
       session: "Session",
       manage: "Manage access on GitHub",
       logout: "Sign out",
@@ -259,15 +262,11 @@ function AccountRows({ account }: { account: Account }) {
                 className="text-xs text-muted-foreground hover:text-primary hover:underline"
               >
                 @{profile.login}
-                {host !== GITHUB && ` · ${host}`}
               </a>
             </div>
           </>
         ) : error ? (
-          <p className="text-sm text-destructive">
-            {t.account.profileError}
-            {host !== GITHUB && ` (${host})`}
-          </p>
+          <p className="text-sm text-destructive">{t.account.profileError}</p>
         ) : (
           <>
             <div className="size-10 animate-pulse rounded-full bg-muted motion-reduce:animate-none" />
@@ -276,6 +275,15 @@ function AccountRows({ account }: { account: Account }) {
               <div className="h-3 w-20 animate-pulse rounded bg-muted motion-reduce:animate-none" />
             </div>
           </>
+        )}
+        {host !== GITHUB && (
+          <span
+            title={t.account.enterprise}
+            className="ml-auto inline-flex min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground"
+          >
+            <Building2 aria-hidden className="size-3.5 shrink-0" />
+            <span className="truncate">{host}</span>
+          </span>
         )}
       </div>
       <Row
