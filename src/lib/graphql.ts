@@ -13,6 +13,38 @@ export type GqlResponse = {
 export const gqlFailed = ({ data, errors }: GqlResponse) =>
   !data || (!!errors?.length && Object.values(data).some((v) => v === null))
 
+/**
+ * Ajoute `rateLimit { cost }` à une opération query (`query …` ou forme abrégée `{ … }`), au premier `{`
+ * hors de l'en-tête des variables. Mutation inchangée : `rateLimit` n'existe que sur le type Query.
+ */
+export function withCost(query: string): string {
+  const head = query.trimStart()
+  if (!head.startsWith("{") && !/^query\b/.test(head)) return query
+  let depth = 0 // parenthèses de l'en-tête `($q: String!)`
+  for (let i = 0; i < query.length; i++) {
+    const ch = query[i]
+    if (ch === "(") depth++
+    else if (ch === ")") depth--
+    else if (ch === "{" && depth === 0)
+      return `${query.slice(0, i + 1)} rateLimit { cost }${query.slice(i + 1)}`
+  }
+  return query
+}
+
+/**
+ * Retire de `data` le `rateLimit` ajouté par `withCost` (ni les appelants ni `gqlFailed` ne le voient)
+ * et renvoie son coût en points ; undefined si absent ou null (GHES sans limite de débit).
+ */
+export function takeCost(json: GqlResponse): number | undefined {
+  if (!json.data || !("rateLimit" in json.data)) return undefined
+  const rl = json.data.rateLimit as { cost?: unknown } | null
+  delete json.data.rateLimit
+  const cost = rl?.cost
+  return typeof cost === "number" && Number.isFinite(cost) && cost >= 0
+    ? cost
+    : undefined
+}
+
 /** Message d'échec : les erreurs de GitHub, sinon `fallback` (statut HTTP). */
 export const gqlMessage = ({ errors }: GqlResponse, fallback: string) =>
   errors?.map((e) => e.message).join(" ; ") || fallback

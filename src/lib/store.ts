@@ -8,11 +8,10 @@ import {
   fetchPrs,
   fetchReviews,
   listRepos,
-  rateLimit,
   reposWithMyOpenPrs,
 } from "./github"
 import { log } from "./log"
-import { lastCost, recordRateLimits } from "./quota"
+import { recordCosts, spentBy } from "./quota"
 import { mergeReviews, type Reviews } from "./review"
 import { getSettings } from "./settings"
 import { saveItem } from "./sync"
@@ -97,6 +96,8 @@ export async function reload({ measure = false } = {}) {
   const id = ++seq
   const start = performance.now()
   const ms = () => Math.round(performance.now() - start)
+  // compteur de points GraphQL de chaque compte avant l'actualisation : base du coût mesuré
+  const spent = allAccounts().map((a) => [a.id, spentBy(a.id)] as const)
   set({ ...data, loading: true })
   // préchauffe la liste du panneau des repos (1 requête GraphQL par 100 repos), au premier chargement seulement
   if (!data.fetchedAt) listRepos().catch(() => {})
@@ -179,23 +180,12 @@ export async function reload({ measure = false } = {}) {
         errors: shown.map((e) => ({ account: e.account.id, error: e.error })),
       }),
     })
-    // relevé du quota de chaque compte, sans faire attendre la fin de l'actualisation : base du mode « auto »
+    // coût de l'actualisation par compte (toutes ses requêtes GraphQL pendant ce temps) : base du mode « auto »
     if (measure && getSettings().refreshMinutes === "auto")
-      Promise.all(queried.map(async (a) => [a.id, await rateLimit(a)] as const))
-        .then((snaps) => {
-          // compte déconnecté pendant le relevé : ignoré
-          if (id !== seq) return
-          const known = snaps.filter(([a]) => findAccount(a))
-          recordRateLimits(known)
-          log("info", "refresh.quota", {
-            accounts: known.map(([account, q]) => ({
-              account,
-              remaining: q?.remaining,
-              cost: lastCost(account),
-            })),
-          })
-        })
-        .catch(() => {})
+      log("info", "refresh.quota", {
+        // compte déconnecté pendant l'actualisation : ignoré
+        accounts: recordCosts(spent.filter(([a]) => findAccount(a))),
+      })
   } catch (e) {
     if (id !== seq) return
     log("error", "refresh.failed", {

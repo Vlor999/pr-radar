@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { reposWithMyOpenPrs } from "@/lib/github"
 import { strings, useStrings, type Lang } from "@/lib/i18n"
-import { dropSnapshots, useAutoInterval } from "@/lib/quota"
+import { useAutoInterval } from "@/lib/quota"
 import { MINUTE_MS } from "@/lib/quiet"
 import { updateSettings, useSettings } from "@/lib/settings"
 import { getRepos, reload, setRepos } from "@/lib/store"
@@ -267,13 +267,12 @@ function RefreshSection() {
           <select
             aria-labelledby="refresh-label"
             value={s.refreshMinutes}
-            onChange={(e) => {
-              if (e.target.value === "auto") dropSnapshots()
+            onChange={(e) =>
               updateSettings({
                 refreshMinutes:
                   e.target.value === "auto" ? "auto" : Number(e.target.value),
               })
-            }}
+            }
             className="h-8 appearance-none rounded-lg border bg-background pr-7 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
           >
             {(["auto", 0, 1, 2, 5, 10, 15, 30] as const).map((m) => (
