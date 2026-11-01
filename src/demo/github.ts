@@ -349,7 +349,10 @@ export const viewerLogin = async (_token: string, _host?: string) => "me"
 // acme/api#91 (CI en échec) : déjà lue au lancement, `get_checks` la sert depuis le cache
 const checksRead = new Set<string>(["acme/api#91"])
 export const clearCache = () => checksRead.clear()
-export const fetchPrs = async (repos: string[]) => {
+export const fetchPrs = async (
+  repos: string[],
+  { delta = false }: { delta?: boolean } = {},
+) => {
   // quota bas pour montrer la notification et la ligne des réglages
   trackQuota(
     new Headers({
@@ -359,9 +362,13 @@ export const fetchPrs = async (repos: string[]) => {
     }),
     DEFAULT_ID,
   )
+  const data = [...PRS, ...otherPrs()].filter((p) => has(repos)(p.repo))
+  // actualisation automatique : rien n'a changé depuis la lecture précédente
   return {
-    data: [...PRS, ...otherPrs()].filter((p) => has(repos)(p.repo)),
+    data,
     errors: [] as AccountError[],
+    full: !delta,
+    refetched: delta ? 0 : data.length,
   }
 }
 export const reposWithMyOpenPrs = async () => [
