@@ -31,3 +31,23 @@ export const SEARCH_QUALITY = {
 export const SEARCH_FUZZY_MIN_LENGTH = 4
 /** à partir de cette longueur, deux fautes tolérées au lieu d'une */
 export const SEARCH_TWO_TYPOS_LENGTH = 8
+
+/* ---------- Journal d'activité local (log.ts, src-tauri/src/log.rs) ---------- */
+
+/** délai avant l'écriture d'un lot d'entrées (une commande par lot, pas par événement) */
+export const LOG_FLUSH_MS = 2_000
+/** lot plein : écrit sans attendre le délai */
+export const LOG_BATCH_MAX = 100
+/** entrées gardées en attente au plus (écriture en échec) : les plus anciennes tombent */
+export const LOG_BUFFER_MAX = 1_000
+/** purge des entrées trop anciennes : au lancement, puis à cet intervalle */
+export const LOG_PURGE_INTERVAL_MS = 60 * 60_000
+/** entrées affichées par le visualiseur des réglages */
+export const LOG_VIEW_LIMIT = 200
+/** chaîne journalisée tronquée au-delà (message d'erreur) */
+export const LOG_STRING_MAX_CHARS = 300
+/** conservation personnalisée : bornes et valeur par défaut, en jours */
+export const LOG_CUSTOM_DAYS_MIN = 1
+export const LOG_CUSTOM_DAYS_MAX = 365
+export const LOG_CUSTOM_DAYS_DEFAULT = 30
+export const DAY_MS = 86_400_000

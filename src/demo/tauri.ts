@@ -1,4 +1,5 @@
 // Démo navigateur (`npm run demo`) : remplace les modules @tauri-apps/* par des faux.
+import { logCommands } from "./log"
 
 /** Version web (réglages) : port 1420 refusé comme déjà utilisé, celui de la démo. */
 const web = {
@@ -30,6 +31,7 @@ const commands: Record<
     dataPaths: ["~/Library/Application Support/com.pr-radar.app"],
     note: null, // démo : invoke journalisé, rien n'est supprimé
   },
+  ...logCommands,
 }
 
 export async function invoke<T>(

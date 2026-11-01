@@ -188,3 +188,19 @@ export type CiWorkflow = {
 /** Vue CI d'une PR ; `moreChecks` : check suites au-delà de la borne de la requête (nombre inconnu de workflows :
  * des apps n'y déclarent qu'une suite vide, masquée). */
 export type CiView = { workflows: CiWorkflow[]; moreChecks: boolean }
+
+/** Niveau d'une entrée du journal local, du moins au plus grave. */
+export type LogLevel = "info" | "warn" | "error"
+
+/** Entrée du journal d'activité local (une ligne JSON, src-tauri/src/log.rs). */
+export type LogEntry = {
+  /** horodatage (ms) */
+  ts: number
+  level: LogLevel
+  /** nom court (`refresh`, `action`, `mcp.call`…) : minuscules, chiffres, `._-` */
+  event: string
+  data?: unknown
+}
+
+/** Dossier du journal : effectif (créé) et par défaut de l'app. */
+export type LogDir = { dir: string; defaultDir: string }
