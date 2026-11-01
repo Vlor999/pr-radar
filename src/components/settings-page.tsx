@@ -2171,7 +2171,7 @@ function settingsIndex(
       category: "mcp",
       label: mcp.tools.title,
       description: mcp.tools.description,
-      keywords: "get_prs get_pr",
+      keywords: "get_prs get_pr get_attention",
     },
     {
       id: "mcp-history",
