@@ -7,7 +7,6 @@ import {
   parseSettings,
   refreshMinutesOf,
   shouldNotify,
-  type Settings,
 } from "./settings.ts"
 import type { Pr } from "./types.ts"
 
@@ -104,56 +103,4 @@ test("fuseau de la plage : enregistré sous son nom canonique", () => {
     parseSettings('{"quietTimeZone":"Etc/UTC"}').quietTimeZone,
     "UTC",
   )
-})
-
-test("journal : activé par défaut, valeurs enregistrées invalides remplacées par défaut", () => {
-  assert.deepEqual(pickLog(parseSettings(null)), {
-    logEnabled: true,
-    logRetention: "7d",
-    logRetentionDays: 30,
-    logDir: null,
-  })
-  assert.deepEqual(
-    pickLog(
-      parseSettings(
-        JSON.stringify({
-          logEnabled: false,
-          logRetention: "1y",
-          logRetentionDays: 0,
-          logDir: "  ",
-        }),
-      ),
-    ),
-    {
-      logEnabled: false,
-      logRetention: "7d",
-      logRetentionDays: 30,
-      logDir: null,
-    },
-  )
-})
-
-test("journal : conservation personnalisée et dossier choisi gardés", () => {
-  const s = parseSettings(
-    JSON.stringify({
-      logRetention: "custom",
-      logRetentionDays: 90,
-      logDir: "/Users/me/logs",
-    }),
-  )
-  assert.equal(s.logRetention, "custom")
-  assert.equal(s.logRetentionDays, 90)
-  assert.equal(s.logDir, "/Users/me/logs")
-})
-
-const pickLog = ({
-  logEnabled,
-  logRetention,
-  logRetentionDays,
-  logDir,
-}: Settings) => ({
-  logEnabled,
-  logRetention,
-  logRetentionDays,
-  logDir,
 })

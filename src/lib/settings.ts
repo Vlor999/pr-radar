@@ -1,10 +1,5 @@
 import { useSyncExternalStore } from "react"
 
-import {
-  LOG_CUSTOM_DAYS_DEFAULT,
-  LOG_CUSTOM_DAYS_MAX,
-  LOG_CUSTOM_DAYS_MIN,
-} from "./constants.ts"
 import type { Lang } from "./i18n"
 import type { Who } from "./review"
 import { normalZone, parseHm } from "./quiet.ts"
@@ -59,17 +54,7 @@ export type Settings = {
   quietHours: { enabled: boolean; start: string; end: string }
   /** fuseau IANA de la plage et de « jusqu'à demain » ; null = celui du système */
   quietTimeZone: string | null
-  /** journal d'activité local (appli de bureau) ; activé par défaut */
-  logEnabled: boolean
-  /** conservation du journal : 24 h, 7 jours, ou `logRetentionDays` jours */
-  logRetention: LogRetention
-  /** jours gardés en conservation personnalisée */
-  logRetentionDays: number
-  /** dossier du journal choisi ; null = dossier par défaut de l'app */
-  logDir: string | null
 }
-
-export type LogRetention = "24h" | "7d" | "custom"
 
 export const DEFAULT_SETTINGS: Settings = {
   refreshMinutes: "auto",
@@ -95,10 +80,6 @@ export const DEFAULT_SETTINGS: Settings = {
   pauseUntil: null,
   quietHours: { enabled: false, start: "22:00", end: "08:00" },
   quietTimeZone: null,
-  logEnabled: true,
-  logRetention: "7d",
-  logRetentionDays: LOG_CUSTOM_DAYS_DEFAULT,
-  logDir: null,
 }
 
 const KEY = "pr-radar:settings"
@@ -121,15 +102,6 @@ const quietHoursOf = (v: unknown): Settings["quietHours"] => {
     end: hm(q.end, d.end),
   }
 }
-
-/** Jours de conservation personnalisée : entier entre les bornes, sinon la valeur par défaut. */
-export const logDaysOf = (v: unknown): number =>
-  Number.isInteger(v) &&
-  (v as number) >= LOG_CUSTOM_DAYS_MIN &&
-  (v as number) <= LOG_CUSTOM_DAYS_MAX
-    ? (v as number)
-    : LOG_CUSTOM_DAYS_DEFAULT
-
 const listeners = new Set<() => void>()
 
 /** Réglages enregistrés (JSON), complétés par les valeurs par défaut. */
@@ -155,15 +127,6 @@ export function parseSettings(raw: string | null): Settings {
           ? normalZone(saved.quietTimeZone)
           : null,
       refreshMinutes: refreshMinutesOf(saved.refreshMinutes),
-      logEnabled: saved.logEnabled !== false,
-      logRetention: ["24h", "7d", "custom"].includes(saved.logRetention ?? "")
-        ? saved.logRetention!
-        : DEFAULT_SETTINGS.logRetention,
-      logRetentionDays: logDaysOf(saved.logRetentionDays),
-      logDir:
-        typeof saved.logDir === "string" && saved.logDir.trim()
-          ? saved.logDir
-          : null,
     }
   } catch {
     return DEFAULT_SETTINGS

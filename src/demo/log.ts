@@ -101,7 +101,7 @@ export const logCommands = {
   log_append: ({ entries: batch }: Record<string, unknown>) => {
     const list = batch as LogEntry[]
     entries = [...entries, ...list]
-    return list.length
+    return { written: list.length, dropped: 0 }
   },
   log_read: ({ limit, level }: Record<string, unknown>) => {
     const min = LEVELS.indexOf((level as LogLevel | null) ?? "info")
