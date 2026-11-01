@@ -2174,6 +2174,13 @@ function settingsIndex(
       keywords: "get_prs get_pr get_attention",
     },
     {
+      id: "mcp-prompts",
+      category: "mcp",
+      label: mcp.prompts.title,
+      description: mcp.prompts.description,
+      keywords: "triage review-queue fix-ci answer-threads standup",
+    },
+    {
       id: "mcp-history",
       category: "mcp",
       label: mcp.history.title,

@@ -63,3 +63,14 @@ export const HARNESS_PATTERNS: [Harness, RegExp][] = [
 export const ATTENTION_URGENT: ActionReason[] = ["reviewRequested", "ciFailing"]
 /** en dessous, `age` en heures (`5h`) ; au-delà, en jours (`3d`) */
 export const ATTENTION_AGE_HOURS_MAX = 48
+
+/* ---------- Prompts MCP (mcp-page.tsx) ---------- */
+
+/** Prompts servis par le shim (`PROMPTS` de `src-tauri/src/mcp.rs`) : nom, arguments affichés, clé du texte. */
+export const MCP_PROMPTS = [
+  { name: "triage", args: "", key: "triage" },
+  { name: "review-queue", args: "", key: "reviewQueue" },
+  { name: "fix-ci", args: "url", key: "fixCi" },
+  { name: "answer-threads", args: "url", key: "answerThreads" },
+  { name: "standup", args: "repo?", key: "standup" },
+] as const

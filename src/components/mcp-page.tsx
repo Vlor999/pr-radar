@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { MCP_PROMPTS } from "@/lib/constants"
 import { locale, strings, useStrings } from "@/lib/i18n"
 import {
   clearMcpHistory,
@@ -111,6 +112,22 @@ export const MCP_STRINGS = strings(
       getAttention:
         "Liste courte de ce qui attend une action de ma part : une entrée par PR avec ses raisons (CI en échec, review demandée…) et son ancienneté. Reviews demandées et CI en échec d'abord, puis les plus anciennes. Filtre optionnel : repo.",
     },
+    prompts: {
+      title: "Prompts exposés",
+      description:
+        "Modèles de demande que ton agent propose comme commandes (Claude Code : /mcp__pr-radar__<nom>). Ils indiquent à l'agent quels outils appeler ; rien n'est publié sur GitHub sans ta confirmation.",
+      command: (name: string) => `Claude Code : /mcp__pr-radar__${name}`,
+      triage:
+        "Quoi faire maintenant : get_attention puis get_pr sur les premières PR, en une liste d'actions par priorité.",
+      reviewQueue:
+        "Les PR qui attendent ma review, les plus anciennes d'abord, avec une suggestion d'une ligne chacune.",
+      fixCi:
+        "Lit la PR, trouve les checks en échec (gh pr checks, gh run view --log-failed si disponible), propose et applique un correctif dans le checkout local.",
+      answerThreads:
+        "Parcourt les fils non résolus de la PR et propose une réponse ou un changement de code pour chacun.",
+      standup:
+        "Point d'équipe court à partir de mes PR ouvertes et de leur état. Filtre optionnel : repo.",
+    },
     history: {
       title: "Historique",
       description:
@@ -180,6 +197,22 @@ export const MCP_STRINGS = strings(
         "One PR of the tree (mine or one involving me): unresolved review threads and conversation, as text.",
       getAttention:
         "Short list of what needs an action from me: one item per PR with its reasons (CI failing, review requested…) and its age. Review requests and CI failures first, then the oldest. Optional filter: repo.",
+    },
+    prompts: {
+      title: "Exposed prompts",
+      description:
+        "Request templates your agent offers as commands (Claude Code: /mcp__pr-radar__<name>). They tell the agent which tools to call; nothing is posted to GitHub without your confirmation.",
+      command: (name: string) => `Claude Code: /mcp__pr-radar__${name}`,
+      triage:
+        "What to do now: get_attention, then get_pr on the top PRs, as a prioritized action list.",
+      reviewQueue:
+        "PRs waiting for my review, oldest first, with a one-line suggestion each.",
+      fixCi:
+        "Reads the PR, finds the failing checks (gh pr checks, gh run view --log-failed when available), proposes and applies a fix in the local checkout.",
+      answerThreads:
+        "Goes through the PR's unresolved threads and proposes a reply or a code change for each.",
+      standup:
+        "Short standup update from my open PRs and their states. Optional filter: repo.",
     },
     history: {
       title: "History",
@@ -363,6 +396,36 @@ function ToolsSection() {
   )
 }
 
+function PromptsSection() {
+  const t = useStrings(MCP_STRINGS).prompts
+  return (
+    <Section
+      id={settingDomId("mcp-prompts")}
+      title={t.title}
+      description={t.description}
+    >
+      {MCP_PROMPTS.map((p) => (
+        <Row
+          key={p.name}
+          label={
+            <code className="font-mono">
+              {p.name}({p.args})
+            </code>
+          }
+          description={
+            <>
+              {t[p.key]}
+              <span className="mt-1 block font-mono text-xs">
+                {t.command(p.name)}
+              </span>
+            </>
+          }
+        />
+      ))}
+    </Section>
+  )
+}
+
 function HistoryRow({ call }: { call: McpCall }) {
   const t = useStrings(MCP_STRINGS).history
   const [open, setOpen] = useState(false)
@@ -462,6 +525,7 @@ export function McpCategory() {
       <StateSection />
       <InstallSection />
       <ToolsSection />
+      <PromptsSection />
       <HistorySection />
     </>
   )
