@@ -26,11 +26,13 @@ const commands: Record<
   web_open: () => void window.open("/?web", "_blank"),
   get_token: "demo",
   gh_token: "demo",
-  uninstall_plan: {
+  uninstall_plan: ({ logDir }: Record<string, unknown>) => ({
     appPath: "/Applications/PR Radar.app",
     dataPaths: ["~/Library/Application Support/com.pr-radar.app"],
     note: null, // démo : invoke journalisé, rien n'est supprimé
-  },
+    // dossier du journal choisi : gardé
+    keptPaths: typeof logDir === "string" ? [logDir] : [],
+  }),
   ...logCommands,
 }
 

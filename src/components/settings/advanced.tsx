@@ -17,6 +17,7 @@ import { refreshPrs } from "@/lib/actions"
 import { forgetTokens } from "@/lib/auth"
 import { clearCache } from "@/lib/github"
 import { locale, strings, useStrings, type Lang } from "@/lib/i18n"
+import { getLogSettings } from "@/lib/log-settings"
 import { invoke, isWeb } from "@/lib/platform"
 import { LOW, resetTime, useQuota } from "@/lib/quota"
 import { resetSettings } from "@/lib/settings"
@@ -63,6 +64,7 @@ const S = strings(
       button: "Désinstaller…",
       inventory: "Inventaire de ce qui sera supprimé…",
       willDelete: "Sera supprimé :",
+      kept: "Gardé (dossier du journal choisi, à supprimer à la main) :",
       token: "Jeton GitHub du trousseau du système",
       notes: {
         "linux-package":
@@ -117,6 +119,7 @@ const S = strings(
       button: "Uninstall…",
       inventory: "Listing what will be removed…",
       willDelete: "Will be removed:",
+      kept: "Kept (chosen log folder, delete it by hand):",
       token: "GitHub token in the system keychain",
       notes: {
         "linux-package":
@@ -348,6 +351,8 @@ type UninstallPlan = {
   appPath: string | null
   dataPaths: string[]
   note: "linux-package" | "windows-settings" | null
+  /** dossier du journal choisi : gardé, à supprimer à la main */
+  keptPaths: string[]
 }
 
 /** Désinstallation complète : liste ce qui sera supprimé, confirmation tapée, puis l'app se ferme. */
@@ -361,7 +366,9 @@ function UninstallRow() {
 
   const show = () => {
     setOpen(true)
-    invoke<UninstallPlan>("uninstall_plan").then(setPlan, (e: unknown) => {
+    invoke<UninstallPlan>("uninstall_plan", {
+      logDir: getLogSettings().dir,
+    }).then(setPlan, (e: unknown) => {
       setState("error")
       setError(String(e))
     })
@@ -417,6 +424,16 @@ function UninstallRow() {
                   ))}
                 </ul>
               </div>
+              {plan.keptPaths.length > 0 && (
+                <div>
+                  <p className="font-medium">{t.uninstall.kept}</p>
+                  <ul className="mt-1 flex flex-col gap-0.5 font-mono text-xs break-all text-muted-foreground">
+                    {plan.keptPaths.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {plan.note && (
                 <p className="text-amber-700 dark:text-amber-400">
                   {t.uninstall.notes[plan.note]}

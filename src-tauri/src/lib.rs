@@ -129,6 +129,14 @@ struct UninstallPlan {
     data_paths: Vec<String>,
     /// Étape manuelle restante, traduite par l'interface : "linux-package" (.deb/.rpm) ou "windows-settings" (MSI).
     note: Option<&'static str>,
+    /// Dossiers gardés (jamais supprimés) : dossier du journal choisi par l'utilisateur, à effacer à la main.
+    kept_paths: Vec<String>,
+}
+
+/// Dossier du journal choisi hors des dossiers supprimés : affiché comme gardé, jamais effacé.
+fn kept_log_dir(log_dir: Option<&str>, data: &[PathBuf]) -> Option<PathBuf> {
+    let p = PathBuf::from(log_dir?.trim());
+    (p.is_absolute() && p.is_dir() && !data.iter().any(|d| p.starts_with(d))).then_some(p)
 }
 
 /// Garde-fou : chemin absolu, sans `..`, strictement sous le home (ou égal au bundle calculé), jamais `/`.
@@ -168,9 +176,10 @@ fn app_removal() -> (Option<PathBuf>, Option<&'static str>) {
     };
 }
 
-/// Inventaire de ce que la désinstallation va retirer (affiché avant confirmation).
+/// Inventaire de ce que la désinstallation va retirer (affiché avant confirmation). `log_dir` : dossier
+/// du journal choisi dans les réglages, listé comme gardé.
 #[tauri::command]
-fn uninstall_plan(app: AppHandle) -> UninstallPlan {
+fn uninstall_plan(app: AppHandle, log_dir: Option<String>) -> UninstallPlan {
     let path = app.path();
     let home = path.home_dir().unwrap_or_default();
     // Linux (XDG) et Windows (%APPDATA%, %LOCALAPPDATA%\EBWebView) : couverts par les dossiers app_*.
@@ -203,6 +212,10 @@ fn uninstall_plan(app: AppHandle) -> UninstallPlan {
     let s = |p: &Path| p.to_string_lossy().into_owned();
     UninstallPlan {
         app_path: app_path.as_deref().map(s),
+        kept_paths: kept_log_dir(log_dir.as_deref(), &data)
+            .iter()
+            .map(|p| s(p))
+            .collect(),
         data_paths: data.iter().map(|p| s(p)).collect(),
         note,
     }
@@ -215,7 +228,7 @@ fn uninstall_run(app: AppHandle) -> Result<(), String> {
     web::forget(&app)?;
     // best effort : sinon le système chercherait à chaque session une app supprimée
     let _ = app.autolaunch().disable();
-    let plan = uninstall_plan(app.clone());
+    let plan = uninstall_plan(app.clone(), None);
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
     let bundle = plan.app_path.as_deref().map(Path::new);
     let data = plan
@@ -530,6 +543,23 @@ mod tests {
         ] {
             assert!(!valid_host(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn custom_log_dir_is_kept_unless_inside_deleted_data() {
+        let tmp = std::env::temp_dir().join(format!("pr-radar-kept-{}", std::process::id()));
+        let logs = tmp.join("logs");
+        std::fs::create_dir_all(&logs).unwrap();
+        let s = logs.to_str().unwrap();
+        assert_eq!(kept_log_dir(Some(s), &[]), Some(logs.clone()));
+        assert_eq!(kept_log_dir(Some(s), std::slice::from_ref(&tmp)), None);
+        assert_eq!(kept_log_dir(Some("relative/logs"), &[]), None);
+        assert_eq!(
+            kept_log_dir(Some(tmp.join("missing").to_str().unwrap()), &[]),
+            None
+        );
+        assert_eq!(kept_log_dir(None, &[]), None);
+        std::fs::remove_dir_all(tmp).unwrap();
     }
 
     #[test]
