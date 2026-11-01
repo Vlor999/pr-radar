@@ -155,7 +155,7 @@ export function Login({ onDone }: { onDone?: (id?: string) => void } = {}) {
       {CLIENT_ID && (
         <section className="flex flex-col gap-3">
           {code ? (
-            <div className="flex flex-col items-center gap-3 rounded-2xl bg-muted/60 px-4 py-5 text-center">
+            <div className="flex flex-col items-center gap-3 rounded-xl bg-muted/60 px-4 py-5 text-center">
               <p className="text-sm text-muted-foreground">
                 {copied ? t.codeCopied : t.enterCode}
               </p>
@@ -300,9 +300,7 @@ export function Login({ onDone }: { onDone?: (id?: string) => void } = {}) {
       <Card className="w-full max-w-md gap-6 px-8">
         <div className="flex flex-col gap-1">
           <img src="/logo.svg" alt="" className="mb-2 size-14" />
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            PR Radar
-          </h1>
+          <h1 className="font-heading text-2xl font-semibold">PR Radar</h1>
           <p className="text-sm text-muted-foreground">{t.intro}</p>
         </div>
         {body}

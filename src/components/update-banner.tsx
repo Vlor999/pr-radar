@@ -40,7 +40,7 @@ export function UpdateBanner() {
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm duration-300 animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none"
+      className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm duration-300 animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none"
     >
       <Download className="size-4 shrink-0 text-primary" />
       <span className="min-w-0 flex-1">

@@ -129,7 +129,7 @@ export function WebMenu({
         </Button>
       </div>
       {open && (
-        <div className="flex items-center gap-1 rounded-full border bg-card p-1 text-xs shadow-sm duration-200 animate-in fade-in slide-in-from-right-2 motion-reduce:animate-none">
+        <div className="flex items-center gap-1 rounded-lg border bg-card p-1 text-xs shadow-sm duration-200 animate-in fade-in slide-in-from-right-2 motion-reduce:animate-none">
           <button
             type="button"
             disabled={busy || status === null}
@@ -138,7 +138,7 @@ export function WebMenu({
               state ? `${state}, ${running ? t.stop : t.start}` : undefined
             }
             title={running ? t.stop : t.start}
-            className="flex h-6 items-center gap-2 rounded-full px-2 whitespace-nowrap tabular-nums transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30 disabled:opacity-60 motion-reduce:transition-none"
+            className="flex h-6 items-center gap-2 rounded-sm px-2 whitespace-nowrap tabular-nums transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/30 disabled:opacity-60 motion-reduce:transition-none"
           >
             {busy ? (
               <Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
@@ -156,7 +156,6 @@ export function WebMenu({
           <Button
             variant="outline"
             size="xs"
-            className="rounded-full"
             onClick={() => {
               setOpen(false)
               onSettings()
