@@ -11,6 +11,7 @@ export const CATEGORIES = [
   "prs",
   "mcp",
   "web",
+  "diagnostic",
   "advanced",
 ] as const
 
