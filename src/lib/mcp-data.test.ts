@@ -1136,6 +1136,15 @@ test("merged : plage au-delà de la fenêtre chargée → outsideWindow nomme la
   assert.equal(mergedPayload(ctx, [merged(1)], WINDOW).outsideWindow, undefined)
 })
 
+test("merged : lecture en échec → notLoaded avec l'erreur, sans liste", () => {
+  const r = mergedPayload(ctx, [], undefined, {}, "HTTP 502")
+  assert.deepEqual(r, {
+    fetchedAt: "2026-01-01T00:00:00Z",
+    notLoaded:
+      "Merged PRs could not be loaded in PR Radar (HTTP 502): retry after its next refresh.",
+  })
+})
+
 test("merged : aucune PR → stats et prs absentes ; rien chargé → notLoaded", () => {
   assert.deepEqual(mergedPayload(ctx, [], WINDOW), {
     fetchedAt: "2026-01-01T00:00:00Z",

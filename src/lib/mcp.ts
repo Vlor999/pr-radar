@@ -199,6 +199,7 @@ function answer(tool: string, args: unknown): McpReply {
           d.trees.flatMap((t) => t.merged),
           d.mergedWindow,
           parsed.filters,
+          d.mergedError,
         ),
       ),
     }

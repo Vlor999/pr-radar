@@ -660,6 +660,7 @@ export const mergedPayload = (
   merged: MergedPr[],
   window: { from: string; to: string } | undefined,
   filters: MergedFilters = {},
+  loadError?: string,
 ) => {
   const head = {
     fetchedAt: ctx.fetchedAt,
@@ -669,8 +670,9 @@ export const mergedPayload = (
   if (!window)
     return omitDefaults({
       ...head,
-      notLoaded:
-        "Merged PRs are not loaded yet in PR Radar: retry once it has finished loading.",
+      notLoaded: loadError
+        ? `Merged PRs could not be loaded in PR Radar (${loadError}): retry after its next refresh.`
+        : "Merged PRs are not loaded yet in PR Radar: retry once it has finished loading.",
     }) as Record<string, unknown>
   const from = filters.from ?? window.from
   const to = filters.to ?? window.to
