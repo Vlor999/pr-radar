@@ -108,6 +108,8 @@ export const MCP_STRINGS = strings(
         "Mes PR ouvertes (CI, décision, conflits, reviewers, taille, fils non résolus, stack, mentions Slack), celles des autres où je suis assigné, mentionné ou impliqué (champ `involved`) et l'onglet « À reviewer ». Filtres optionnels : repo, scope (mine, involved, reviews, all), needs_action (ce qui attend une action de ma part), limit par liste.",
       getPr:
         "Une PR de l'arbre (à moi ou qui me concerne) : fils de review non résolus et conversation, en texte.",
+      getAttention:
+        "Liste courte de ce qui attend une action de ma part : une entrée par PR avec ses raisons (CI en échec, review demandée…) et son ancienneté. Reviews demandées et CI en échec d'abord, puis les plus anciennes. Filtre optionnel : repo.",
     },
     history: {
       title: "Historique",
@@ -176,6 +178,8 @@ export const MCP_STRINGS = strings(
         "My open PRs (CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions), other people's PRs where I am assigned, mentioned or involved (`involved` field), and the “To review” tab. Optional filters: repo, scope (mine, involved, reviews, all), needs_action (what needs an action from me), limit per list.",
       getPr:
         "One PR of the tree (mine or one involving me): unresolved review threads and conversation, as text.",
+      getAttention:
+        "Short list of what needs an action from me: one item per PR with its reasons (CI failing, review requested…) and its age. Review requests and CI failures first, then the oldest. Optional filter: repo.",
     },
     history: {
       title: "History",
@@ -350,6 +354,10 @@ function ToolsSection() {
       <Row
         label={<code className="font-mono">get_pr(url)</code>}
         description={t.getPr}
+      />
+      <Row
+        label={<code className="font-mono">get_attention(repo?)</code>}
+        description={t.getAttention}
       />
     </Section>
   )
