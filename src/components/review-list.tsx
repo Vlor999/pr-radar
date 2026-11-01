@@ -105,7 +105,7 @@ export function ReviewList({ reviews }: { reviews: ReviewPr[] }) {
   )
 }
 
-/** ● moi / ◌ équipe(s) */
+/** Point (moi) ou icône Users (équipes), suivi du libellé */
 function WhoBadge({ pr }: { pr: ReviewPr }) {
   const t = useStrings(S)
   return (
