@@ -75,9 +75,9 @@ export const RepoSection = memo(function RepoSection({
         <CollapsibleTrigger className="group flex min-w-0 items-center gap-2 rounded-md py-1 text-base font-semibold">
           <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]:rotate-90" />
           <span className="truncate">{tree.repo}</span>
-          <Badge variant="secondary">
+          <span className="text-sm font-normal text-muted-foreground tabular-nums">
             {shown.length === total ? total : `${shown.length} / ${total}`}
-          </Badge>
+          </span>
           {attn > 0 && <Badge variant="destructive">{t.attn(attn)}</Badge>}
         </CollapsibleTrigger>
         <Button
@@ -156,7 +156,7 @@ function MergedList({
         <ChevronRight className="size-3.5 transition-transform group-data-[panel-open]:rotate-90" />
         <GitMerge className="size-3.5 text-violet-600 dark:text-violet-400" />
         {t.merged(mergedDays)}
-        <Badge variant="outline">{prs.length}</Badge>
+        <span className="tabular-nums">{prs.length}</span>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <ul className="flex max-w-xl flex-col pt-1 pl-5">

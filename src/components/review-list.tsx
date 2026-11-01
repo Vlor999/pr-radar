@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react"
+import { RotateCcw, Users } from "lucide-react"
 import { cn } from "cn"
 
 import { Avatar } from "@/components/avatar"
@@ -67,9 +67,9 @@ export function ReviewList({ reviews }: { reviews: ReviewPr[] }) {
             onClick={() => updateSettings({ reviewWho: w })}
           >
             {t.who[w]}
-            <Badge variant={who === w ? "secondary" : "outline"}>
+            <span className="tabular-nums opacity-70">
               {filterReviews(reviews, w, hideApproved).length}
-            </Badge>
+            </span>
           </Button>
         ))}
         <Button
@@ -109,11 +109,13 @@ export function ReviewList({ reviews }: { reviews: ReviewPr[] }) {
 function WhoBadge({ pr }: { pr: ReviewPr }) {
   const t = useStrings(S)
   return (
-    <Badge
-      variant={pr.direct ? "default" : "outline"}
-      className="shrink-0 self-center"
-    >
-      {pr.direct ? `● ${t.me}` : `◌ ${pr.teams.join(", ") || t.team}`}
+    <Badge variant="outline" className="shrink-0 self-center">
+      {pr.direct ? (
+        <span aria-hidden className="size-1.5 rounded-full bg-emerald-500" />
+      ) : (
+        <Users aria-hidden />
+      )}
+      {pr.direct ? t.me : pr.teams.join(", ") || t.team}
     </Badge>
   )
 }
@@ -151,7 +153,7 @@ function ReviewRow({ pr }: { pr: ReviewPr }) {
       data-pr-card=""
       data-url={pr.url}
       className={cn(
-        "flex max-w-xl items-baseline gap-2 rounded-2xl border bg-card px-3 py-2 text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary",
+        "flex max-w-xl items-baseline gap-2 rounded-lg border bg-card px-3 py-2 text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary",
         pr.draft && "opacity-70",
       )}
     >

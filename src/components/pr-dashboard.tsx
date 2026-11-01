@@ -43,7 +43,6 @@ import { refreshMentions, useSlack } from "@/lib/slack"
 import { useMcp } from "@/lib/mcp"
 import { openWeb, startErrorText, toggleWeb, WEB_ERRORS } from "@/lib/web"
 import { RepoSection, type OpenState } from "@/components/repo-section"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -602,7 +601,7 @@ export function PrDashboard({
             </Sheet>
           )}
           <div className="flex flex-col gap-1">
-            <h1 className="font-heading text-2xl font-semibold tracking-tight">
+            <h1 className="font-heading text-2xl font-semibold">
               {t.myOpenPrs}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -676,7 +675,7 @@ export function PrDashboard({
       {webError && (
         <div
           role="alert"
-          className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm duration-300 animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm duration-300 animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none"
         >
           <TriangleAlert className="size-4 shrink-0 text-destructive" />
           <span className="min-w-0 flex-1">{webError}</span>
@@ -722,8 +721,11 @@ export function PrDashboard({
               {underline && (
                 <span
                   aria-hidden
-                  style={{ left: underline.left, width: underline.width }}
-                  className="absolute -bottom-px h-0.5 bg-primary transition-[left,width] duration-200 ease-out motion-reduce:transition-none"
+                  // 1px mis à l'échelle : seul `transform` s'anime
+                  style={{
+                    transform: `translateX(${underline.left}px) scaleX(${underline.width})`,
+                  }}
+                  className="absolute -bottom-px left-0 h-0.5 w-px origin-left bg-primary transition-transform duration-200 ease-out motion-reduce:transition-none"
                 />
               )}
               {TABS.map((tb) => (
@@ -743,7 +745,12 @@ export function PrDashboard({
                   <tb.icon className="size-4" />
                   {t.tabs[tb.id]}
                   {tb.id === "review" && toReview > 0 && (
-                    <Badge title={t.reviewCount(toReview)}>{toReview}</Badge>
+                    <span
+                      title={t.reviewCount(toReview)}
+                      className="text-emerald-700 tabular-nums dark:text-emerald-400"
+                    >
+                      {toReview}
+                    </span>
                   )}
                 </button>
               ))}
@@ -790,11 +797,9 @@ export function PrDashboard({
                           onClick={() => setFilter(f.id)}
                         >
                           {t.filters[f.id]}
-                          <Badge
-                            variant={filter === f.id ? "secondary" : "outline"}
-                          >
+                          <span className="tabular-nums opacity-70">
                             {counts[i]}
-                          </Badge>
+                          </span>
                         </Button>
                       ))}
                     </div>

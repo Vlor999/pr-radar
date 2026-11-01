@@ -244,7 +244,7 @@ function WorkflowBox({
           )}
         </span>
         {w.event && (
-          <span className="font-mono text-[0.7rem] text-muted-foreground">
+          <span className="font-mono text-xs text-muted-foreground">
             on: {w.event}
           </span>
         )}
