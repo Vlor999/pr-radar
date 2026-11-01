@@ -66,7 +66,7 @@ export const ATTENTION_AGE_HOURS_MAX = 48
 
 /* ---------- Prompts MCP (mcp-page.tsx) ---------- */
 
-/** Prompts servis par le shim (`PROMPTS` de `src-tauri/src/mcp.rs`) : nom, arguments affichés, clé du texte. */
+/** Prompts servis par le shim (`prompts()` de `src-tauri/src/mcp.rs`) : nom, arguments affichés, clé du texte. Liste vérifiée par `mcp-prompts.json`. */
 export const MCP_PROMPTS = [
   { name: "triage", args: "", key: "triage" },
   { name: "review-queue", args: "", key: "reviewQueue" },
