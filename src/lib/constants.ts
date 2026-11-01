@@ -33,10 +33,14 @@ export const CRASH_REPO_IN_URL =
   /(?:\/repos\/|github\.com\/(?!(?:repos|orgs|users)\/))([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/g
 /** organisation ou utilisateur dans une adresse d'API (`/orgs/acme`, `/users/jdoe`) */
 export const CRASH_OWNER_IN_URL = /\/(?:orgs|users)\/([A-Za-z0-9_.-]+)/g
-/** dossier personnel dans un chemin (macOS, Linux, Windows) : remplacé par `~` */
+/**
+ * dossier personnel dans un chemin (macOS, Linux, Windows) : remplacé par `~`. Le nom s'arrête au
+ * séparateur, à un guillemet ou à la fin de ligne, pas à une espace (`C:\Users\John Smith\…`) : sans
+ * séparateur après, la suite de la ligne part avec (plutôt trop masquer que laisser un nom).
+ */
 export const CRASH_HOME_DIRS = [
-  /\/(?:Users|home)\/[^/\s"'`:]+/g,
-  /\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"'`]+/gi,
+  /\/(?:Users|home)\/[^/"'`:\r\n]+/g,
+  /\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/"'`\r\n]+/gi,
 ]
 /** adresse e-mail */
 export const CRASH_EMAIL =

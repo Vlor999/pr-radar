@@ -162,6 +162,22 @@ test("anonymisation : dossier personnel ramené à ~ (macOS, Linux, Windows)", (
   )
 })
 
+test("anonymisation : nom d'utilisateur avec espace masqué en entier", () => {
+  assert.equal(
+    scrub(
+      "C:\\Users\\John Smith\\AppData\\x.js and /home/jane doe/.config and /Users/Ann Lee/dev",
+    ),
+    "~\\AppData\\x.js and ~/.config and ~/dev",
+  )
+})
+
+test("anonymisation : dossier personnel sans séparateur après, masqué jusqu'à la fin de ligne", () => {
+  assert.equal(
+    scrub('open "/Users/John Smith"\nnext line'),
+    'open "~"\nnext line',
+  )
+})
+
 test("anonymisation : adresse e-mail masquée", () => {
   assert.equal(
     scrub("author jane.doe+pr@example.co.uk wrote"),
