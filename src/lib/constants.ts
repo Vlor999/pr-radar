@@ -73,6 +73,17 @@ export const ATTENTION_URGENT: ActionReason[] = ["reviewRequested", "ciFailing"]
 /** en dessous, `age` en heures (`5h`) ; au-delà, en jours (`3d`) */
 export const ATTENTION_AGE_HOURS_MAX = 48
 
+/* ---------- Prompts MCP (settings/mcp.tsx) ---------- */
+
+/** Prompts servis par le shim (`prompts()` de `src-tauri/src/mcp.rs`) : nom, arguments affichés, clé du texte. Liste vérifiée par `mcp-prompts.json`. */
+export const MCP_PROMPTS = [
+  { name: "triage", args: "", key: "triage" },
+  { name: "review-queue", args: "", key: "reviewQueue" },
+  { name: "fix-ci", args: "url", key: "fixCi" },
+  { name: "answer-threads", args: "url", key: "answerThreads" },
+  { name: "standup", args: "repo?", key: "standup" },
+] as const
+
 /* ---------- Journal d'activité local (log.ts, src-tauri/src/log.rs) ---------- */
 
 /** délai avant l'écriture d'un lot d'entrées (une commande par lot, pas par événement) */
