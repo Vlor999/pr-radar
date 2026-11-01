@@ -448,6 +448,17 @@ test("arguments de get_prs : valeurs valides, null vaut absent", () => {
   })
 })
 
+test("arguments de get_prs : limit écrit 1.0 ou 3e0 accepté, comme dans le shim", () => {
+  for (const [raw, limit] of [
+    ['{"limit":1.0}', 1],
+    ['{"limit":3e0}', 3],
+  ] as const)
+    assert.deepEqual(parsePrsArgs(JSON.parse(raw)), {
+      ok: true,
+      filters: { scope: "all", needsAction: false, limit },
+    })
+})
+
 test("arguments de get_prs : type ou valeur invalide → erreur explicite", () => {
   const cases: [unknown, string][] = [
     ["x", "get_prs: arguments must be an object"],
@@ -460,6 +471,7 @@ test("arguments de get_prs : type ou valeur invalide → erreur explicite", () =
     [{ needs_action: "yes" }, "get_prs: `needs_action` must be a boolean"],
     [{ limit: 0 }, "get_prs: `limit` must be an integer >= 1"],
     [{ limit: 1.5 }, "get_prs: `limit` must be an integer >= 1"],
+    [{ limit: 1e20 }, "get_prs: `limit` must be an integer >= 1"],
     [{ limit: "3" }, "get_prs: `limit` must be an integer >= 1"],
     [{ state: "open" }, "get_prs: unknown argument `state`"],
   ]

@@ -44,6 +44,8 @@ const SUPPORTED_VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"]
 const TOOLS: [&str; 3] = ["get_prs", "get_pr", "get_attention"];
 /// Valeurs de l'argument `scope` de `get_prs`.
 const PRS_SCOPES: [&str; 4] = ["mine", "involved", "reviews", "all"];
+/// Plus grand entier exact en JSON côté app (`Number.MAX_SAFE_INTEGER`) : même borne que `parsePrsArgs`.
+const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
 const NOT_RUNNING: &str = "PR Radar not running. Open the PR Radar app, then retry.";
 const DISABLED: &str = "MCP server disabled in PR Radar. Turn it on in PR Radar (plug icon in the header), then retry.";
@@ -183,7 +185,9 @@ fn check_prs_args(args: &Value) -> Result<(), String> {
             "repo" => v.is_string(),
             "scope" => v.as_str().is_some_and(|s| PRS_SCOPES.contains(&s)),
             "needs_action" => v.is_boolean(),
-            "limit" => v.as_u64().is_some_and(|n| n >= 1),
+            "limit" => v
+                .as_f64()
+                .is_some_and(|n| n >= 1.0 && n.fract() == 0.0 && n <= MAX_SAFE_INTEGER),
             _ => return Err(format!("get_prs: unknown argument `{key}`")),
         };
         if !ok {
@@ -762,6 +766,8 @@ mod tests {
             &[
                 r#"{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_prs","arguments":{"repo":"Acme/","scope":"mine","needs_action":true,"limit":3}}}"#,
                 r#"{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_prs","arguments":{"scope":null}}}"#,
+                r#"{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_prs","arguments":{"limit":1.0}}}"#,
+                r#"{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"get_prs","arguments":{"limit":3e0}}}"#,
             ],
             Ok("{}".into()),
         );
@@ -770,7 +776,7 @@ mod tests {
             sent[0]["args"],
             json!({"repo":"Acme/","scope":"mine","needs_action":true,"limit":3})
         );
-        assert_eq!(sent.len(), 2);
+        assert_eq!(sent.len(), 4);
     }
 
     #[test]
@@ -792,6 +798,14 @@ mod tests {
             ),
             (
                 r#"{"limit":-1}"#,
+                "get_prs: `limit` must be an integer >= 1",
+            ),
+            (
+                r#"{"limit":1e20}"#,
+                "get_prs: `limit` must be an integer >= 1",
+            ),
+            (
+                r#"{"limit":18446744073709551615}"#,
                 "get_prs: `limit` must be an integer >= 1",
             ),
             (r#"{"state":"open"}"#, "get_prs: unknown argument `state`"),
