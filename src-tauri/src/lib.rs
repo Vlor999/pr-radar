@@ -449,6 +449,8 @@ pub fn run() {
         .setup(|app| {
             // marqueur de session et hook de panic : avant tout le reste
             crash::init(app.handle());
+            #[cfg(unix)]
+            crash::quit_on_signals(app.handle());
             // serveur MCP : verrou de présence pris au lancement, socket créé seulement si activé
             mcp::hold_lock(&app.state::<mcp::McpState>());
             // retour de la connexion Slack ; Windows/Linux : arrive par single-instance (feature deep-link)

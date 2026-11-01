@@ -1,6 +1,8 @@
 //! Détection des plantages : un marqueur « session en cours » (`session.json`, dossier de données de
 //! l'app) est écrit au lancement et supprimé à la fermeture propre. Présent au lancement suivant : la
 //! session précédente s'est mal terminée. Un panic Rust est noté dans ce marqueur et dans le journal.
+//! Le marqueur garde aussi l'heure de démarrage du système : un marqueur d'un démarrage précédent (arrêt
+//! ou fermeture de session du système sans `RunEvent::Exit`) n'est pas un plantage, sauf s'il note un panic.
 //! Rien n'est envoyé : l'interface propose seulement d'ouvrir une issue préremplie.
 
 use serde::{Deserialize, Serialize};
@@ -18,6 +20,8 @@ const MARKER: &str = "session.json";
 const LOG_DIR_FILE: &str = "log-dir.txt";
 /// message de panic et backtrace tronqués au-delà
 const MAX_PANIC_CHARS: usize = 2_000;
+/// écart toléré entre deux calculs de l'heure de démarrage du système (horloge réglée, NTP)
+const BOOT_TOLERANCE_MS: i64 = 120_000;
 
 /// Panic noté par le hook (le dernier de la session).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -34,8 +38,21 @@ pub struct Panic {
 pub struct Session {
     /// lancement (ms depuis l'époque Unix) ; 0 : marqueur illisible
     pub started_at: i64,
+    /// démarrage du système (ms depuis l'époque Unix), None si inconnu
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boot: Option<i64>,
     #[serde(default)]
     pub panic: Option<Panic>,
+}
+
+impl Session {
+    fn new(started_at: i64, boot: Option<i64>) -> Self {
+        Self {
+            started_at,
+            boot,
+            panic: None,
+        }
+    }
 }
 
 struct Paths {
@@ -50,11 +67,62 @@ static LOG_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 static PREVIOUS: Mutex<Option<Session>> = Mutex::new(None);
 /// lancement de cette session
 static STARTED_AT: OnceLock<i64> = OnceLock::new();
+/// démarrage du système, lu au lancement
+static BOOT: OnceLock<Option<i64>> = OnceLock::new();
 
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as i64)
+}
+
+/// Heure de démarrage du système (ms depuis l'époque Unix), None si elle ne peut pas être lue.
+#[cfg(target_os = "macos")]
+fn boot_ms() -> Option<i64> {
+    let mut tv = libc::timeval {
+        tv_sec: 0,
+        tv_usec: 0,
+    };
+    let mut size = std::mem::size_of::<libc::timeval>();
+    let mut mib = [libc::CTL_KERN, libc::KERN_BOOTTIME];
+    // SAFETY: `mib` et `tv` sont valides le temps de l'appel, `size` est la taille de `tv`.
+    let r = unsafe {
+        libc::sysctl(
+            mib.as_mut_ptr(),
+            2,
+            (&raw mut tv).cast(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    (r == 0 && tv.tv_sec > 0).then(|| tv.tv_sec * 1_000 + i64::from(tv.tv_usec) / 1_000)
+}
+
+#[cfg(target_os = "linux")]
+fn boot_ms() -> Option<i64> {
+    parse_btime(&fs::read_to_string("/proc/stat").ok()?)
+}
+
+/// Ligne `btime <secondes>` de /proc/stat.
+#[cfg(any(target_os = "linux", test))]
+fn parse_btime(stat: &str) -> Option<i64> {
+    stat.lines()
+        .find_map(|l| l.strip_prefix("btime "))
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .map(|s| s * 1_000)
+}
+
+#[cfg(windows)]
+fn boot_ms() -> Option<i64> {
+    // SAFETY: sans argument ni état partagé.
+    let uptime = unsafe { windows_sys::Win32::System::SystemInformation::GetTickCount64() };
+    Some(now_ms() - i64::try_from(uptime).ok()?)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+fn boot_ms() -> Option<i64> {
+    None
 }
 
 /* ---------- Marqueur (fonctions pures sur un dossier, testées) ---------- */
@@ -68,22 +136,24 @@ fn write_marker(data: &Path, s: &Session) -> Result<(), String> {
 fn read_marker(data: &Path) -> Option<Session> {
     let text = fs::read_to_string(data.join(MARKER)).ok()?;
     // présent mais illisible (écriture interrompue) : session mal terminée quand même
-    Some(serde_json::from_str(&text).unwrap_or(Session {
-        started_at: 0,
-        panic: None,
-    }))
+    Some(serde_json::from_str(&text).unwrap_or(Session::new(0, None)))
 }
 
-/// Lancement : session précédente si son marqueur est resté, puis marqueur de cette session.
-fn begin(data: &Path, now: i64) -> Option<Session> {
-    let previous = read_marker(data);
-    let _ = write_marker(
-        data,
-        &Session {
-            started_at: now,
-            panic: None,
-        },
-    );
+/// Marqueur resté d'un démarrage précédent du système, sans panic : arrêt ou fermeture de session
+/// (l'app n'a pas reçu `RunEvent::Exit`), pas un plantage.
+fn is_crash(prev: &Session, boot: Option<i64>) -> bool {
+    match (prev.boot, boot) {
+        _ if prev.panic.is_some() => true,
+        (Some(a), Some(b)) => (a - b).abs() <= BOOT_TOLERANCE_MS,
+        _ => true,
+    }
+}
+
+/// Lancement : session précédente si son marqueur est resté (et que c'est un plantage), puis marqueur
+/// de cette session.
+fn begin(data: &Path, now: i64, boot: Option<i64>) -> Option<Session> {
+    let previous = read_marker(data).filter(|p| is_crash(p, boot));
+    let _ = write_marker(data, &Session::new(now, boot));
     previous
 }
 
@@ -93,11 +163,8 @@ fn end(data: &Path) {
 }
 
 /// Panic noté dans le marqueur (recréé s'il manque : le prochain lancement le verra).
-fn note_panic(data: &Path, started_at: i64, panic: Panic) {
-    let mut s = read_marker(data).unwrap_or(Session {
-        started_at,
-        panic: None,
-    });
+fn note_panic(data: &Path, started_at: i64, boot: Option<i64>, panic: Panic) {
+    let mut s = read_marker(data).unwrap_or(Session::new(started_at, boot));
     s.panic = Some(panic);
     let _ = write_marker(data, &s);
 }
@@ -158,6 +225,7 @@ fn on_panic(info: &std::panic::PanicHookInfo) {
     note_panic(
         &paths.data,
         STARTED_AT.get().copied().unwrap_or(ts),
+        BOOT.get().copied().flatten(),
         Panic {
             ts,
             message: message.clone(),
@@ -194,9 +262,11 @@ pub fn init(app: &AppHandle) {
         return;
     };
     let now = now_ms();
+    let boot = boot_ms();
     let _ = STARTED_AT.set(now);
+    let _ = BOOT.set(boot);
     *LOG_DIR.lock().unwrap_or_else(|e| e.into_inner()) = load_log_dir(&data);
-    *PREVIOUS.lock().unwrap_or_else(|e| e.into_inner()) = begin(&data, now);
+    *PREVIOUS.lock().unwrap_or_else(|e| e.into_inner()) = begin(&data, now, boot);
     let _ = PATHS.set(Paths { data, default_log });
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -205,10 +275,28 @@ pub fn init(app: &AppHandle) {
     }));
 }
 
-/// Fermeture propre (`RunEvent::Exit` : Quitter, désinstallation, redémarrage après mise à jour).
+/// Fermeture propre (`RunEvent::Exit` : Quitter, désinstallation, redémarrage après mise à jour, SIGTERM
+/// et SIGHUP sur unix). Restent sans fermeture propre : kill -9, fin de tâche (Windows), coupure de
+/// courant ; et sous Windows une fermeture de session sans redémarrage.
 pub fn shutdown() {
     if let Some(p) = PATHS.get() {
         end(&p.data);
+    }
+}
+
+/// Unix : SIGTERM (arrêt du système, fermeture de session, `kill`) et SIGHUP (terminal fermé) quittent
+/// l'app comme « Quitter » : `RunEvent::Exit`, donc marqueur supprimé, serveur web et MCP arrêtés.
+#[cfg(unix)]
+pub fn quit_on_signals(app: &AppHandle) {
+    use tokio::signal::unix::{SignalKind, signal};
+    for kind in [SignalKind::terminate(), SignalKind::hangup()] {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let Ok(mut s) = signal(kind) else { return };
+            if s.recv().await.is_some() {
+                app.exit(0);
+            }
+        });
     }
 }
 
@@ -243,10 +331,10 @@ pub fn session_clean(clean: bool) -> Result<(), String> {
     } else {
         write_marker(
             &p.data,
-            &Session {
-                started_at: STARTED_AT.get().copied().unwrap_or(0),
-                panic: None,
-            },
+            &Session::new(
+                STARTED_AT.get().copied().unwrap_or(0),
+                BOOT.get().copied().flatten(),
+            ),
         )
     }
 }
@@ -270,51 +358,80 @@ mod tests {
         }
     }
 
+    const BOOT: Option<i64> = Some(1_000_000);
+
     #[test]
     fn clean_exit_leaves_no_previous_session() {
         let data = tmp("clean");
-        assert_eq!(begin(&data, 1), None);
+        assert_eq!(begin(&data, 1, BOOT), None);
         end(&data);
-        assert_eq!(begin(&data, 2), None);
+        assert_eq!(begin(&data, 2, BOOT), None);
         fs::remove_dir_all(data).unwrap();
     }
 
     #[test]
     fn unclean_exit_is_reported_once() {
         let data = tmp("unclean");
-        begin(&data, 1);
-        assert_eq!(
-            begin(&data, 2),
-            Some(Session {
-                started_at: 1,
-                panic: None
-            })
-        );
+        begin(&data, 1, BOOT);
+        assert_eq!(begin(&data, 2, BOOT), Some(Session::new(1, BOOT)));
         end(&data);
-        assert_eq!(begin(&data, 3), None);
+        assert_eq!(begin(&data, 3, BOOT), None);
         fs::remove_dir_all(data).unwrap();
+    }
+
+    #[test]
+    fn marker_from_previous_boot_is_a_system_shutdown() {
+        let data = tmp("reboot");
+        begin(&data, 1, BOOT);
+        assert_eq!(begin(&data, 2, Some(9_000_000)), None);
+        fs::remove_dir_all(data).unwrap();
+    }
+
+    #[test]
+    fn boot_comparison() {
+        let s = Session::new(1, Some(1_000_000));
+        assert!(is_crash(&s, Some(1_000_000 + BOOT_TOLERANCE_MS)));
+        assert!(!is_crash(&s, Some(1_000_000 + BOOT_TOLERANCE_MS + 1)));
+        assert!(is_crash(&s, None));
+        assert!(is_crash(&Session::new(1, None), Some(5)));
+        let mut panicked = Session::new(1, Some(0));
+        panicked.panic = Some(panic_at(5));
+        assert!(is_crash(&panicked, Some(9_000_000)));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn boot_time_is_in_the_past() {
+        let boot = boot_ms().unwrap();
+        assert!(boot > 0 && boot < now_ms());
+    }
+
+    #[test]
+    fn btime_parsing() {
+        assert_eq!(
+            parse_btime("cpu  1 2 3\nbtime 1793491200\nprocesses 9\n"),
+            Some(1_793_491_200_000)
+        );
+        assert_eq!(parse_btime("cpu 1\n"), None);
     }
 
     #[test]
     fn panic_is_kept_for_next_launch() {
         let data = tmp("panic");
-        begin(&data, 1);
-        note_panic(&data, 1, panic_at(5));
-        assert_eq!(
-            begin(&data, 9),
-            Some(Session {
-                started_at: 1,
-                panic: Some(panic_at(5))
-            })
-        );
+        begin(&data, 1, BOOT);
+        note_panic(&data, 1, BOOT, panic_at(5));
+        let mut expected = Session::new(1, BOOT);
+        expected.panic = Some(panic_at(5));
+        // même après un redémarrage du système : un panic reste un plantage
+        assert_eq!(begin(&data, 9, Some(9_000_000)), Some(expected));
         fs::remove_dir_all(data).unwrap();
     }
 
     #[test]
     fn panic_recreates_missing_marker() {
         let data = tmp("recreate");
-        note_panic(&data, 4, panic_at(5));
-        assert_eq!(begin(&data, 9).unwrap().started_at, 4);
+        note_panic(&data, 4, BOOT, panic_at(5));
+        assert_eq!(begin(&data, 9, BOOT).unwrap().started_at, 4);
         fs::remove_dir_all(data).unwrap();
     }
 
@@ -323,22 +440,13 @@ mod tests {
         let data = tmp("corrupt");
         fs::create_dir_all(&data).unwrap();
         fs::write(data.join(MARKER), "{\"startedAt\":").unwrap();
-        assert_eq!(
-            begin(&data, 9),
-            Some(Session {
-                started_at: 0,
-                panic: None
-            })
-        );
+        assert_eq!(begin(&data, 9, BOOT), Some(Session::new(0, None)));
         fs::remove_dir_all(data).unwrap();
     }
 
     #[test]
     fn status_is_read_once() {
-        *PREVIOUS.lock().unwrap() = Some(Session {
-            started_at: 1,
-            panic: None,
-        });
+        *PREVIOUS.lock().unwrap() = Some(Session::new(1, None));
         assert!(crash_status().unwrap().previous.is_some());
         assert!(crash_status().unwrap().previous.is_none());
     }
