@@ -188,7 +188,11 @@ export async function reload({ measure = false, delta = false } = {}) {
     if (measure && getSettings().refreshMinutes === "auto")
       log("info", "refresh.quota", {
         // compte déconnecté pendant l'actualisation : ignoré
-        accounts: recordCosts(spent.filter(([a]) => findAccount(a))),
+        accounts: recordCosts(
+          spent.filter(([a]) => findAccount(a)),
+          Date.now(),
+          full,
+        ),
       })
   } catch (e) {
     if (id !== seq) return
