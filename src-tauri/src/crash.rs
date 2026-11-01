@@ -223,10 +223,11 @@ pub struct CrashStatus {
     started_at: i64,
 }
 
+/// Lu une fois : l'interface le garde pour la session (une fenêtre rechargée ne le revoit pas).
 #[tauri::command]
 pub fn crash_status() -> Result<CrashStatus, String> {
     Ok(CrashStatus {
-        previous: PREVIOUS.lock().map_err(|e| e.to_string())?.clone(),
+        previous: PREVIOUS.lock().map_err(|e| e.to_string())?.take(),
         started_at: STARTED_AT.get().copied().unwrap_or(0),
     })
 }
@@ -330,6 +331,16 @@ mod tests {
             })
         );
         fs::remove_dir_all(data).unwrap();
+    }
+
+    #[test]
+    fn status_is_read_once() {
+        *PREVIOUS.lock().unwrap() = Some(Session {
+            started_at: 1,
+            panic: None,
+        });
+        assert!(crash_status().unwrap().previous.is_some());
+        assert!(crash_status().unwrap().previous.is_none());
     }
 
     #[test]
