@@ -144,14 +144,14 @@ function Bubble({
         // coude qui part de la carte de la PR vers chaque discussion.
         // Valeurs liées : -top-3 = gap-3 sous la carte (repo-section) ; -left-4.5 sous pl-14 ;
         // trait du coude à y = 15px (-top-3 + h-7), pointe de la queue au même y (top-2.25 + 6px).
-        "before:absolute before:-top-3 before:-left-4.5 before:h-7 before:w-3 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-border",
-        "not-last:after:absolute not-last:after:top-0 not-last:after:-bottom-3 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-border",
+        "before:absolute before:-top-3 before:-left-4.5 before:h-7 before:w-3 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-rail",
+        "not-last:after:absolute not-last:after:top-0 not-last:after:-bottom-3 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-rail",
       )}
     >
       {/* queue de la bulle : pointe sur le trait du coude (y = 15px), même trait que le coude */}
       <span
         aria-hidden
-        className="absolute top-2.25 -left-1.5 z-10 size-3 rotate-45 border-b-2 border-l-2 border-border bg-card"
+        className="absolute top-2.25 -left-1.5 z-10 size-3 rotate-45 border-b-2 border-l-2 border-rail bg-card"
       />
       {children}
     </li>
@@ -169,10 +169,7 @@ function ThreadCard({
 }) {
   const t = useStrings(S)
   return (
-    <Card
-      size="sm"
-      className="gap-0 rounded-2xl rounded-tl-md py-0 shadow-sm ring-foreground/10"
-    >
+    <Card size="sm" className="gap-0 rounded-xl rounded-tl-sm py-0">
       <header className="flex items-center justify-between gap-2 border-b px-4 py-2">
         <a
           href={thread.comments[0]?.url}
@@ -218,10 +215,7 @@ function ConversationCard({
 }) {
   const t = useStrings(S)
   return (
-    <Card
-      size="sm"
-      className="gap-0 rounded-2xl rounded-tl-md py-0 shadow-sm ring-foreground/10"
-    >
+    <Card size="sm" className="gap-0 rounded-xl rounded-tl-sm py-0">
       <header className="flex items-center justify-between gap-2 border-b px-4 py-2">
         <h3 className="min-w-0 flex-1 truncate text-xs font-normal text-muted-foreground">
           {t.conversation}

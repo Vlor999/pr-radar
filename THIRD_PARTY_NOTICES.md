@@ -284,6 +284,7 @@ SOFTWARE.
 - tauri-macros 2.7.3 (Apache-2.0 OR MIT)
 - tauri-plugin-autostart 2.7.0 (Apache-2.0 OR MIT)
 - tauri-plugin-deep-link 2.6.2 (Apache-2.0 OR MIT)
+- tauri-plugin-dialog 2.8.4 (Apache-2.0 OR MIT)
 - tauri-plugin-fs 2.7.1 (Apache-2.0 OR MIT)
 - tauri-plugin-http 2.8.3 (Apache-2.0 OR MIT)
 - tauri-plugin-notification 2.7.0 (Apache-2.0 OR MIT)
@@ -491,6 +492,7 @@ Apache License
 - tauri-macros 2.7.3 (Apache-2.0 OR MIT)
 - tauri-plugin-autostart 2.7.0 (Apache-2.0 OR MIT)
 - tauri-plugin-deep-link 2.6.2 (Apache-2.0 OR MIT)
+- tauri-plugin-dialog 2.8.4 (Apache-2.0 OR MIT)
 - tauri-plugin-fs 2.7.1 (Apache-2.0 OR MIT)
 - tauri-plugin-http 2.8.3 (Apache-2.0 OR MIT)
 - tauri-plugin-notification 2.7.0 (Apache-2.0 OR MIT)
@@ -559,6 +561,7 @@ Creator: Person: Daniel Thompson-Yvetot
 - @tauri-apps/plugin-updater 2.14.0 (MIT OR Apache-2.0)
 - tauri-plugin-autostart 2.7.0 (Apache-2.0 OR MIT)
 - tauri-plugin-deep-link 2.6.2 (Apache-2.0 OR MIT)
+- tauri-plugin-dialog 2.8.4 (Apache-2.0 OR MIT)
 - tauri-plugin-fs 2.7.1 (Apache-2.0 OR MIT)
 - tauri-plugin-http 2.8.3 (Apache-2.0 OR MIT)
 - tauri-plugin-notification 2.7.0 (Apache-2.0 OR MIT)
@@ -12160,6 +12163,32 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+- rfd 0.17.2 (MIT)
+
+```
+MIT License
+
+Copyright (c) 2022 Bartłomiej Maryńczak
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 - ring 0.17.14 (Apache-2.0 AND ISC)
 
 ```
@@ -16411,3 +16440,7 @@ The license is the one declared in the package metadata; its standard text appli
 - webview2-com-sys 0.39.1 (MIT), by https://github.com/wravery/webview2-rs: https://crates.io/crates/webview2-com-sys/0.39.1
 - winapi-i686-pc-windows-gnu 0.4.0 (MIT/Apache-2.0), by Peter Atashian <retep998@gmail.com>: https://crates.io/crates/winapi-i686-pc-windows-gnu/0.4.0
 - winapi-x86_64-pc-windows-gnu 0.4.0 (MIT/Apache-2.0), by Peter Atashian <retep998@gmail.com>: https://crates.io/crates/winapi-x86_64-pc-windows-gnu/0.4.0
+
+## Embedded assets
+
+- Simple Icons 16.36.0 (CC0-1.0), https://simpleicons.org: SVG paths of the Claude, Claude Code, Cursor, GitHub, Google Gemini, Windsurf and Zed Industries logos, in `src/components/harness-logo.tsx` and `src/components/auth-source-icon.tsx`. The brands are trademarks of their owners; their use does not imply endorsement.

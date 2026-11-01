@@ -1,6 +1,8 @@
 import {
   AtSign,
+  Check,
   ChevronRight,
+  CircleDashed,
   CircleCheck,
   Clock,
   ExternalLink,
@@ -13,6 +15,7 @@ import {
   MessagesSquare,
   RefreshCw,
   UserCheck,
+  X,
 } from "lucide-react"
 import { cn } from "cn"
 import { useEffect, useState, useTransition } from "react"
@@ -63,6 +66,13 @@ const S = strings(
     agoD: (d: number) => `il y a ${d} j`,
     fresh: "Nouveau",
     freshTitle: "A bougé depuis ta dernière visite",
+    ci: {
+      SUCCESS: "CI réussie",
+      FAILURE: "CI en échec",
+      ERROR: "CI en erreur",
+      PENDING: "CI en cours",
+      EXPECTED: "CI en attente",
+    } as Record<string, string>,
     filesChanged: (n: number) =>
       `${plural(n, "fichier")} modifié${n > 1 ? "s" : ""}`,
     files: (n: number) => plural(n, "fichier"),
@@ -117,6 +127,13 @@ const S = strings(
     agoD: (d: number) => `${d}d ago`,
     fresh: "New",
     freshTitle: "Changed since your last visit",
+    ci: {
+      SUCCESS: "CI passed",
+      FAILURE: "CI failed",
+      ERROR: "CI errored",
+      PENDING: "CI running",
+      EXPECTED: "CI expected",
+    } as Record<string, string>,
     filesChanged: (n: number) => `${plural(n, "file")} changed`,
     files: (n: number) => plural(n, "file"),
     readyToMerge: "Ready to merge",
@@ -160,8 +177,9 @@ const EXIT_MS = 200
 /** durée des animations d'ouverture / fermeture de la colonne Slack (comme les panneaux repliables) */
 const SLACK_ANIM_MS = 200
 
-const STATUS: Record<string, "default" | "destructive" | "outline"> = {
-  APPROVED: "default",
+// plein (primary) réservé à « Prête à merger » ; approuvée = contour + coche
+const STATUS: Record<string, "destructive" | "outline"> = {
+  APPROVED: "outline",
   CHANGES_REQUESTED: "destructive",
   REVIEW_REQUIRED: "outline",
   NONE: "outline",
@@ -172,12 +190,12 @@ const REASON_ICON: Record<Reason, typeof AtSign> = {
   involved: MessagesSquare,
 }
 
-const CI: Record<string, { label: string; bad?: boolean }> = {
-  SUCCESS: { label: "CI ✓" },
-  FAILURE: { label: "CI ✗", bad: true },
-  ERROR: { label: "CI ✗", bad: true },
-  PENDING: { label: "CI …" },
-  EXPECTED: { label: "CI …" },
+const CI: Record<string, { icon: typeof Check; bad?: boolean }> = {
+  SUCCESS: { icon: Check },
+  FAILURE: { icon: X, bad: true },
+  ERROR: { icon: X, bad: true },
+  PENDING: { icon: CircleDashed },
+  EXPECTED: { icon: CircleDashed },
 }
 
 /** Logo Slack officiel (4 couleurs), en ligne : pas de dépendance. */
@@ -241,18 +259,21 @@ export function PrCard({
     <Card
       size="sm"
       className={cn(
-        "w-full max-w-xl gap-0 rounded-2xl py-0 transition-[box-shadow,background-color] duration-150",
+        "relative w-full max-w-xl gap-0 py-0 transition-[box-shadow,background-color] duration-150 ease-out",
         // carte sélectionnée au clavier (j/k) : contour épais + fond teinté, bien visible
-        "has-[[data-pr-card]:focus-visible]:bg-primary/5 has-[[data-pr-card]:focus-visible]:shadow-lg has-[[data-pr-card]:focus-visible]:ring-2 has-[[data-pr-card]:focus-visible]:ring-primary",
-        needsAttention(pr) && "border-l-4 border-l-destructive",
-        merge?.kind === "ready" && "border-l-4 border-l-primary",
+        "has-[[data-pr-card]:focus-visible]:bg-primary/5 has-[[data-pr-card]:focus-visible]:ring-2 has-[[data-pr-card]:focus-visible]:ring-primary",
+        // bord d'état : rouge = action attendue, vert = prête à merger ; en retrait des coins arrondis
+        (needsAttention(pr) || merge?.kind === "ready") &&
+          "before:absolute before:inset-y-3 before:left-0 before:w-0.75 before:rounded-r-full",
+        needsAttention(pr) && "before:bg-destructive",
+        merge?.kind === "ready" && "before:bg-primary",
       )}
     >
       <Collapsible open={open} onOpenChange={onOpenChange}>
         <CollapsibleTrigger
           data-pr-card=""
           data-url={pr.url}
-          className="group flex w-full scroll-mt-16 flex-col gap-1.5 rounded-2xl px-4 pt-3 pb-1.5 text-left outline-none"
+          className="group flex w-full scroll-mt-16 flex-col gap-1.5 rounded-xl px-4 pt-3 pb-1.5 text-left outline-none"
         >
           <div className="flex w-full items-baseline gap-2">
             <ChevronRight className="size-3.5 shrink-0 self-center text-muted-foreground transition-transform group-data-[panel-open]:rotate-90" />
@@ -265,12 +286,15 @@ export function PrCard({
             >
               #{pr.number}
             </a>
-            <span className="min-w-0 flex-1 font-medium">{pr.title}</span>
             {isNew && (
-              <Badge className="shrink-0 self-center" title={t.freshTitle}>
-                {t.fresh}
-              </Badge>
+              <span
+                role="img"
+                aria-label={t.fresh}
+                title={t.freshTitle}
+                className="size-2 shrink-0 self-center rounded-full bg-emerald-500"
+              />
             )}
+            <span className="min-w-0 flex-1 font-medium">{pr.title}</span>
           </div>
           <div className="flex flex-wrap gap-x-3 pl-5.5 font-mono text-xs text-muted-foreground">
             <span className="break-all">
@@ -300,7 +324,12 @@ export function PrCard({
               {t.readyToMerge}
             </Badge>
           )}
-          <Badge variant={STATUS[decision]}>{t.status[decision]}</Badge>
+          <Badge variant={STATUS[decision]}>
+            {decision === "APPROVED" && (
+              <Check className="text-green-600 dark:text-green-400" />
+            )}
+            {t.status[decision]}
+          </Badge>
           {pr.draft && <Badge variant="secondary">Draft</Badge>}
           {ci && (
             <Badge
@@ -316,7 +345,8 @@ export function PrCard({
                 ciOpen && "ring-2 ring-ring/40",
               )}
             >
-              {ci.label}
+              CI
+              <ci.icon role="img" aria-label={t.ci[pr.ci ?? ""]} />
             </Badge>
           )}
           {pr.conflicting && <Badge variant="destructive">{t.conflict}</Badge>}
@@ -394,6 +424,9 @@ export function PrCard({
                     {r.who}
                   </span>
                   <Badge variant={STATUS[r.state] ?? "outline"}>
+                    {r.state === "APPROVED" && (
+                      <Check className="text-green-600 dark:text-green-400" />
+                    )}
                     {t.review[r.state] ?? r.state.toLowerCase()}
                   </Badge>
                 </li>
@@ -600,14 +633,14 @@ export function SlackColumn({
           ? "animate-in fade-in slide-in-from-top-2 @[44rem]:slide-in-from-top-0 @[44rem]:slide-in-from-right-8"
           : "animate-out fill-mode-forwards fade-out slide-out-to-top-2 @[44rem]:slide-out-to-top-0 @[44rem]:slide-out-to-right-8",
         bridge &&
-          "relative before:absolute before:-top-3 before:-bottom-3 before:left-9.5 before:border-l-2 before:border-border @[44rem]:before:hidden",
+          "relative before:absolute before:-top-3 before:-bottom-3 before:left-9.5 before:border-l-2 before:border-rail @[44rem]:before:hidden",
       )}
     >
       {mentions.map((m) => (
         <li key={m.permalink}>
           <Card
             size="sm"
-            className="gap-1 rounded-2xl rounded-tl-md px-4 py-3 text-sm shadow-sm ring-foreground/10"
+            className="gap-1 rounded-xl rounded-tl-sm px-4 py-3 text-sm"
           >
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <SlackLogo className="size-3.5 shrink-0" />

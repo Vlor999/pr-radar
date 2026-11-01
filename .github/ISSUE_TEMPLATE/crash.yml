@@ -1,0 +1,45 @@
+name: Crash report
+description: PR Radar stopped unexpectedly. Usually opened from the app ("Report on GitHub"), prefilled.
+labels: ["crash"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The app prefills this form; review it before submitting. This issue is public: the app masks tokens, emails and home folders, and replaces repos, owners, accounts and hosts (`repo-1`, `owner-1`, `account-1`, `host-1`…), but check for anything confidential. You can attach the exported log file (Settings › Diagnostic › Export) by dropping it into the "Logs" field or a comment.
+  # ids prefilled by the app's URL (src/lib/crash-data.ts): description, version, os, logs
+  - type: textarea
+    id: description
+    attributes:
+      label: Summary
+      description: Crash kind, time, message. Add what you were doing just before.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If you can make it happen again.
+      value: |
+        1.
+        2.
+        3.
+  - type: input
+    id: version
+    attributes:
+      label: PR Radar version
+      placeholder: "0.11.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS · desktop app"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Warnings and errors of the crashed session (JSON lines).
+      render: shell

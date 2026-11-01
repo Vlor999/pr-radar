@@ -136,7 +136,7 @@ export function AddReviewer({ pr }: { pr: Pr }) {
                   // aria-disabled, pas disabled : le focus reste sur le bouton pendant la requête
                   aria-disabled={!!busy}
                   onClick={() => pick(u)}
-                  className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none aria-disabled:opacity-50"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none aria-disabled:opacity-50"
                 >
                   <Avatar login={u.login} url={pr.url} />
                   <span className="min-w-0 flex-1 truncate">{u.login}</span>

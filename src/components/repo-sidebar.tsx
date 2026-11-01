@@ -6,7 +6,6 @@ import { accessibleRepos, addRepo, setFollowed } from "@/lib/actions"
 import { CLIENT_ID } from "@/lib/auth"
 import { strings, useStrings } from "@/lib/i18n"
 import { updateSettings, useSettings } from "@/lib/settings"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -64,7 +63,7 @@ const PrDot = ({ title }: { title: string }) => (
     role="img"
     aria-label={title}
     title={title}
-    className="size-2 shrink-0 rounded-full bg-green-500"
+    className="size-2 shrink-0 rounded-full bg-emerald-500"
   />
 )
 
@@ -232,9 +231,14 @@ export function RepoSidebar({
                 {rs.some((r) => hasPr.has(lower(r))) && (
                   <PrDot title={t.orgOpenPr} />
                 )}
-                <Badge variant={count(rs) ? "secondary" : "outline"}>
+                <span
+                  className={cn(
+                    "text-xs tabular-nums",
+                    count(rs) ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
                   {count(rs)} / {rs.length}
-                </Badge>
+                </span>
                 <span className="w-5 shrink-0" />
               </CollapsibleTrigger>
               <HideButton name={org} onClick={() => hide(org, rs)} />

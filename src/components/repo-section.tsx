@@ -75,9 +75,9 @@ export const RepoSection = memo(function RepoSection({
         <CollapsibleTrigger className="group flex min-w-0 items-center gap-2 rounded-md py-1 text-base font-semibold">
           <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]:rotate-90" />
           <span className="truncate">{tree.repo}</span>
-          <Badge variant="secondary">
+          <span className="text-sm font-normal text-muted-foreground tabular-nums">
             {shown.length === total ? total : `${shown.length} / ${total}`}
-          </Badge>
+          </span>
           {attn > 0 && <Badge variant="destructive">{t.attn(attn)}</Badge>}
         </CollapsibleTrigger>
         <Button
@@ -156,7 +156,7 @@ function MergedList({
         <ChevronRight className="size-3.5 transition-transform group-data-[panel-open]:rotate-90" />
         <GitMerge className="size-3.5 text-violet-600 dark:text-violet-400" />
         {t.merged(mergedDays)}
-        <Badge variant="outline">{prs.length}</Badge>
+        <span className="tabular-nums">{prs.length}</span>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <ul className="flex max-w-xl flex-col pt-1 pl-5">
@@ -199,8 +199,8 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
             key={n.number}
             className={cn(
               "relative pt-2",
-              "before:absolute before:top-0 before:-left-4.5 before:h-9 before:w-4 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-border",
-              "not-last:after:absolute not-last:after:top-0 not-last:after:bottom-0 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-border",
+              "before:absolute before:top-0 before:-left-4.5 before:h-9 before:w-4 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-rail",
+              "not-last:after:absolute not-last:after:top-0 not-last:after:bottom-0 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-rail",
             )}
           >
             {/*
@@ -213,7 +213,7 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
               className={cn(
                 "@container relative flex flex-col gap-3",
                 n.children.length > 0 &&
-                  "before:absolute before:top-6 before:bottom-0 before:left-2.5 before:border-l-2 before:border-border",
+                  "before:absolute before:top-6 before:bottom-0 before:left-2.5 before:border-l-2 before:border-rail",
               )}
             >
               {/*

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Idea or feedback
+    url: https://github.com/Vlor999/pr-radar/discussions/categories/ideas
+    about: Suggestions, questions and feedback go to Discussions › Ideas (also from the app: Settings › General › Send feedback).

@@ -2,8 +2,11 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import App from "./App"
 import "./index.css"
+import { ErrorBoundary } from "./components/error-boundary"
 import { WebWaiting } from "./components/web-waiting"
+import { loadCrashStatus, watchErrors } from "./lib/crash"
 import { routeLinksToBrowser } from "./lib/open"
+import { startLog } from "./lib/log"
 import { connectWeb, HttpError, isWeb } from "./lib/platform"
 import { setLowQuotaNotifier } from "./lib/quota"
 import { pull, seed } from "./lib/sync"
@@ -38,6 +41,11 @@ async function boot() {
     await hydrate(root)
   } else {
     await seed().catch(() => {})
+    // journal local : après `seed` (réglages du dossier et de la conservation en place)
+    startLog()
+    // erreurs non rattrapées journalisées ; plantage de la session précédente (bandeau)
+    watchErrors()
+    void loadCrashStatus()
     setLowQuotaNotifier((title, body) => {
       notify(title, body).catch(() => {})
     })
@@ -47,7 +55,9 @@ async function boot() {
   routeLinksToBrowser()
   root.render(
     <React.StrictMode>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </React.StrictMode>,
   )
 }

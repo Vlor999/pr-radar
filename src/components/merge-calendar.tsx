@@ -216,7 +216,7 @@ export function MergeCalendar() {
             <span
               aria-hidden
               style={thumb}
-              className="absolute rounded-4xl bg-secondary transition-[left,top,width,height] duration-200 ease-out motion-reduce:transition-none"
+              className="absolute rounded-md bg-secondary transition-[left,top,width,height] duration-200 ease-out motion-reduce:transition-none"
             />
           )}
           {VIEWS.map((v) => (

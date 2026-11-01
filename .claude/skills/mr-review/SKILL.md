@@ -50,7 +50,7 @@ If fetch fails, or if local changes affect the review, prompt the user to resolv
 
 ## Step 2 — Rule Gathering
 
-- Collect the rules: root `CLAUDE.md` (stack, checks, security rules), `.claude/skills/*` that the change touches (`release`, `demo`), `docs/`, `.github/workflows/`, `src-tauri/tauri.conf.json` (CSP, capabilities) and any other relevant configuration.
+- Collect the rules: root `CLAUDE.md` (stack, checks, security rules), `.claude/rules/*` matching the diff (`ui.md` for any change in `src/components/` or `src/index.css`), `.claude/skills/*` that the change touches (`release`, `demo`), `docs/`, `.github/workflows/`, `src-tauri/tauri.conf.json` (CSP, capabilities) and any other relevant configuration.
 - Pay special attention to: secrets never logged or committed, `site/` with mock data only, Tauri capabilities and CSP, calls to `api.github.com` (quota, bandwidth).
 
 If none are found, prompt the user to provide any relevant rules or guidelines that should be considered during the code review. Especially considering the following aspects:

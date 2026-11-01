@@ -1,6 +1,6 @@
 [package]
 name = "pr-radar"
-version = "0.11.0"
+version = "0.12.0"
 description = "PR Radar: your open GitHub PRs, as a tree"
 authors = ["Vlor999"]
 edition = "2024"
@@ -35,8 +35,20 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-autostart = "2"
 # version web locale : serveur HTTP sur 127.0.0.1 (tokio, déjà le runtime de Tauri)
 axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "json"] }
-tokio = { version = "1", features = ["net"] }
+# signal : SIGTERM / SIGHUP (fermeture de session, arrêt du système) traités comme « Quitter » (crash.rs)
+tokio = { version = "1", features = ["net", "signal"] }
 getrandom = "0.3"
+# sélecteurs du dossier et de l'export du journal (log.rs), ouverts depuis Rust
+tauri-plugin-dialog = "2"
+
+[target.'cfg(unix)'.dependencies]
+# O_NOFOLLOW : fichiers du journal jamais ouverts à travers un lien symbolique (log.rs)
+# + heure de démarrage du système (sysctl KERN_BOOTTIME, crash.rs)
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+# heure de démarrage du système (GetTickCount64, crash.rs)
+windows-sys = { version = "0.61", features = ["Win32_System_SystemInformation"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

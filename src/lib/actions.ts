@@ -18,8 +18,10 @@ import {
   resolveThread,
   updateBranch,
 } from "./github"
+import { log } from "./log"
+import { prNumberOf } from "./log-data"
 import { forgetQuota } from "./quota"
-import { getRepos, reload, setRepos } from "./store"
+import { getData, getRepos, reload, setRepos } from "./store"
 import { pull } from "./sync"
 import type { MergedPr } from "./types"
 
@@ -30,6 +32,23 @@ const MAX_COMMENT_CHARS = 65_000
 
 const message = (e: unknown) =>
   e instanceof Error ? e.message.slice(0, MAX_ERROR_CHARS) : String(e)
+
+/** Journal local : action, repo, numéro de la PR (d'après le nœud GraphQL), issue ; jamais le texte envoyé. */
+const logAction = (
+  action: string,
+  repo: string,
+  error?: string,
+  extra?: Record<string, unknown>,
+) =>
+  log(error ? "warn" : "info", "action", {
+    action,
+    repo,
+    ok: !error,
+    ...extra,
+    ...(error && { error }),
+  })
+
+const prOf = (id: string) => ({ pr: prNumberOf(getData().prs, id) })
 
 /** Liste des repos suivis relue avant d'être réécrite en entier (l'autre fenêtre a pu la changer). */
 const freshRepos = async () => {
@@ -44,14 +63,17 @@ export async function addRepo(repo: string): Promise<{ error?: string }> {
     if (!repos.some((r) => r.toLowerCase() === name.toLowerCase()))
       setRepos([...repos, name])
   } catch (e) {
+    logAction("addRepo", repo, message(e))
     return { error: message(e) }
   }
+  logAction("addRepo", repo)
   await reload()
   return {}
 }
 
 export async function removeRepo(repo: string) {
   setRepos((await freshRepos()).filter((r) => r !== repo))
+  logAction("removeRepo", repo)
   await reload()
 }
 
@@ -62,6 +84,7 @@ export async function setFollowed(repo: string, followed: boolean) {
     (r) => r.toLowerCase() !== repo.toLowerCase(),
   )
   setRepos(followed ? [...repos, repo] : repos)
+  logAction(followed ? "followRepo" : "unfollowRepo", repo)
   await reload()
 }
 
@@ -86,6 +109,8 @@ export async function refreshPrs() {
 
 /** Publie un message sur le nœud GitHub `id`, puis relit GitHub pour l'afficher. */
 async function post(
+  action: string,
+  repo: string,
   id: string,
   body: string,
   send: (text: string) => Promise<void>,
@@ -97,8 +122,10 @@ async function post(
   try {
     await send(text)
   } catch (e) {
+    logAction(action, repo, message(e), prOf(id))
     return { error: message(e) }
   }
+  logAction(action, repo, undefined, prOf(id))
   clearCache()
   await reload()
   return {}
@@ -106,25 +133,32 @@ async function post(
 
 /** Répond dans un fil de discussion de review. */
 export const reply = (threadId: string, body: string, repo: string) =>
-  post(threadId, body, (text) => replyToThread(threadId, text, repo))
+  post("reply", repo, threadId, body, (text) =>
+    replyToThread(threadId, text, repo),
+  )
 
 /** Commentaire général sur la PR (une review ne se répond pas individuellement sur GitHub). */
 export const comment = (prId: string, body: string, repo: string) =>
-  post(prId, body, (text) => commentOnPr(prId, text, repo))
+  post("comment", repo, prId, body, (text) => commentOnPr(prId, text, repo))
 
 /** Écrit sur le nœud GitHub `id` (fil, PR), puis relit GitHub pour afficher le résultat.
  * `settle` : attendu entre le succès et la relecture (animation de sortie de l'élément). */
 async function act(
+  action: string,
+  repo: string,
   id: string,
   send: () => Promise<void>,
   settle?: () => Promise<void>,
+  extra: Record<string, unknown> = prOf(id),
 ): Promise<{ error?: string }> {
   if (!/^[\w=-]+$/.test(id)) return { error: "Identifiant GitHub invalide" }
   try {
     await send()
   } catch (e) {
+    logAction(action, repo, message(e), extra)
     return { error: message(e) }
   }
+  logAction(action, repo, undefined, extra)
   await settle?.()
   clearCache()
   await reload()
@@ -136,28 +170,36 @@ export const resolve = (
   threadId: string,
   repo: string,
   settle?: () => Promise<void>,
-) => act(threadId, () => resolveThread(threadId, repo), settle)
+) => act("resolve", repo, threadId, () => resolveThread(threadId, repo), settle)
 
 /** Sort une de mes PR du mode draft. */
 export const ready = (
   prId: string,
   repo: string,
   settle?: () => Promise<void>,
-) => act(prId, () => markReady(prId, repo), settle)
+) => act("ready", repo, prId, () => markReady(prId, repo), settle)
 
 /** Merge la base dans la branche de la PR, en retard sur sa base. */
 export const syncBranch = (
   prId: string,
   repo: string,
   settle?: () => Promise<void>,
-) => act(prId, () => updateBranch(prId, repo), settle)
+) => act("syncBranch", repo, prId, () => updateBranch(prId, repo), settle)
 
 /** Relance les jobs en échec d'un workflow run de la PR ; la vue CI se relit avec la PR. */
 export const rerunFailed = (
   repo: string,
   runId: number,
   settle?: () => Promise<void>,
-) => act(String(runId), () => rerunFailedJobs(repo, runId), settle)
+) =>
+  act(
+    "rerunFailed",
+    repo,
+    String(runId),
+    () => rerunFailedJobs(repo, runId),
+    settle,
+    { runId },
+  )
 
 /** Compte ajouté dans les réglages : on suit d'office ses repos où j'ai des PR ouvertes. */
 export async function accountAdded(id: string) {
@@ -204,8 +246,10 @@ export async function addReviewer(
   try {
     await requestReviewer(prId, userId, repo)
   } catch (e) {
+    logAction("addReviewer", repo, message(e), prOf(prId))
     return { error: message(e) }
   }
+  logAction("addReviewer", repo, undefined, prOf(prId))
   clearCache()
   await reload()
   return {}
