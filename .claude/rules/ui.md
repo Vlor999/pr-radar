@@ -69,5 +69,5 @@ Only radius and the card shadow were edited. Everything else stays as shadcn gen
 
 - One curve: `ease-out` = `cubic-bezier(0.22, 1, 0.36, 1)` (`--ease-out` in `src/index.css`).
 - Durations: 150ms state/hover, 200ms thumbs, underlines, menus, 300ms entrances.
-- Animate `transform`, `opacity`, colours only; `transition-colors` / `transition-transform`, not `transition-all`. Known exceptions, do not copy: the segmented thumbs (`settings-ui.tsx`, `merge-calendar.tsx`) and the collapsing PR action button (`pr-card.tsx`).
+- Animate `transform`, `opacity`, colours only; `transition-colors` / `transition-transform`, not `transition-all`. Known exceptions, do not copy: the segmented thumbs (`settings/ui.tsx`, `merge-calendar.tsx`) and the collapsing PR action button (`pr-card.tsx`).
 - Looping animation only on things that are live (spinners, loading skeletons), always with `motion-reduce:animate-none`.
