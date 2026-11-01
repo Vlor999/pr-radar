@@ -192,6 +192,8 @@ test("chaque requête réelle reçoit rateLimit { cost } à la racine de son cor
     queryFor("github.com"),
     queryFor("github.com", true),
     queryFor("ghe.example.com"),
+    queryFor("github.com", false, "probe"),
+    queryFor("ghe.example.com", false, "probe"),
     CHECKS_QUERY,
   ])
     assertAtRoot(op)
