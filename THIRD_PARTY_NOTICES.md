@@ -16411,3 +16411,7 @@ The license is the one declared in the package metadata; its standard text appli
 - webview2-com-sys 0.39.1 (MIT), by https://github.com/wravery/webview2-rs: https://crates.io/crates/webview2-com-sys/0.39.1
 - winapi-i686-pc-windows-gnu 0.4.0 (MIT/Apache-2.0), by Peter Atashian <retep998@gmail.com>: https://crates.io/crates/winapi-i686-pc-windows-gnu/0.4.0
 - winapi-x86_64-pc-windows-gnu 0.4.0 (MIT/Apache-2.0), by Peter Atashian <retep998@gmail.com>: https://crates.io/crates/winapi-x86_64-pc-windows-gnu/0.4.0
+
+## Embedded assets
+
+- Simple Icons 16.36.0 (CC0-1.0), https://simpleicons.org: SVG paths of the Claude, Claude Code, Cursor, GitHub, Google Gemini, Windsurf and Zed Industries logos, in `src/components/harness-logo.tsx` and `src/components/auth-source-icon.tsx`. The brands are trademarks of their owners; their use does not imply endorsement.

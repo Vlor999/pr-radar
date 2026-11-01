@@ -2,13 +2,18 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import {
+  actionReasons,
+  ageLabel,
+  attentionPayload,
   callsToday,
   htmlToText,
   installSnippet,
   MCP_HISTORY_MAX,
   normalizeUrl,
   parentsOf,
+  parseAttentionArgs,
   parseHistory,
+  parsePrsArgs,
   prPayload,
   prsPayload,
   pushCall,
@@ -108,7 +113,15 @@ const el = (
   getAttribute: (n) => attrs[n] ?? null,
 })
 
-test("get_prs : mention cherchée → liste, PR à reviewer → slack null", () => {
+type Payload = {
+  prs?: Record<string, unknown>[]
+  reviews?: Record<string, unknown>[]
+} & Record<string, unknown>
+
+const prs = (...args: Parameters<typeof prsPayload>) =>
+  prsPayload(...args) as Payload
+
+test("get_prs : mentions absentes si pas cherchées, checkedAt seul si aucune", () => {
   const seen = pr(1)
   const empty = pr(2)
   const unread = pr(3)
@@ -116,51 +129,89 @@ test("get_prs : mention cherchée → liste, PR à reviewer → slack null", () 
     [seen.url, { at: 0, list: [mention()] }],
     [empty.url, { at: 0, list: [] }],
   ])
-  const out = prsPayload(
+  const out = prs(
     ctx,
     [seen, empty, unread],
     [rv()],
     new Map(),
     (u) => known.get(u) ?? null,
   )
+  const checkedAt = "1970-01-01T00:00:00.000Z"
   assert.deepEqual(
-    out.prs.map((p) => p.slack),
-    [[mention()], [], null],
+    out.prs?.map((p) => p.slack),
+    [{ checkedAt, mentions: [mention()] }, { checkedAt }, undefined],
   )
-  assert.deepEqual(
-    out.prs.map((p) => p.slackCheckedAt),
-    ["1970-01-01T00:00:00.000Z", "1970-01-01T00:00:00.000Z", null],
-  )
-  assert.equal(out.reviews[0].slack, null)
+  assert.equal("slack" in (out.reviews?.[0] ?? {}), false)
 })
 
-test("get_prs : format compact, sans fils ni conversation", () => {
-  const out = prsPayload(
+test("get_prs : valeurs par défaut omises, sans fils ni conversation", () => {
+  const out = prs(
+    { ...ctx, fetchedAt: null },
+    [pr(1, { ci: null, additions: 0 })],
+    [rv({ direct: false })],
+    new Map(),
+    noMentions,
+  )
+  assert.deepEqual(out, {
+    slack: { status: "connected" },
+    prs: [
+      {
+        repo: "acme/web",
+        number: 1,
+        title: "PR 1",
+        url: "https://github.com/acme/web/pull/1",
+        head: "b1",
+        base: "main",
+        deletions: 2,
+        files: 1,
+        updated: "2026-01-01T00:00:00Z",
+      },
+    ],
+    reviews: [
+      {
+        repo: "acme/api",
+        number: 9,
+        title: "Review me",
+        url: "https://github.com/acme/api/pull/9",
+        author: "alice",
+        decision: "REVIEW_REQUIRED",
+        since: "2026-01-01T00:00:00Z",
+      },
+    ],
+  })
+})
+
+test("get_prs : reviewers en listes de logins par état, équipes à part", () => {
+  const out = prs(
     ctx,
-    [pr(1, { threads: [], conversation: [] })],
+    [
+      pr(1, {
+        reviews: [
+          { who: "alice", state: "APPROVED" },
+          { who: "bob", state: "CHANGES_REQUESTED" },
+          { who: "carol", state: "APPROVED" },
+        ],
+        requested: [{ who: "dave" }, { who: "Platform", team: true }],
+      }),
+    ],
     [],
     new Map(),
     noMentions,
   )
-  assert.equal(out.fetchedAt, ctx.fetchedAt)
-  assert.equal(out.slack.status, "connected")
-  assert.equal("threads" in out.prs[0], false)
-  assert.equal("conversation" in out.prs[0], false)
-  assert.deepEqual(out.prs[0].reviewers, { reviews: [], requested: [] })
+  assert.deepEqual(out.prs?.[0].reviewers, {
+    approved: ["alice", "carol"],
+    changesRequested: ["bob"],
+    requested: ["dave"],
+    requestedTeams: ["Platform"],
+  })
 })
 
-test("get_prs : la PR d'un autre donne son motif, la mienne null", () => {
+test("get_prs : la PR d'un autre donne son motif, la mienne rien", () => {
   const involved = { reason: "mentioned" as const, author: "bob" }
-  const out = prsPayload(
-    ctx,
-    [pr(1), pr(2, { involved })],
-    [],
-    new Map(),
-    noMentions,
-  )
+  const out = prs(ctx, [pr(1), pr(2, { involved })], [], new Map(), noMentions)
   assert.deepEqual(
-    out.prs.map((p) => p.involved),
-    [null, involved],
+    out.prs?.map((p) => p.involved),
+    [undefined, involved],
   )
 })
 
@@ -170,11 +221,262 @@ test("get_prs : une PR stackée donne le numéro de sa PR parente", () => {
   const parents = parentsOf([
     { repo: "acme/web", roots: buildTree([a, b]), merged: [] },
   ])
-  const out = prsPayload(ctx, [a, b], [], parents, noMentions)
+  const out = prs(ctx, [a, b], [], parents, noMentions)
   assert.deepEqual(
-    out.prs.map((p) => p.stack.parent),
-    [null, 1],
+    out.prs?.map((p) => p.parent),
+    [undefined, 1],
   )
+})
+
+test("get_prs : réponse compacte plus courte que la forme complète", () => {
+  const list = Array.from({ length: 20 }, (_, i) =>
+    pr(i + 1, {
+      draft: i % 5 === 0,
+      ci: i % 4 === 0 ? null : "SUCCESS",
+      comments: i % 3,
+      reviews: i % 2 ? [{ who: "alice", state: "APPROVED" }] : [],
+      requested: [{ who: "bob" }],
+    }),
+  )
+  const queue = Array.from({ length: 5 }, (_, i) => rv({ number: 100 + i }))
+  const full = JSON.stringify({
+    ...ctx,
+    prs: list.map((p) => ({
+      ...p,
+      reviewers: { reviews: p.reviews, requested: p.requested },
+      stack: { parent: null, native: null },
+      involved: null,
+      slack: null,
+      slackCheckedAt: null,
+    })),
+    reviews: queue.map((r) => ({ ...r, slack: null })),
+  })
+  const compact = JSON.stringify(
+    prsPayload(ctx, list, queue, new Map(), noMentions),
+  )
+  assert.ok(
+    compact.length < full.length * 0.6,
+    `${compact.length} / ${full.length}`,
+  )
+})
+
+/* ---------- Filtres de get_prs et actions attendues ---------- */
+
+const thread = (author: string) => ({
+  id: `T_${author}`,
+  path: "a.ts",
+  line: 1,
+  outdated: false,
+  hunk: "",
+  comments: [{ author, body: "?", url: "u", at: "2026-01-01T00:00:00Z" }],
+})
+const other = { reason: "involved" as const, author: "bob" }
+
+test("actions : ma PR sans rien à faire → aucune raison", () => {
+  assert.deepEqual(actionReasons({ pr: pr(1) }, ["me"]), [])
+})
+
+test("actions : ma PR donne chaque raison qui s'applique", () => {
+  const p = pr(1, {
+    ci: "FAILURE",
+    decision: "CHANGES_REQUESTED",
+    conflicting: true,
+    unresolved: 2,
+    canUpdateBranch: true,
+  })
+  assert.deepEqual(actionReasons({ pr: p }, ["me"]), [
+    "ciFailing",
+    "changesRequested",
+    "conflicting",
+    "unresolvedThreads",
+    "behindBase",
+  ])
+  assert.deepEqual(actionReasons({ pr: pr(2, { ci: "ERROR" }) }, []), [
+    "ciFailing",
+  ])
+})
+
+test("actions : CI en cours ou PR approuvée ne demandent rien", () => {
+  for (const extra of [
+    { ci: "PENDING" },
+    { decision: "APPROVED" as const },
+    { draft: true },
+  ])
+    assert.deepEqual(actionReasons({ pr: pr(1, extra) }, ["me"]), [])
+})
+
+test("actions : PR d'un autre, review demandée à moi nommément (casse ignorée)", () => {
+  const p = pr(1, {
+    involved: other,
+    requested: [{ who: "Me" }, { who: "me", team: true }],
+  })
+  assert.deepEqual(actionReasons({ pr: p }, ["me"]), ["reviewRequested"])
+  const team = pr(2, {
+    involved: other,
+    requested: [{ who: "me", team: true }],
+  })
+  assert.deepEqual(actionReasons({ pr: team }, ["me"]), [])
+})
+
+test("actions : PR d'un autre, fil non résolu où j'ai écrit seulement", () => {
+  const mine = pr(1, {
+    involved: other,
+    unresolved: 1,
+    threads: [thread("me")],
+  })
+  const theirs = pr(2, {
+    involved: other,
+    unresolved: 1,
+    threads: [thread("carol")],
+    ci: "FAILURE",
+    conflicting: true,
+  })
+  assert.deepEqual(actionReasons({ pr: mine }, ["other", "me"]), [
+    "inUnresolvedThread",
+  ])
+  assert.deepEqual(actionReasons({ pr: theirs }, ["me"]), [])
+})
+
+test("actions : file « À reviewer » → toujours une review demandée", () => {
+  assert.deepEqual(actionReasons({ review: rv({ draft: true }) }, []), [
+    "reviewRequested",
+  ])
+})
+
+const listed = (out: Payload) => ({
+  prs: out.prs?.map((p) => p.number) ?? [],
+  reviews: out.reviews?.map((r) => r.number) ?? [],
+})
+
+const sample = () => ({
+  prs: [
+    pr(1, { ci: "FAILURE" }),
+    pr(2),
+    pr(3, { repo: "globex/billing", conflicting: true }),
+    pr(4, { involved: other, requested: [{ who: "me" }] }),
+    pr(5, { involved: other, repo: "globex/billing" }),
+  ],
+  reviews: [rv({ number: 10 }), rv({ number: 11, repo: "globex/billing" })],
+})
+
+const filtered = (args: unknown) => {
+  const parsed = parsePrsArgs(args)
+  assert.ok(parsed.ok)
+  const { prs: list, reviews } = sample()
+  return listed(
+    prs(ctx, list, reviews, new Map(), noMentions, parsed.filters, ["me"]),
+  )
+}
+
+test("get_prs : sans argument, tout est renvoyé", () => {
+  assert.deepEqual(filtered({}), { prs: [1, 2, 3, 4, 5], reviews: [10, 11] })
+  assert.deepEqual(filtered(undefined), filtered({}))
+})
+
+test("get_prs : scope mine / involved / reviews", () => {
+  assert.deepEqual(filtered({ scope: "mine" }), { prs: [1, 2, 3], reviews: [] })
+  assert.deepEqual(filtered({ scope: "involved" }), {
+    prs: [4, 5],
+    reviews: [],
+  })
+  assert.deepEqual(filtered({ scope: "reviews" }), {
+    prs: [],
+    reviews: [10, 11],
+  })
+})
+
+test("get_prs : repo en sous-chaîne, casse ignorée, sur les deux listes", () => {
+  assert.deepEqual(filtered({ repo: "GLOBEX/" }), {
+    prs: [3, 5],
+    reviews: [11],
+  })
+  assert.deepEqual(filtered({ repo: "nope" }), { prs: [], reviews: [] })
+})
+
+test("get_prs : needs_action garde ce qui attend une action de ma part", () => {
+  assert.deepEqual(filtered({ needs_action: true }), {
+    prs: [1, 3, 4],
+    reviews: [10, 11],
+  })
+  assert.deepEqual(
+    filtered({ needs_action: true, scope: "mine", repo: "acme" }),
+    { prs: [1], reviews: [] },
+  )
+})
+
+test("get_prs : limit par liste, truncated compte le reste", () => {
+  const { prs: list, reviews } = sample()
+  const out = prs(ctx, list, reviews, new Map(), noMentions, {
+    scope: "all",
+    needsAction: false,
+    limit: 2,
+  })
+  assert.deepEqual(listed(out), { prs: [1, 2], reviews: [10, 11] })
+  assert.deepEqual(out.truncated, { prs: 3 })
+})
+
+test("get_prs : truncated absent quand rien n'est coupé", () => {
+  const { prs: list, reviews } = sample()
+  const out = prs(ctx, list, reviews, new Map(), noMentions, {
+    scope: "all",
+    needsAction: false,
+    limit: 10,
+  })
+  assert.equal("truncated" in out, false)
+})
+
+test("arguments de get_prs : valeurs valides, null vaut absent", () => {
+  assert.deepEqual(parsePrsArgs(null), {
+    ok: true,
+    filters: { scope: "all", needsAction: false },
+  })
+  assert.deepEqual(
+    parsePrsArgs({
+      repo: "acme",
+      scope: "reviews",
+      needs_action: true,
+      limit: 5,
+    }),
+    {
+      ok: true,
+      filters: { repo: "acme", scope: "reviews", needsAction: true, limit: 5 },
+    },
+  )
+  assert.deepEqual(parsePrsArgs({ scope: null, limit: null }), {
+    ok: true,
+    filters: { scope: "all", needsAction: false },
+  })
+})
+
+test("arguments de get_prs : limit écrit 1.0 ou 3e0 accepté, comme dans le shim", () => {
+  for (const [raw, limit] of [
+    ['{"limit":1.0}', 1],
+    ['{"limit":3e0}', 3],
+  ] as const)
+    assert.deepEqual(parsePrsArgs(JSON.parse(raw)), {
+      ok: true,
+      filters: { scope: "all", needsAction: false, limit },
+    })
+})
+
+test("arguments de get_prs : type ou valeur invalide → erreur explicite", () => {
+  const cases: [unknown, string][] = [
+    ["x", "get_prs: arguments must be an object"],
+    [[], "get_prs: arguments must be an object"],
+    [{ repo: 1 }, "get_prs: `repo` must be a string"],
+    [
+      { scope: "team" },
+      "get_prs: `scope` must be one of mine, involved, reviews, all",
+    ],
+    [{ needs_action: "yes" }, "get_prs: `needs_action` must be a boolean"],
+    [{ limit: 0 }, "get_prs: `limit` must be an integer >= 1"],
+    [{ limit: 1.5 }, "get_prs: `limit` must be an integer >= 1"],
+    [{ limit: 1e20 }, "get_prs: `limit` must be an integer >= 1"],
+    [{ limit: "3" }, "get_prs: `limit` must be an integer >= 1"],
+    [{ state: "open" }, "get_prs: unknown argument `state`"],
+  ]
+  for (const [args, error] of cases)
+    assert.deepEqual(parsePrsArgs(args), { ok: false, error })
 })
 
 test("get_pr : fils et conversation en texte, URL avec /files acceptée", () => {
@@ -214,7 +516,6 @@ test("get_pr : fils et conversation en texte, URL avec /files acceptée", () => 
     {
       path: "a.ts",
       line: 3,
-      outdated: false,
       hunk: "+x",
       comments: [{ author: "alice", at: "t", url: "u", body: "fix" }],
     },
@@ -385,5 +686,169 @@ test("installation : JSON au format d'Antigravity, Cursor, Windsurf et Zed", () 
   })
   assert.deepEqual(JSON.parse(installSnippet("zed", exe)), {
     context_servers: { "pr-radar": server },
+  })
+})
+
+/* ---------- get_attention ---------- */
+
+const NOW = Date.parse("2026-01-10T00:00:00Z")
+
+test("attention : seulement les PR avec une raison d'agir, une entrée compacte par PR", () => {
+  const out = attentionPayload(
+    ctx,
+    [pr(1), pr(2, { ci: "FAILURE", updated: "2026-01-09T21:00:00Z" })],
+    [],
+    ["me"],
+    NOW,
+  )
+  assert.deepEqual(out, {
+    fetchedAt: "2026-01-01T00:00:00Z",
+    items: [
+      {
+        url: "https://github.com/acme/web/pull/2",
+        repo: "acme/web",
+        number: 2,
+        title: "PR 2",
+        reasons: ["ciFailing"],
+        age: "3h",
+      },
+    ],
+  })
+})
+
+test("attention : rien à faire → pas de liste, contexte de fraîcheur seul", () => {
+  const out = attentionPayload(
+    { ...ctx, loading: true, error: "boom" },
+    [pr(1)],
+    [],
+    ["me"],
+    NOW,
+  )
+  assert.deepEqual(out, {
+    fetchedAt: "2026-01-01T00:00:00Z",
+    loading: true,
+    error: "boom",
+  })
+})
+
+test("attention : review demandée et CI en échec d'abord, puis la plus ancienne", () => {
+  const out = attentionPayload(
+    ctx,
+    [
+      pr(1, { unresolved: 1, updated: "2026-01-02T00:00:00Z" }),
+      pr(2, { conflicting: true, updated: "2026-01-05T00:00:00Z" }),
+      pr(3, { ci: "FAILURE", updated: "2026-01-08T00:00:00Z" }),
+    ],
+    [rv({ since: "2026-01-09T00:00:00Z" })],
+    ["me"],
+    NOW,
+  )
+  const items = out.items as { number: number; age: string }[]
+  assert.deepEqual(
+    items.map((i) => [i.number, i.age]),
+    [
+      [3, "2d"],
+      [9, "24h"],
+      [1, "8d"],
+      [2, "5d"],
+    ],
+  )
+})
+
+test("attention : PR à la fois dans la file et dans l'arbre → une entrée, raisons réunies, âge de la demande", () => {
+  const url = "https://github.com/acme/web/pull/5"
+  const out = attentionPayload(
+    ctx,
+    [
+      pr(5, {
+        involved: other,
+        requested: [{ who: "me" }],
+        threads: [thread("me")],
+        updated: "2026-01-09T23:00:00Z",
+      }),
+    ],
+    [
+      rv({
+        repo: "acme/web",
+        number: 5,
+        url: `${url}/files`,
+        since: "2026-01-07T00:00:00Z",
+      }),
+    ],
+    ["me"],
+    NOW,
+  )
+  const items = out.items as { url: string; reasons: string[]; age: string }[]
+  assert.equal(items.length, 1)
+  assert.equal(items[0].url, url)
+  assert.deepEqual(items[0].reasons, ["reviewRequested", "inUnresolvedThread"])
+  assert.equal(items[0].age, "3d")
+})
+
+test("attention : à égalité de priorité et de date, file « À reviewer » puis arbre, dans leur ordre", () => {
+  const at = "2026-01-05T00:00:00Z"
+  const out = attentionPayload(
+    ctx,
+    [
+      pr(1, { ci: "FAILURE", updated: at }),
+      pr(2, { unresolved: 1, updated: at }),
+      pr(3, { conflicting: true, updated: at }),
+    ],
+    [
+      rv({ number: 8, url: "https://github.com/acme/api/pull/8", since: at }),
+      rv({ since: at }),
+    ],
+    ["me"],
+    NOW,
+  )
+  const items = out.items as { number: number }[]
+  assert.deepEqual(
+    items.map((i) => i.number),
+    [8, 9, 1, 2, 3],
+  )
+})
+
+test("attention : filtre repo sur une sous-chaîne, casse ignorée", () => {
+  const out = attentionPayload(
+    ctx,
+    [pr(1, { ci: "FAILURE" }), pr(2, { repo: "globex/api", ci: "FAILURE" })],
+    [rv()],
+    ["me"],
+    NOW,
+    "ACME/W",
+  )
+  const items = out.items as { repo: string }[]
+  assert.deepEqual(
+    items.map((i) => i.repo),
+    ["acme/web"],
+  )
+})
+
+test("attention : âge en minutes, heures jusqu'à 48 h, puis jours", () => {
+  const h = 3_600_000
+  assert.equal(ageLabel(-5), "0m")
+  assert.equal(ageLabel(45 * 60_000), "45m")
+  assert.equal(ageLabel(47 * h), "47h")
+  assert.equal(ageLabel(48 * h), "2d")
+})
+
+test("attention : arguments validés comme ceux de get_prs", () => {
+  assert.deepEqual(parseAttentionArgs(undefined), { ok: true })
+  assert.deepEqual(parseAttentionArgs({ repo: null }), { ok: true })
+  assert.deepEqual(parseAttentionArgs({ repo: "acme" }), {
+    ok: true,
+    repo: "acme",
+  })
+  assert.deepEqual(parseAttentionArgs({ repo: 1 }), {
+    ok: false,
+    error: "get_attention: `repo` must be a string",
+  })
+  assert.deepEqual(parseAttentionArgs({ limit: 3 }), {
+    ok: false,
+    error: "get_attention: unknown argument `limit`",
+  })
+  assert.deepEqual(parseAttentionArgs([]), {
+    ok: false,
+    error: "get_attention: arguments must be an object",
   })
 })
