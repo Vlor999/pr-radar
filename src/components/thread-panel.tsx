@@ -151,7 +151,7 @@ function Bubble({
       {/* queue de la bulle : pointe sur le trait du coude (y = 15px), même trait que le coude */}
       <span
         aria-hidden
-        className="absolute top-2.25 -left-1.5 z-10 size-3 rotate-45 border-b-2 border-l-2 border-border bg-card"
+        className="absolute top-2.25 -left-1.5 z-10 size-3 rotate-45 border-b-2 border-l-2 border-rail bg-card"
       />
       {children}
     </li>
