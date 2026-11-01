@@ -1,5 +1,8 @@
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import { test } from "node:test"
+
+import { CHECKS_QUERY } from "./checks.ts"
 
 import {
   gqlFailed,
@@ -10,6 +13,7 @@ import {
   type GqlResponse,
   type RepoNode,
 } from "./graphql.ts"
+import { queryFor } from "./pr-query.ts"
 
 const errors = [{ message: "Resource not accessible by integration" }]
 
@@ -134,4 +138,67 @@ test("rateLimit absent (mutation) : coût inconnu, data intacte", () => {
   const json: GqlResponse = { data: { resolveReviewThread: { thread: {} } } }
   assert.equal(takeCost(json), undefined)
   assert.deepEqual(json.data, { resolveReviewThread: { thread: {} } })
+})
+
+test("coût négatif, NaN ou non numérique : inconnu, rateLimit retiré", () => {
+  for (const cost of [-1, NaN, "3", null]) {
+    const json: GqlResponse = { data: { rateLimit: { cost }, viewer: {} } }
+    assert.equal(takeCost(json), undefined)
+    assert.deepEqual(json.data, { viewer: {} })
+  }
+})
+
+test("data null (requête refusée) : coût inconnu", () => {
+  assert.equal(takeCost({ data: null, errors }), undefined)
+})
+
+// requêtes passées à `gql` dans github.ts (module Tauri, non importable ici) : lues dans la source,
+// `${CONSTANTE}` remplacé par un nombre comme à l'exécution
+const sourceOps = () => {
+  const src = readFileSync(new URL("./github.ts", import.meta.url), "utf8")
+  const literals = [
+    ...[...src.matchAll(/`([^`]*)`/g)].map((m) => m[1]),
+    ...[...src.matchAll(/"([^"\n]*)"/g)].map((m) => m[1]),
+  ].map((s) => s.replace(/\$\{[^}]*\}/g, "1"))
+  // une opération a un corps : `"query"` seul (nom d'argument) n'en est pas une
+  const isOp = (kind: RegExp) => (s: string) =>
+    kind.test(s.trimStart()) && s.includes("{")
+  return {
+    queries: literals.filter(isOp(/^(query\b|\{ \w+)/)),
+    mutations: literals.filter(isOp(/^mutation\b/)),
+  }
+}
+
+// `rateLimit { cost }` posé une fois, au premier niveau du corps de l'opération, accolades équilibrées
+const assertAtRoot = (op: string) => {
+  const out = withCost(op)
+  const at = out.indexOf("rateLimit { cost }")
+  assert.notEqual(at, -1, op)
+  assert.equal(out.indexOf("rateLimit { cost }", at + 1), -1, op)
+  const before = out.slice(0, at)
+  const depth = (s: string) =>
+    [...s].reduce((d, ch) => d + (ch === "{" ? 1 : ch === "}" ? -1 : 0), 0)
+  assert.equal(depth(before), 1, op)
+  assert.equal(depth(out), 0, op)
+  assert.equal(before.split("(").length, before.split(")").length, op)
+}
+
+test("chaque requête réelle reçoit rateLimit { cost } à la racine de son corps", () => {
+  const { queries } = sourceOps()
+  // REVIEW, REPOS, MENTIONS, reviewers, merged, withPrs, recherches, viewer…
+  assert.ok(queries.length >= 8, `${queries.length} requêtes trouvées`)
+  for (const op of [
+    ...queries,
+    queryFor("github.com"),
+    queryFor("github.com", true),
+    queryFor("ghe.example.com"),
+    CHECKS_QUERY,
+  ])
+    assertAtRoot(op)
+})
+
+test("chaque mutation réelle est envoyée inchangée", () => {
+  const { mutations } = sourceOps()
+  assert.ok(mutations.length >= 5, `${mutations.length} mutations trouvées`)
+  for (const m of mutations) assert.equal(withCost(m), m)
 })
