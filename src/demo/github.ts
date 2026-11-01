@@ -346,7 +346,8 @@ const has = (repos: string[]) => (r: string) =>
 export const viewerLogin = async (_token: string, _host?: string) => "me"
 // PR dont les jobs ont déjà été lus : pas de latence ensuite, comme le cache de src/lib/github.ts ; une
 // actualisation (clearCache) la remet
-const checksRead = new Set<string>()
+// acme/api#91 (CI en échec) : déjà lue au lancement, `get_checks` la sert depuis le cache
+const checksRead = new Set<string>(["acme/api#91"])
 export const clearCache = () => checksRead.clear()
 export const fetchPrs = async (repos: string[]) => {
   // quota bas pour montrer la notification et la ligne des réglages
@@ -650,6 +651,19 @@ export const fetchChecks = async (
   console.info("[demo] checks", repo, number)
   return { workflows: checksFor(number, rollup), moreChecks: false }
 }
+
+export const cachedChecks = (
+  repo: string,
+  number: number,
+  _sha: string | null,
+  rollup: string | null,
+): { value: CiView; at: number } | null =>
+  checksRead.has(`${repo}#${number}`)
+    ? {
+        value: { workflows: checksFor(number, rollup), moreChecks: false },
+        at: Date.now(),
+      }
+    : null
 
 export const rerunFailedJobs = async (repo: string, runId: number) => {
   await latency()

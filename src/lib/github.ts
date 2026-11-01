@@ -318,9 +318,19 @@ function cached<T>(
   if (hit && now < hit.until) return hit.value
   sweep(caches, now)
   const value = load()
-  value.catch(() => caches.delete(key)) // ne garde pas une erreur en cache
-  caches.set(key, { until: now + ttl, value })
+  const entry: Entry<T> = { until: now + ttl, value }
+  value.then(
+    (v) => (entry.resolved = { value: v, at: Date.now() }),
+    () => caches.delete(key), // ne garde pas une erreur en cache
+  )
+  caches.set(key, entry)
   return value
+}
+
+/** Valeur déjà chargée et encore fraîche d'une clé, sans appel ; `null` : absente, en cours ou expirée. */
+function peek<T>(key: string): { value: T; at: number } | null {
+  const hit = caches.get(key) as Entry<T> | undefined
+  return hit?.resolved && Date.now() < hit.until ? hit.resolved : null
 }
 
 /** Rafraîchir : tout relire, sauf la liste des repos accessibles (lente, change rarement). */
@@ -726,6 +736,13 @@ export async function requestReviewer(
   )
 }
 
+const checksKey = (
+  repo: string,
+  number: number,
+  sha: string | null,
+  rollup: string | null,
+) => `checks:${repo}#${number}@${sha}|${rollup}`
+
 /** Vue CI d'une PR (ouverte depuis la pastille CI) ; commit de tête et état agrégé dans la clé du cache :
  * relue à un nouveau push ou quand l'état de la CI change. */
 export function fetchChecks(
@@ -735,7 +752,7 @@ export function fetchChecks(
   rollup: string | null,
 ): Promise<CiView> {
   return cached(
-    `checks:${repo}#${number}@${sha}|${rollup}`,
+    checksKey(repo, number, sha, rollup),
     checksTtlMs(rollup),
     async () => {
       const [owner, name] = splitKey(repo).name.split("/")
@@ -749,6 +766,14 @@ export function fetchChecks(
     },
   )
 }
+
+/** Vue CI déjà chargée et fraîche pour ce commit et cet état agrégé (serveur MCP : aucun appel) ; `at` : lecture. */
+export const cachedChecks = (
+  repo: string,
+  number: number,
+  sha: string | null,
+  rollup: string | null,
+) => peek<CiView>(checksKey(repo, number, sha, rollup))
 
 /** Relance les jobs en échec (et ceux qui en dépendent) d'un workflow run GitHub Actions. */
 export async function rerunFailedJobs(repo: string, runId: number) {
