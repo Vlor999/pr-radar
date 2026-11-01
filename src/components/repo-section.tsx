@@ -199,8 +199,8 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
             key={n.number}
             className={cn(
               "relative pt-2",
-              "before:absolute before:top-0 before:-left-4.5 before:h-9 before:w-4 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-border",
-              "not-last:after:absolute not-last:after:top-0 not-last:after:bottom-0 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-border",
+              "before:absolute before:top-0 before:-left-4.5 before:h-9 before:w-4 before:rounded-bl-lg before:border-b-2 before:border-l-2 before:border-rail",
+              "not-last:after:absolute not-last:after:top-0 not-last:after:bottom-0 not-last:after:-left-4.5 not-last:after:border-l-2 not-last:after:border-rail",
             )}
           >
             {/*
@@ -213,7 +213,7 @@ function Branches({ nodes, state }: { nodes: PrNode[]; state: OpenState }) {
               className={cn(
                 "@container relative flex flex-col gap-3",
                 n.children.length > 0 &&
-                  "before:absolute before:top-6 before:bottom-0 before:left-2.5 before:border-l-2 before:border-border",
+                  "before:absolute before:top-6 before:bottom-0 before:left-2.5 before:border-l-2 before:border-rail",
               )}
             >
               {/*

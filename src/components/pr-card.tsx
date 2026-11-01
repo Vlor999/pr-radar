@@ -633,7 +633,7 @@ export function SlackColumn({
           ? "animate-in fade-in slide-in-from-top-2 @[44rem]:slide-in-from-top-0 @[44rem]:slide-in-from-right-8"
           : "animate-out fill-mode-forwards fade-out slide-out-to-top-2 @[44rem]:slide-out-to-top-0 @[44rem]:slide-out-to-right-8",
         bridge &&
-          "relative before:absolute before:-top-3 before:-bottom-3 before:left-9.5 before:border-l-2 before:border-border @[44rem]:before:hidden",
+          "relative before:absolute before:-top-3 before:-bottom-3 before:left-9.5 before:border-l-2 before:border-rail @[44rem]:before:hidden",
       )}
     >
       {mentions.map((m) => (

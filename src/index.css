@@ -7,6 +7,7 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
+  --color-rail: var(--rail);
   /* courbe unique de l'interface (ease-out) : voir .claude/rules/ui.md */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --font-sans: "Inter Variable", sans-serif;
@@ -83,6 +84,8 @@
   --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
   --sidebar-border: oklch(0.925 0.005 214.3);
   --sidebar-ring: oklch(0.723 0.014 214.4);
+  /* rails de l'arbre des PR : opaque, les segments qui se croisent ne s'additionnent pas */
+  --rail: var(--border);
 }
 
 .dark {
@@ -117,6 +120,7 @@
   --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.56 0.021 213.5);
+  --rail: color-mix(in oklab, var(--foreground) 10%, var(--background));
 }
 
 @layer base {
