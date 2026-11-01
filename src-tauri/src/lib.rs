@@ -8,6 +8,7 @@ use tauri::{AppHandle, Emitter, Manager, ipc::CapabilityBuilder};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
 
+mod log;
 pub mod mcp;
 mod web;
 
@@ -420,6 +421,8 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
+        // sélecteurs de dossier et de fichier du journal, ouverts depuis Rust (log.rs) : aucune permission JS
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -478,7 +481,14 @@ pub fn run() {
             mcp::mcp_info,
             mcp::mcp_enable,
             mcp::mcp_disable,
-            mcp::mcp_response
+            mcp::mcp_response,
+            log::log_dir,
+            log::log_append,
+            log::log_read,
+            log::log_purge,
+            log::log_reveal,
+            log::log_pick_dir,
+            log::log_export
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
