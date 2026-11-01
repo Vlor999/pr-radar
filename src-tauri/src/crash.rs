@@ -22,6 +22,8 @@ const LOG_DIR_FILE: &str = "log-dir.txt";
 const MAX_PANIC_CHARS: usize = 2_000;
 /// marge sur l'heure de démarrage du système (dérivée de l'horloge : NTP, réglage)
 const BOOT_TOLERANCE_MS: i64 = 120_000;
+/// SIGTERM / SIGHUP : délai laissé à la fermeture normale avant de quitter de force (boucle bloquée)
+const SIGNAL_EXIT_GRACE_MS: u64 = 5_000;
 
 /// Panic noté par le hook (le dernier de la session).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -297,6 +299,12 @@ pub fn quit_on_signals(app: &AppHandle) {
             let Ok(mut s) = signal(kind) else { return };
             if s.recv().await.is_some() {
                 app.exit(0);
+                // boucle d'événements bloquée : sortie forcée après un délai, marqueur supprimé quand même
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(SIGNAL_EXIT_GRACE_MS));
+                    shutdown();
+                    std::process::exit(0);
+                });
             }
         });
     }
