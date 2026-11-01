@@ -34,6 +34,7 @@ import {
   fingerprint,
   isFullRead,
   mergeProbe,
+  nextFullAt,
   splitProbe,
   type Snapshot,
 } from "./delta"
@@ -467,13 +468,17 @@ export function fetchPrs(
           ).map((n) => ({ id: n.id, fp: fingerprint(n) }))
           const { changed, kept } = splitProbe(probe, whole ? null : prev!.prs)
           const nodes = await fetchNodes(a, changed)
+          let mentionsFailed = false
           const ids = await mentionedIds(nodes.map(who), login, () =>
             searchAll<{ id: string }>(
               conn(a),
               MENTIONS_QUERY,
               "is:pr is:open mentions:@me " + filter,
               MENTION_SEARCH_RETRIES,
-            ),
+            ).catch((e: unknown) => {
+              mentionsFailed = true
+              throw e
+            }),
           )
           const fetched = new Map(
             nodes.map((p) => [p.id, toPr(p, login, a.id, ids)]),
@@ -482,7 +487,7 @@ export function fetchPrs(
             probe,
             kept,
             fetched,
-            whole ? now : prev!.fullAt,
+            nextFullAt(whole, now, prev?.fullAt ?? 0, mentionsFailed),
           )
           next.set(key, merged.snapshot)
           if (!whole) full = false

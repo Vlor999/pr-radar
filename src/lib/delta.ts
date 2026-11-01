@@ -20,6 +20,18 @@ export const isFullRead = (
   forced: boolean,
 ) => forced || !prev || now - prev.fullAt > FULL_REFRESH_MAX_AGE_MS
 
+/**
+ * Date de relecture complète gardée dans l'instantané : maintenant après une relecture complète, sinon la
+ * précédente. Recherche des mentions en échec : -Infinity, le prochain tick relit tout (sinon le motif « Impliqué »
+ * mis à la place de « Mentionné » resterait jusqu'à la relecture complète suivante).
+ */
+export const nextFullAt = (
+  whole: boolean,
+  now: number,
+  prevFullAt: number,
+  mentionsFailed: boolean,
+) => (mentionsFailed ? -Infinity : whole ? now : prevFullAt)
+
 /** Ids à relire en entier (nouvelles PR, empreinte changée) et PR reprises telles quelles ; `prev` null : tout relire. */
 export function splitProbe<P>(
   probe: Probed[],

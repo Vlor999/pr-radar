@@ -6,6 +6,7 @@ import {
   fingerprint,
   isFullRead,
   mergeProbe,
+  nextFullAt,
   splitProbe,
   type Known,
   type Snapshot,
@@ -166,4 +167,15 @@ test("lecture automatique après une lecture complète : rien de perdu, rien de 
   const second = mergeProbe(probe, kept, new Map(), first.snapshot.fullAt)
   assert.deepEqual(changed, [])
   assert.deepEqual(second.prs, first.prs)
+})
+
+test("date de relecture complète : maintenant après une relecture complète, la précédente sinon", () => {
+  assert.equal(nextFullAt(true, 500, 100, false), 500)
+  assert.equal(nextFullAt(false, 500, 100, false), 100)
+})
+
+test("recherche des mentions en échec : le tick suivant relit tout le lot", () => {
+  const fullAt = nextFullAt(false, 500, 100, true)
+  const next: Snapshot<P> = { fullAt, prs: known(["a", "1"]) }
+  assert.equal(isFullRead(next, 501, false), true)
 })
