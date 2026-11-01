@@ -836,6 +836,7 @@ mod tests {
             &[
                 r#"{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"get_attention","arguments":{"repo":"acme"}}}"#,
                 r#"{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"get_attention"}}"#,
+                r#"{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"get_attention","arguments":{"repo":null}}}"#,
             ],
             Ok("{}".into()),
         );
@@ -843,6 +844,8 @@ mod tests {
         assert_eq!(sent[0]["tool"], "get_attention");
         assert_eq!(sent[0]["args"], json!({"repo":"acme"}));
         assert_eq!(sent[1]["args"], json!({}));
+        assert_eq!(sent[2]["args"], json!({"repo":null}));
+        assert_eq!(sent.len(), 3);
     }
 
     #[test]
