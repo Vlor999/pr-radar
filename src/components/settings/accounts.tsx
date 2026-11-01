@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { useEffect, useState } from "react"
 
+import { AuthSourceIcon } from "@/components/auth-source-icon"
 import { Login } from "@/components/login"
 import { words, type SettingsEntry } from "@/components/settings/category"
 import { Row, Section, settingDomId, Toggle } from "@/components/settings/ui"
@@ -281,7 +282,8 @@ function AccountRows({ account }: { account: Account }) {
         label={t.account.via}
         description={source === "gh" ? t.account.ghNote : undefined}
       >
-        <span className="text-sm text-muted-foreground">
+        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <AuthSourceIcon source={source} />
           {source === "oauth"
             ? t.account.oauth
             : source === "pat"
