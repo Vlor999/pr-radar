@@ -42,10 +42,10 @@ const HISTORY: McpCall[] = [
     at: ago(8),
     client: "Zed",
     tool: "get_prs",
-    args: {},
+    args: { scope: "mine", needs_action: true },
     ms: 3,
     ok: true,
-    bytes: 17_904,
+    bytes: 4_812,
   },
   {
     at: ago(12),

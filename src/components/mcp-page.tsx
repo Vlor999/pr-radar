@@ -105,7 +105,7 @@ export const MCP_STRINGS = strings(
       description:
         "Lecture seule : aucun outil n'écrit sur GitHub ni Slack. Les données sont celles affichées, sans requête supplémentaire.",
       getPrs:
-        "Mes PR ouvertes (CI, décision, conflits, reviewers, taille, fils non résolus, stack, mentions Slack), celles des autres où je suis assigné, mentionné ou impliqué (champ `involved`) et l'onglet « À reviewer ».",
+        "Mes PR ouvertes (CI, décision, conflits, reviewers, taille, fils non résolus, stack, mentions Slack), celles des autres où je suis assigné, mentionné ou impliqué (champ `involved`) et l'onglet « À reviewer ». Filtres optionnels : repo, scope (mine, involved, reviews, all), needs_action (ce qui attend une action de ma part), limit par liste.",
       getPr:
         "Une PR de l'arbre (à moi ou qui me concerne) : fils de review non résolus et conversation, en texte.",
     },
@@ -173,7 +173,7 @@ export const MCP_STRINGS = strings(
       description:
         "Read-only: no tool writes to GitHub or Slack. Data is what the app shows, with no extra request.",
       getPrs:
-        "My open PRs (CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions), other people's PRs where I am assigned, mentioned or involved (`involved` field), and the “To review” tab.",
+        "My open PRs (CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions), other people's PRs where I am assigned, mentioned or involved (`involved` field), and the “To review” tab. Optional filters: repo, scope (mine, involved, reviews, all), needs_action (what needs an action from me), limit per list.",
       getPr:
         "One PR of the tree (mine or one involving me): unresolved review threads and conversation, as text.",
     },
@@ -340,7 +340,11 @@ function ToolsSection() {
       description={t.description}
     >
       <Row
-        label={<code className="font-mono">get_prs</code>}
+        label={
+          <code className="font-mono">
+            get_prs(repo?, scope?, needs_action?, limit?)
+          </code>
+        }
         description={t.getPrs}
       />
       <Row
