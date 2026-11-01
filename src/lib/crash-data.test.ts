@@ -9,7 +9,9 @@ import {
   crashOf,
   crashReport,
   errorInfo,
+  minimalReport,
   newErrorGate,
+  scrub,
   type Crash,
   type Known,
 } from "./crash-data.ts"
@@ -120,6 +122,67 @@ test("anonymisation : compte GitHub Enterprise, login et hôte remplacés, compt
     anon("github alice@ghe.corp.com https://ghe.corp.com/api octocat alice"),
     "github account-1 https://host-1/api account-2 account-3",
   )
+})
+
+test("anonymisation : propriétaire seul et nom de repo seul remplacés, mots entiers seulement", () => {
+  const anon = anonymizer(known({ repos: ["acme/webapp"] }), [])
+  assert.equal(
+    anon("login of 'acme' failed for webapp (acmecorp, webapps)"),
+    "login of 'owner-1' failed for repo-1 (acmecorp, webapps)",
+  )
+})
+
+test("anonymisation : organisation et utilisateur vus dans une adresse d'API remplacés", () => {
+  const anon = anonymizer(known(), [
+    "GET https://api.github.com/orgs/initech/teams and /users/jdoe",
+  ])
+  assert.equal(
+    anon("https://api.github.com/orgs/initech/teams /users/jdoe initech"),
+    "https://api.github.com/orgs/owner-1/teams /users/owner-2 owner-1",
+  )
+})
+
+test("anonymisation : adresse web d'un hôte GitHub Enterprise, repo extrait et hôte remplacé", () => {
+  const anon = anonymizer(
+    known({ accounts: [{ id: "jdoe@ghe.corp.com", host: "ghe.corp.com" }] }),
+    ["see https://ghe.corp.com/secret-org/payroll/pull/3"],
+  )
+  assert.equal(
+    anon("https://ghe.corp.com/secret-org/payroll/pull/3"),
+    "https://host-1/repo-1/pull/3",
+  )
+})
+
+test("anonymisation : dossier personnel ramené à ~ (macOS, Linux, Windows)", () => {
+  assert.equal(
+    scrub(
+      "at /Users/jane/dev/x.rs and /home/jane/.cargo, C:\\Users\\Jane\\AppData",
+    ),
+    "at ~/dev/x.rs and ~/.cargo, ~\\AppData",
+  )
+})
+
+test("anonymisation : adresse e-mail masquée", () => {
+  assert.equal(
+    scrub("author jane.doe+pr@example.co.uk wrote"),
+    "author [email] wrote",
+  )
+})
+
+test("anonymisation : appliquée aussi aux chaînes du journal sans repo connu", () => {
+  const anon = anonymizer(known(), [])
+  assert.equal(anon("/Users/jane/x jane@corp.com"), "~/x [email]")
+})
+
+test("rapport réduit : type et heure seulement, sans message ni journal", () => {
+  const r = minimalReport(crash({ message: "acme/web secret" }), "en")
+  assert.equal(r.title, "Crash: Rust panic")
+  assert.match(
+    r.description,
+    /- Kind: Rust panic\n- Time: 1970-01-01T00:00:05\.000Z/,
+  )
+  assert.doesNotMatch(r.description, /acme|secret/)
+  assert.equal(r.logs, "")
 })
 
 test("rapport : jetons expurgés et repos anonymisés dans le message et le journal", () => {

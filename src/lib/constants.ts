@@ -24,6 +24,23 @@ export const CRASH_LOG_LINES = 30
 /** erreurs de la webview journalisées : même message ignoré pendant ce délai, et au plus N par minute */
 export const WEBVIEW_ERROR_DEDUPE_MS = 60_000
 export const WEBVIEW_ERROR_MAX_PER_MIN = 10
+/** fenêtre de ce plafond */
+export const WEBVIEW_ERROR_WINDOW_MS = 60_000
+/** anonymisation : valeur plus courte jamais remplacée (abîmerait le texte, n'identifie rien seule) */
+export const CRASH_MIN_SECRET_CHARS = 3
+/** `owner/name` dans une adresse d'API (`/repos/owner/name`) ou de github.com */
+export const CRASH_REPO_IN_URL =
+  /(?:\/repos\/|github\.com\/(?!(?:repos|orgs|users)\/))([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/g
+/** organisation ou utilisateur dans une adresse d'API (`/orgs/acme`, `/users/jdoe`) */
+export const CRASH_OWNER_IN_URL = /\/(?:orgs|users)\/([A-Za-z0-9_.-]+)/g
+/** dossier personnel dans un chemin (macOS, Linux, Windows) : remplacé par `~` */
+export const CRASH_HOME_DIRS = [
+  /\/(?:Users|home)\/[^/\s"'`:]+/g,
+  /\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"'`]+/gi,
+]
+/** adresse e-mail */
+export const CRASH_EMAIL =
+  /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g
 
 /* ---------- Réglages ---------- */
 

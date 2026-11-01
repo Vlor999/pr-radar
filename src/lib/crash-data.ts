@@ -1,9 +1,16 @@
+import { DEFAULT_ID, GITHUB } from "./accounts.ts"
 import {
+  CRASH_EMAIL,
+  CRASH_HOME_DIRS,
   CRASH_ISSUE_LABEL,
   CRASH_ISSUE_TEMPLATE,
   CRASH_LOG_LINES,
+  CRASH_MIN_SECRET_CHARS,
+  CRASH_OWNER_IN_URL,
+  CRASH_REPO_IN_URL,
   WEBVIEW_ERROR_DEDUPE_MS,
   WEBVIEW_ERROR_MAX_PER_MIN,
+  WEBVIEW_ERROR_WINDOW_MS,
 } from "./constants.ts"
 import { strings, type Lang } from "./i18n.ts"
 import { redact, toJsonl } from "./log-data.ts"
@@ -11,7 +18,8 @@ import { issueFormUrl, type ReportContext } from "./report.ts"
 import type { LogEntry } from "./types.ts"
 
 // Rapport de plantage : logique pure (testée). L'issue est publique : rien d'identifiant n'y va,
-// jetons expurgés, repos, comptes et hôtes remplacés par `repo-1`, `account-1`, `host-1`…
+// jetons expurgés, repos, comptes, propriétaires et hôtes remplacés par `repo-1`, `account-1`…,
+// dossiers personnels et e-mails masqués.
 
 const S = strings(
   {
@@ -29,6 +37,8 @@ const S = strings(
     location: "Emplacement",
     stack: "Pile",
     what: "<!-- Que faisiez-vous juste avant ? -->",
+    minimal:
+      "_Message et journal laissés de côté : le rapport complet n'a pas pu être préparé._",
     desktop: "app de bureau",
     web: "version web",
     unknown: "inconnu",
@@ -48,6 +58,8 @@ const S = strings(
     location: "Location",
     stack: "Stack",
     what: "<!-- What were you doing just before? -->",
+    minimal:
+      "_Message and log left out: the full report could not be prepared._",
     desktop: "desktop app",
     web: "web version",
     unknown: "unknown",
@@ -116,13 +128,6 @@ export type Known = {
   accounts: { id: string; host: string; login?: string }[]
 }
 
-const GITHUB_HOST = "github.com"
-/** `owner/name` dans une adresse GitHub ou d'API (`/repos/owner/name`) */
-const REPO_IN_URL =
-  /(?:\/repos\/|github\.com\/(?!repos\/))([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/g
-/** valeur trop courte : remplacée partout, elle abîmerait le texte (et n'identifie rien seule) */
-const MIN_SECRET_CHARS = 3
-
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 
 /** Chaînes trouvées sous les clés `key` (récursif). */
@@ -140,9 +145,17 @@ function stringsOf(v: unknown, out: string[], depth = 0) {
     for (const x of Object.values(v)) stringsOf(x, out, depth + 1)
 }
 
+/** Dossier personnel → `~`, adresses e-mail masquées. */
+export const scrub = (s: string) =>
+  CRASH_HOME_DIRS.reduce((t, p) => t.replace(p, "~"), s).replace(
+    CRASH_EMAIL,
+    "[email]",
+  )
+
 /**
- * Remplaçant de texte : chaque repo, compte, login et hôte connu (ou vu dans le journal) devient
- * `repo-N`, `account-N`, `host-N`, numérotés dans l'ordre d'apparition dans le texte.
+ * Remplaçant de texte : chaque repo (`owner/name`, et son nom seul), compte, login, propriétaire et
+ * hôte connu (ou vu dans le journal) devient `repo-N`, `account-N`, `owner-N`, `host-N`, numérotés
+ * dans l'ordre d'apparition dans le texte ; puis dossiers personnels et e-mails masqués (`scrub`).
  */
 export function anonymizer(
   known: Known,
@@ -151,13 +164,9 @@ export function anonymizer(
   const texts: string[] = []
   stringsOf(seen, texts)
   const repos = [...known.repos]
-  const accounts: string[] = known.accounts
-    .filter((a) => a.id !== "github")
-    .map((a) => a.id)
+  const accounts: string[] = known.accounts.map((a) => a.id)
   valuesOf(seen, "repo", repos)
   valuesOf(seen, "account", accounts)
-  for (const t of texts)
-    for (const m of t.matchAll(REPO_IN_URL)) repos.push(m[1])
   const hosts = known.accounts.map((a) => a.host)
   const logins = known.accounts.flatMap((a) => (a.login ? [a.login] : []))
   for (const id of accounts) {
@@ -167,17 +176,34 @@ export function anonymizer(
       hosts.push(id.slice(at + 1))
     }
   }
+  const ghe = [...new Set(hosts.filter((h) => h !== GITHUB))]
+  // adresses web d'un hôte GitHub Enterprise : `https://<hôte>/owner/name` (hors API)
+  const gheRepo = ghe.length
+    ? new RegExp(
+        `(?:${ghe.map(escape).join("|")})/(?!(?:api|repos|orgs|users)/)([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)`,
+        "gi",
+      )
+    : null
+  const owners: string[] = []
+  for (const t of texts) {
+    for (const m of t.matchAll(CRASH_REPO_IN_URL)) repos.push(m[1])
+    if (gheRepo) for (const m of t.matchAll(gheRepo)) repos.push(m[1])
+    for (const m of t.matchAll(CRASH_OWNER_IN_URL)) owners.push(m[1])
+  }
   // repos sans le compte (`<compte>:owner/name`) et sans `.git`
-  const clean = (r: string) =>
-    r.slice(r.lastIndexOf(":") + 1).replace(/\.git$/, "")
+  const full = repos
+    .map((r) => r.slice(r.lastIndexOf(":") + 1).replace(/\.git$/, ""))
+    .filter((r) => r.includes("/"))
+  for (const r of full) owners.push(r.slice(0, r.indexOf("/")))
   const groups: [string, string[]][] = [
-    ["repo", repos.map(clean)],
-    ["account", [...accounts.filter((a) => a !== "github"), ...logins]],
-    ["host", hosts.filter((h) => h !== GITHUB_HOST)],
+    ["repo", full],
+    ["account", [...accounts.filter((a) => a !== DEFAULT_ID), ...logins]],
+    ["owner", owners],
+    ["host", ghe],
   ]
   const joined = texts.join("\n").toLowerCase()
   const firstSeen = (v: string) => {
-    const i = joined.indexOf(v.toLowerCase())
+    const i = joined.indexOf(v)
     return i < 0 ? Infinity : i
   }
   const map = new Map<string, string>()
@@ -185,25 +211,37 @@ export function anonymizer(
     const unique = [
       ...new Set(
         values
-          .map((v) => v.trim())
-          .filter((v) => v.length >= MIN_SECRET_CHARS)
-          .map((v) => v.toLowerCase()),
+          .map((v) => v.trim().toLowerCase())
+          .filter((v) => v.length >= CRASH_MIN_SECRET_CHARS),
       ),
     ].filter((v) => !map.has(v))
     unique
       .sort((a, b) => firstSeen(a) - firstSeen(b))
       .forEach((v, i) => map.set(v, `${prefix}-${i + 1}`))
   }
-  if (!map.size) return (s) => s
-  // plus longues d'abord : `acme/web-app` avant `acme/web`, `login@hôte` avant `login`
+  // nom seul d'un repo : même remplaçant que `owner/name`
+  for (const r of full) {
+    const name = r.slice(r.indexOf("/") + 1).toLowerCase()
+    const placeholder = map.get(r.toLowerCase())
+    if (placeholder && name.length >= CRASH_MIN_SECRET_CHARS && !map.has(name))
+      map.set(name, placeholder)
+  }
+  if (!map.size) return scrub
+  // plus longues d'abord : `acme/web-app` avant `acme/web`, `login@hôte` avant `login`.
+  // Pas de lookbehind (WebKit avant Safari 16.4) : le caractère qui précède est capturé et remis.
   const keys = [...map.keys()].sort((a, b) => b.length - a.length)
   const pattern = new RegExp(
-    keys
-      .map((k) => `(?<![A-Za-z0-9_.-])${escape(k)}(?![A-Za-z0-9_-])`)
-      .join("|"),
+    `(^|[^A-Za-z0-9_.-])(${keys.map(escape).join("|")})(?![A-Za-z0-9_-])`,
     "gi",
   )
-  return (s) => s.replace(pattern, (m) => map.get(m.toLowerCase()) ?? m)
+  return (s) =>
+    scrub(
+      s.replace(
+        pattern,
+        (_, before: string, k: string) =>
+          before + (map.get(k.toLowerCase()) ?? k),
+      ),
+    )
 }
 
 /** Copie d'une donnée où chaque chaîne (et clé) est passée au remplaçant. */
@@ -253,14 +291,8 @@ export function crashReport(
   }
   const anon = anonymizer(known, [clean])
   const a = mapStrings(clean, anon) as typeof clean
-  const kind = t.kinds[crash.kind]
-  const when =
-    crash.ts !== null
-      ? iso(crash.ts)
-      : t.timeUnknown(crash.startedAt ? iso(crash.startedAt) : t.unknown)
   const description = [
-    `- ${t.kind}: ${kind}`,
-    `- ${t.time}: ${when}`,
+    ...summary(crash, lang),
     ...(a.message
       ? [`- ${t.message}: \`${a.message.replace(/`/g, "'")}\``]
       : []),
@@ -269,8 +301,38 @@ export function crashReport(
     "",
     t.what,
   ].join("\n")
-  return { title: t.title(kind), description, logs: toJsonl(a.entries) }
+  return {
+    title: t.title(t.kinds[crash.kind]),
+    description,
+    logs: toJsonl(a.entries),
+  }
 }
+
+/** Type et heure du plantage. */
+function summary(crash: Crash, lang: Lang) {
+  const t = S[lang]
+  const when =
+    crash.ts !== null
+      ? iso(crash.ts)
+      : t.timeUnknown(crash.startedAt ? iso(crash.startedAt) : t.unknown)
+  return [`- ${t.kind}: ${t.kinds[crash.kind]}`, `- ${t.time}: ${when}`]
+}
+
+/**
+ * Rapport réduit quand le rapport complet n'a pas pu être construit : type et heure seulement, aucun
+ * message ni ligne du journal (rien qui puisse identifier).
+ */
+export const minimalReport = (crash: Crash, lang: Lang): CrashReport => ({
+  title: S[lang].title(S[lang].kinds[crash.kind]),
+  description: [
+    ...summary(crash, lang),
+    "",
+    S[lang].minimal,
+    "",
+    S[lang].what,
+  ].join("\n"),
+  logs: "",
+})
 
 /** Champs `version` et `os` du formulaire (mêmes ids que crash.yml). */
 const contextFields = (ctx: ReportContext, lang: Lang): [string, string][] => [
@@ -314,7 +376,7 @@ export const newErrorGate = (): ErrorGate => ({ seen: new Map(), window: [] })
 export function admitError(gate: ErrorGate, key: string, now: number): boolean {
   const last = gate.seen.get(key)
   if (last !== undefined && now - last < WEBVIEW_ERROR_DEDUPE_MS) return false
-  gate.window = gate.window.filter((t) => now - t < 60_000)
+  gate.window = gate.window.filter((t) => now - t < WEBVIEW_ERROR_WINDOW_MS)
   if (gate.window.length >= WEBVIEW_ERROR_MAX_PER_MIN) return false
   gate.window.push(now)
   gate.seen.set(key, now)

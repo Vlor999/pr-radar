@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        The app prefills this form; review it before submitting. This issue is public: tokens are masked and repos and accounts are replaced (`repo-1`, `account-1`…) by the app, but check for anything confidential. You can attach the exported log file (Settings › Diagnostic › Export) by dropping it into the "Logs" field or a comment.
+        The app prefills this form; review it before submitting. This issue is public: the app masks tokens, emails and home folders, and replaces repos, owners, accounts and hosts (`repo-1`, `owner-1`, `account-1`, `host-1`…), but check for anything confidential. You can attach the exported log file (Settings › Diagnostic › Export) by dropping it into the "Logs" field or a comment.
   # ids prefilled by the app's URL (src/lib/crash-data.ts): description, version, os, logs
   - type: textarea
     id: description
