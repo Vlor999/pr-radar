@@ -118,7 +118,7 @@ if (bare.length)
 out.push(
   "## Embedded assets",
   "",
-  "- Simple Icons 16.36.0 (CC0-1.0), https://simpleicons.org: SVG paths of the Claude, Claude Code, Cursor, Google Gemini, Windsurf and Zed Industries logos, in `src/components/harness-logo.tsx`. The brands are trademarks of their owners; their use does not imply endorsement.",
+  "- Simple Icons 16.36.0 (CC0-1.0), https://simpleicons.org: SVG paths of the Claude, Claude Code, Cursor, GitHub, Google Gemini, Windsurf and Zed Industries logos, in `src/components/harness-logo.tsx` and `src/components/auth-source-icon.tsx`. The brands are trademarks of their owners; their use does not imply endorsement.",
   "",
 )
 

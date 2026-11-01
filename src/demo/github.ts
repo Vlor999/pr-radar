@@ -2,6 +2,7 @@
 // Un compte GitHub Enterprise ajouté dans les réglages (hôte au choix, jeton quelconque) voit `globex/ledger`.
 import {
   DEFAULT_ID,
+  GITHUB,
   repoKey,
   type Account,
   type AccountError,
@@ -292,6 +293,20 @@ try {
     localStorage.setItem(
       "pr-radar:repos",
       JSON.stringify(["acme/web", "acme/api", "globex/billing"]),
+    )
+  // deux modes de connexion et un hôte Enterprise dans les réglages (même clé que src/lib/auth.ts)
+  if (!localStorage.getItem("pr-radar:accounts"))
+    localStorage.setItem(
+      "pr-radar:accounts",
+      JSON.stringify([
+        { id: DEFAULT_ID, host: GITHUB, source: "oauth" },
+        {
+          id: "me@ghe.globex.example",
+          host: "ghe.globex.example",
+          source: "pat",
+          login: "me",
+        },
+      ] satisfies Account[]),
     )
 } catch {}
 
