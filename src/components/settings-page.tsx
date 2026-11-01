@@ -2,6 +2,7 @@ import { cn } from "cn"
 import {
   ArrowLeft,
   Bell,
+  FileText,
   GitPullRequest,
   Globe,
   Plug,
@@ -34,6 +35,10 @@ import {
   type SettingsCategory,
   type SettingsEntry,
 } from "@/components/settings/category"
+import {
+  DiagnosticCategory,
+  diagnosticEntries,
+} from "@/components/settings/diagnostic"
 import { GeneralCategory, generalEntries } from "@/components/settings/general"
 import { McpCategory, mcpEntries } from "@/components/settings/mcp"
 import {
@@ -89,6 +94,11 @@ const CATEGORY_VIEWS: Record<
   prs: { icon: GitPullRequest, Content: PrsCategory, entries: prsEntries },
   mcp: { icon: Plug, Content: McpCategory, entries: mcpEntries },
   web: { icon: Globe, Content: WebCategory, entries: webEntries },
+  diagnostic: {
+    icon: FileText,
+    Content: DiagnosticCategory,
+    entries: diagnosticEntries,
+  },
   advanced: {
     icon: SlidersHorizontal,
     Content: AdvancedCategory,
@@ -105,6 +115,7 @@ const S = strings(
       prs: "PR et repos",
       mcp: "Serveur MCP",
       web: "Version web",
+      diagnostic: "Diagnostic",
       advanced: "Avancé",
     },
     search: {
@@ -124,6 +135,7 @@ const S = strings(
       prs: "PRs and repos",
       mcp: "MCP server",
       web: "Web version",
+      diagnostic: "Diagnostics",
       advanced: "Advanced",
     },
     search: {
@@ -270,10 +282,15 @@ export function SettingsPage({
   const t = useStrings(S)
   const lang = currentLang(useSettings().lang)
   // mêmes conditions que les anciens points d'entrée : bouton MCP si le binaire le gère, version web dans l'app seulement
+  // (journal local aussi : ses commandes ne sont pas ouvertes au navigateur)
   const mcpInfo = useMcp().info
   const mcpSupported = !!mcpInfo?.supported
   const available = (c: Category) =>
-    c === "mcp" ? mcpSupported : c === "web" ? !isWeb : true
+    c === "mcp"
+      ? mcpSupported
+      : c === "web" || c === "diagnostic"
+        ? !isWeb
+        : true
   const category = available(requested) ? requested : "general"
   // catégorie indisponible pour de bon : le tableau de bord se recale sur Général. Infos MCP encore
   // en chargement (info null au lancement) : on garde « mcp » demandé, affiché dès qu'il est confirmé.

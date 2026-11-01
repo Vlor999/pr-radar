@@ -11,7 +11,8 @@ import {
   rateLimit,
   reposWithMyOpenPrs,
 } from "./github"
-import { recordRateLimits } from "./quota"
+import { log } from "./log"
+import { lastCost, recordRateLimits } from "./quota"
 import { mergeReviews, type Reviews } from "./review"
 import { getSettings } from "./settings"
 import { saveItem } from "./sync"
@@ -94,6 +95,8 @@ export function useData(): Data {
  */
 export async function reload({ measure = false } = {}) {
   const id = ++seq
+  const start = performance.now()
+  const ms = () => Math.round(performance.now() - start)
   set({ ...data, loading: true })
   // préchauffe la liste du panneau des repos (1 requête GraphQL par 100 repos), au premier chargement seulement
   if (!data.fetchedAt) listRepos().catch(() => {})
@@ -166,17 +169,40 @@ export async function reload({ measure = false } = {}) {
       mergedError: merged.error,
       loading: false,
     })
+    log(shown.length ? "warn" : "info", "refresh", {
+      ms: ms(),
+      measure,
+      repos: live.length,
+      prs: prs.length,
+      reviews: reviews.known.reviews.length,
+      ...(shown.length && {
+        errors: shown.map((e) => ({ account: e.account.id, error: e.error })),
+      }),
+    })
     // relevé du quota de chaque compte, sans faire attendre la fin de l'actualisation : base du mode « auto »
     if (measure && getSettings().refreshMinutes === "auto")
       Promise.all(queried.map(async (a) => [a.id, await rateLimit(a)] as const))
         .then((snaps) => {
           // compte déconnecté pendant le relevé : ignoré
-          if (id === seq)
-            recordRateLimits(snaps.filter(([a]) => findAccount(a)))
+          if (id !== seq) return
+          const known = snaps.filter(([a]) => findAccount(a))
+          recordRateLimits(known)
+          log("info", "refresh.quota", {
+            accounts: known.map(([account, q]) => ({
+              account,
+              remaining: q?.remaining,
+              cost: lastCost(account),
+            })),
+          })
         })
         .catch(() => {})
   } catch (e) {
     if (id !== seq) return
+    log("error", "refresh.failed", {
+      ms: ms(),
+      error: e,
+      auth: e instanceof Error && e.name === "AuthError",
+    })
     set({
       ...data,
       loading: false,

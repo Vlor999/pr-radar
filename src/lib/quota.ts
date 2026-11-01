@@ -84,6 +84,9 @@ export const dropSnapshots = () => snapshots.clear()
 
 export const getQuota = () => worst
 
+/** Points consommés par la dernière actualisation mesurée du compte (journal), undefined si inconnu. */
+export const lastCost = (account: string) => costs.get(account)
+
 export function trackQuota(h: Headers, account: string) {
   const quota = {
     limit: Number(h.get("x-ratelimit-limit")),

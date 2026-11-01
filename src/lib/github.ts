@@ -29,6 +29,7 @@ import {
 } from "./graphql"
 import { pick, strings } from "./i18n"
 import { mentionedIds, reasonOf, uniqueById } from "./involved"
+import { log } from "./log"
 import {
   toConversation,
   withStackFallback,
@@ -114,10 +115,20 @@ async function gql<T>(
   })
   // quota rangé par compte connecté ; pas de compte (connexion en cours) ou compte déconnecté entre-temps : ignoré
   if (c.account && findAccount(c.account)) trackQuota(res.headers, c.account)
-  if (res.status === 401) throw new AuthError(pick(S).tokenRejected, c.account)
+  if (res.status === 401) {
+    log("warn", "github.error", { account: c.account, status: 401 })
+    throw new AuthError(pick(S).tokenRejected, c.account)
+  }
   const json = (await res.json()) as GqlResponse
-  if (gqlFailed(json))
-    throw new Error(gqlMessage(json, pick(S).http(res.status)))
+  if (gqlFailed(json)) {
+    const error = gqlMessage(json, pick(S).http(res.status))
+    log("warn", "github.error", {
+      account: c.account,
+      status: res.status,
+      error,
+    })
+    throw new Error(error)
+  }
   return json.data as T
 }
 
