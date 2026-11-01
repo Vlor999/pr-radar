@@ -18,6 +18,8 @@ const S = strings(
     web: "version web",
     unknown: "inconnu",
     truncated: "_[texte tronqué : adresse trop longue]_",
+    omitted: (n: number) =>
+      `# ${n} ligne(s) plus ancienne(s) retirée(s) : adresse trop longue`,
     feedbackTitle: "Avis sur PR Radar",
     feedbackPlaceholder:
       "<!-- Votre idée, question ou remarque. Le contexte ci-dessous aide à la comprendre. -->",
@@ -31,6 +33,7 @@ const S = strings(
     web: "web version",
     unknown: "unknown",
     truncated: "_[text truncated: address too long]_",
+    omitted: (n: number) => `# ${n} older line(s) removed: address too long`,
     feedbackTitle: "Feedback on PR Radar",
     feedbackPlaceholder:
       "<!-- Your idea, question or remark. The context below helps understand it. -->",
@@ -73,6 +76,27 @@ export type Prefill = { title: string; body: string; footer?: string }
 const encode = (params: [string, string][]) =>
   params.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&")
 
+/** Plus long préfixe de `text` (marqué comme tronqué) dont l'adresse tient en `maxLength` caractères. */
+function fit(
+  url: (text: string) => string,
+  text: string,
+  lang: Lang,
+  maxLength: number,
+): string {
+  const chars = Array.from(text)
+  const cut = (n: number) =>
+    url(`${chars.slice(0, n).join("")}\n\n${S[lang].truncated}`)
+  // plus grand préfixe qui tient (la longueur croît avec n)
+  let lo = 0
+  let hi = chars.length
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2)
+    if (cut(mid).length <= maxLength) lo = mid
+    else hi = mid - 1
+  }
+  return cut(lo)
+}
+
 /**
  * Adresse `base?params&title=…&body=…` d'au plus `maxLength` caractères : le corps est coupé
  * (sans casser un caractère) et marqué comme tronqué. Le titre et `params` sont supposés courts.
@@ -91,19 +115,69 @@ export function prefillUrl(
       ["body", footer ? `${text}\n\n${footer}` : text],
     ])}`
   const full = url(body)
-  if (full.length <= maxLength) return full
-  const chars = Array.from(body)
-  const cut = (n: number) =>
-    url(`${chars.slice(0, n).join("")}\n\n${S[lang].truncated}`)
-  // plus grand préfixe qui tient (la longueur croît avec n)
-  let lo = 0
-  let hi = chars.length
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2)
-    if (cut(mid).length <= maxLength) lo = mid
-    else hi = mid - 1
+  return full.length <= maxLength ? full : fit(url, body, lang, maxLength)
+}
+
+type IssueOptions = { template?: string; labels?: string[] }
+
+const issueParams = ({ template, labels = [] }: IssueOptions) => [
+  ...(template ? [["template", template] as [string, string]] : []),
+  ...(labels.length ? [["labels", labels.join(",")] as [string, string]] : []),
+]
+
+/**
+ * Formulaire d'issue (`.github/ISSUE_TEMPLATE/*.yml`) : GitHub préremplit ses champs texte par leur `id`
+ * passé en paramètre d'adresse (`body` n'y est pas lu).
+ */
+export type IssueForm = {
+  title: string
+  fields: [id: string, value: string][]
+  /** champ dont les lignes les plus anciennes sont retirées d'abord si l'adresse est trop longue (journal) */
+  lines?: string
+  /** champ coupé ensuite si ça ne suffit pas */
+  cut?: string
+}
+
+/**
+ * Nouvelle issue au formulaire prérempli, d'au plus `maxLength` caractères : lignes de `lines` retirées
+ * depuis le début (une note dit combien), puis `cut` tronqué.
+ */
+export function issueFormUrl(
+  { title, fields, lines, cut }: IssueForm,
+  lang: Lang,
+  options: IssueOptions = {},
+  maxLength = GITHUB_PREFILL_MAX_URL_LENGTH,
+): string {
+  const url = (fs: [string, string][]) =>
+    `${REPO_URL}/issues/new?${encode([...issueParams(options), ["title", title], ...fs])}`
+  const set = (fs: [string, string][], id: string | undefined, v: string) =>
+    fs.map(([k, x]): [string, string] => [k, k === id ? v : x])
+  let current = fields
+  if (url(current).length <= maxLength) return url(current)
+  const all = (fields.find(([k]) => k === lines)?.[1] ?? "").split("\n")
+  if (lines && all.length) {
+    // n dernières lignes gardées, la note en tête
+    const keep = (n: number) =>
+      set(
+        fields,
+        lines,
+        [S[lang].omitted(all.length - n), ...all.slice(all.length - n)].join(
+          "\n",
+        ),
+      )
+    let lo = 0
+    let hi = all.length - 1
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2)
+      if (url(keep(mid)).length <= maxLength) lo = mid
+      else hi = mid - 1
+    }
+    current = keep(lo)
+    if (url(current).length <= maxLength) return url(current)
   }
-  return cut(lo)
+  const text = current.find(([k]) => k === cut)?.[1]
+  if (text === undefined) return url(current)
+  return fit((t) => url(set(current, cut, t)), text, lang, maxLength)
 }
 
 /** Nouvelle discussion préremplie sur le dépôt de l'app. */
@@ -123,19 +197,8 @@ export const newDiscussionUrl = (
 export const newIssueUrl = (
   prefill: Prefill,
   lang: Lang,
-  { template, labels = [] }: { template?: string; labels?: string[] } = {},
-) =>
-  prefillUrl(
-    `${REPO_URL}/issues/new`,
-    [
-      ...(template ? [["template", template] as [string, string]] : []),
-      ...(labels.length
-        ? [["labels", labels.join(",")] as [string, string]]
-        : []),
-    ],
-    prefill,
-    lang,
-  )
+  options: IssueOptions = {},
+) => prefillUrl(`${REPO_URL}/issues/new`, issueParams(options), prefill, lang)
 
 /** « Envoyer un avis » : discussion préremplie, message à écrire dans le navigateur, contexte en dessous. */
 export const feedbackUrl = (ctx: ReportContext, lang: Lang, message = "") =>
