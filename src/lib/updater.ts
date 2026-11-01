@@ -2,6 +2,7 @@ import { relaunch } from "@tauri-apps/plugin-process"
 import { check, type Update } from "@tauri-apps/plugin-updater"
 import { useSyncExternalStore } from "react"
 
+import { markCleanExit } from "./crash"
 import { pick, strings } from "./i18n"
 import { isWeb } from "./platform"
 
@@ -69,7 +70,7 @@ export async function installUpdate() {
   let received = 0
   set({ status: "downloading", version, progress: null })
   try {
-    await pending.downloadAndInstall((event) => {
+    await pending.download((event) => {
       if (event.event === "Started") total = event.data.contentLength ?? 0
       if (event.event === "Progress") {
         received += event.data.chunkLength
@@ -80,9 +81,14 @@ export async function installUpdate() {
         })
       }
     })
+    // Windows : l'installeur quitte l'app tout de suite, sans fermeture propre (pas de faux plantage)
+    await markCleanExit(true)
+    await pending.install()
     set({ status: "ready", version })
     await relaunch()
   } catch (e) {
+    // installation ou redémarrage ratés : la session continue, marqueur remis
+    await markCleanExit(false)
     set({ status: "error", message: message(e) })
   }
 }

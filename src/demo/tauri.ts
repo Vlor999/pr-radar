@@ -1,4 +1,5 @@
 // Démo navigateur (`npm run demo`) : remplace les modules @tauri-apps/* par des faux.
+import { crashCommands } from "./crash"
 import { logCommands } from "./log"
 
 /** Version web (réglages) : port 1420 refusé comme déjà utilisé, celui de la démo. */
@@ -34,6 +35,7 @@ const commands: Record<
     keptPaths: typeof logDir === "string" ? [logDir] : [],
   }),
   ...logCommands,
+  ...crashCommands,
 }
 
 export async function invoke<T>(
