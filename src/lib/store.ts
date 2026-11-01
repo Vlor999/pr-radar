@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react"
 
 import { describeErrors, splitKey } from "./accounts"
 import { allAccounts, findAccount } from "./auth"
+import { DAY_MS } from "./constants"
 import {
   fetchMerged,
   fetchPrs,
@@ -109,9 +110,7 @@ export async function reload({ measure = false } = {}) {
     const now = new Date()
     const queried = allAccounts()
     const mergedWindow = {
-      from: day(
-        new Date(now.getTime() - getSettings().mergedDays * 86_400_000),
-      ),
+      from: day(new Date(now.getTime() - getSettings().mergedDays * DAY_MS)),
       to: day(now),
     }
     const [{ data: fetched, errors }, merged, found] = await Promise.all([

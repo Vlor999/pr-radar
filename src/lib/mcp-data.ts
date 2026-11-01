@@ -1,6 +1,13 @@
 // Serveur MCP local : logique pure (testée). Le câblage Tauri est dans `mcp.ts`.
 import { formatDuration, jobDurationMs } from "./checks.ts"
-import { ATTENTION_AGE_HOURS_MAX, ATTENTION_URGENT } from "./constants.ts"
+import {
+  ATTENTION_AGE_HOURS_MAX,
+  ATTENTION_URGENT,
+  MCP_DAY_FORMAT,
+  MCP_LEAD_TIME_PERCENTILE,
+  MCP_MERGED_ARGS,
+  MCP_STATUSES_NAME,
+} from "./constants.ts"
 import { HOUR_MS, MINUTE_MS } from "./quiet.ts"
 import type {
   CiView,
@@ -560,7 +567,7 @@ export const checksPayload = (
     }
   const counts: Record<string, number> = {}
   const workflows = hit.value.workflows.map((w) => ({
-    name: w.name ?? "commit statuses",
+    name: w.name ?? MCP_STATUSES_NAME,
     file: w.file,
     runId: w.runId,
     jobs: w.jobs.map((j) => {
@@ -590,12 +597,9 @@ export const checksPayload = (
 
 /* ---------- `get_merged` ---------- */
 
-const MERGED_ARGS = new Set(["from", "to", "repo"])
-const DAY_FORMAT = /^\d{4}-\d{2}-\d{2}$/
-
 /** Jour `YYYY-MM-DD` réel (mois 1-12, jour du mois, années bissextiles) ; mêmes règles que `is_day` du shim. */
 export const isDay = (s: string) => {
-  if (!DAY_FORMAT.test(s)) return false
+  if (!MCP_DAY_FORMAT.test(s)) return false
   const [y, m, d] = s.split("-").map(Number)
   const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)
   const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
@@ -612,7 +616,7 @@ export const parseMergedArgs = (
   if (typeof args !== "object" || Array.isArray(args))
     return { ok: false, error: "get_merged: arguments must be an object" }
   const a = args as Record<string, unknown>
-  const unknown = Object.keys(a).find((k) => !MERGED_ARGS.has(k))
+  const unknown = Object.keys(a).find((k) => !MCP_MERGED_ARGS.has(k))
   if (unknown)
     return { ok: false, error: `get_merged: unknown argument \`${unknown}\`` }
   const { from, to, repo } = a
@@ -646,7 +650,7 @@ export const leadTimeStats = (ms: number[]) => {
   const mid = s.length >> 1
   return {
     median: s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2,
-    p90: s[Math.ceil(s.length * 0.9) - 1],
+    p90: s[Math.ceil(s.length * MCP_LEAD_TIME_PERCENTILE) - 1],
   }
 }
 
