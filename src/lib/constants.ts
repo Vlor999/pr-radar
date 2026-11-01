@@ -13,6 +13,18 @@ export const FEEDBACK_DISCUSSION_CATEGORY = "ideas"
 /** longueur max. d'une adresse préremplie : au-delà, GitHub ou le navigateur la refusent */
 export const GITHUB_PREFILL_MAX_URL_LENGTH = 8_000
 
+/* ---------- Plantages (crash.ts, crash-data.ts, src-tauri/src/crash.rs) ---------- */
+
+/** formulaire d'issue des plantages (.github/ISSUE_TEMPLATE/crash.yml) et son label */
+export const CRASH_ISSUE_TEMPLATE = "crash.yml"
+export const CRASH_ISSUE_LABEL = "crash"
+/** avertissements et erreurs lus dans le journal pour le rapport, puis lignes gardées autour du plantage */
+export const CRASH_LOG_READ_LIMIT = 500
+export const CRASH_LOG_LINES = 30
+/** erreurs de la webview journalisées : même message ignoré pendant ce délai, et au plus N par minute */
+export const WEBVIEW_ERROR_DEDUPE_MS = 60_000
+export const WEBVIEW_ERROR_MAX_PER_MIN = 10
+
 /* ---------- Réglages ---------- */
 
 /** durée du surlignage d'un réglage ouvert depuis la recherche */
