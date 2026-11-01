@@ -2,6 +2,7 @@ import { cn } from "cn"
 import { Check, ChevronRight, Copy, Trash2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
+import { words, type SettingsEntry } from "@/components/settings/category"
 import { Row, Section, settingDomId, Toggle } from "@/components/settings/ui"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { locale, strings, useStrings } from "@/lib/i18n"
+import { locale, strings, useStrings, type Lang } from "@/lib/i18n"
 import {
   clearMcpHistory,
   setMcpEnabled,
@@ -39,7 +40,7 @@ const CLIENTS: McpClient[] = [
   "other",
 ]
 
-export const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
+const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
   antigravity: "Antigravity",
   "claude-code": "Claude Code",
   "claude-desktop": "Claude Desktop",
@@ -53,7 +54,7 @@ export const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
 }
 
 /** Textes de la catégorie, repris par l'index de recherche des réglages. */
-export const MCP_STRINGS = strings(
+const MCP_STRINGS = strings(
   {
     title: "Serveur MCP",
     subtitle:
@@ -449,4 +450,48 @@ export function McpCategory() {
       <HistorySection />
     </>
   )
+}
+
+/** Lignes de la catégorie pour la recherche des réglages, dans l'ordre d'affichage. */
+export function mcpEntries(lang: Lang): SettingsEntry[] {
+  const mcp = MCP_STRINGS[lang]
+  return [
+    {
+      id: "mcp-server",
+      category: "mcp",
+      label: mcp.state.server,
+      description: mcp.state.description,
+      keywords: words(mcp.subtitle, mcp.state.socket, "agent"),
+    },
+    {
+      id: "mcp-calls",
+      category: "mcp",
+      label: mcp.state.today,
+    },
+    {
+      id: "mcp-client",
+      category: "mcp",
+      label: mcp.install.title,
+      description: mcp.install.description,
+      keywords: words(
+        mcp.install.client,
+        mcp.install.other,
+        ...Object.values(CLIENT_LABEL),
+      ),
+    },
+    {
+      id: "mcp-tools",
+      category: "mcp",
+      label: mcp.tools.title,
+      description: mcp.tools.description,
+      keywords: "get_prs get_pr",
+    },
+    {
+      id: "mcp-history",
+      category: "mcp",
+      label: mcp.history.title,
+      description: mcp.history.description,
+      keywords: mcp.history.clear,
+    },
+  ]
 }

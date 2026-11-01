@@ -1,6 +1,7 @@
 import { ExternalLink, Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
 
+import { words, type SettingsEntry } from "@/components/settings/category"
 import {
   Feedback,
   Row,
@@ -11,7 +12,7 @@ import {
 } from "@/components/settings/ui"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { strings, useStrings } from "@/lib/i18n"
+import { strings, useStrings, type Lang } from "@/lib/i18n"
 import { invoke } from "@/lib/platform"
 import type { WebStatus } from "@/lib/types"
 import {
@@ -26,7 +27,7 @@ const MIN_PORT = 1024 // en dessous : ports réservés au système
 const MAX_PORT = 65_535
 
 /** Textes de la catégorie, repris par l'index de recherche des réglages. */
-export const WEB_STRINGS = strings(
+const WEB_STRINGS = strings(
   {
     title: "Version web",
     subtitle:
@@ -215,4 +216,31 @@ export function WebCategory() {
       <ServerSection />
     </>
   )
+}
+
+/** Lignes de la catégorie pour la recherche des réglages, dans l'ordre d'affichage. */
+export function webEntries(lang: Lang): SettingsEntry[] {
+  const web = WEB_STRINGS[lang]
+  return [
+    {
+      id: "web-enable",
+      category: "web",
+      label: web.enable,
+      description: web.subtitle,
+      keywords: words(web.title, web.server, web.open, "127.0.0.1"),
+    },
+    {
+      id: "web-port",
+      category: "web",
+      label: web.port,
+      description: web.portDescription,
+    },
+    {
+      id: "web-sessions",
+      category: "web",
+      label: web.secret,
+      description: web.secretDescription,
+      keywords: web.rotate,
+    },
+  ]
 }
