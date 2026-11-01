@@ -196,19 +196,147 @@ const compactPr = (
   }
 }
 
-/** `get_prs` : mes PR ouvertes et celles des autres qui me concernent (avec mentions Slack) et l'onglet « À reviewer ». Valeurs par défaut omises. */
+/* ---------- Filtres de `get_prs` ---------- */
+
+export const PRS_SCOPES = ["mine", "involved", "reviews", "all"] as const
+export type PrsScope = (typeof PRS_SCOPES)[number]
+
+/** Arguments de `get_prs` validés ; aucun argument : tout, sans limite. */
+export type PrsFilters = {
+  /** sous-chaîne de `owner/name`, casse ignorée */
+  repo?: string
+  scope: PrsScope
+  needsAction: boolean
+  /** maximum par liste (`prs`, `reviews`) */
+  limit?: number
+}
+
+export const NO_FILTERS: PrsFilters = { scope: "all", needsAction: false }
+
+/** Ce que j'ai à faire sur une PR. */
+export type ActionReason =
+  | "ciFailing"
+  | "changesRequested"
+  | "conflicting"
+  | "unresolvedThreads"
+  | "behindBase"
+  | "reviewRequested"
+  | "inUnresolvedThread"
+
+/**
+ * Raisons d'agir sur un élément, vide : rien à faire.
+ * - ma PR : CI en échec, changements demandés, conflit, fils non résolus, branche à mettre à jour ;
+ * - PR d'un autre (`involved`) : review demandée à moi nommément, fil non résolu où j'ai écrit ;
+ * - file « À reviewer » : toujours une review demandée.
+ * `me` : mes logins (un par compte), casse ignorée.
+ */
+export const actionReasons = (
+  item: { pr: Pr } | { review: ReviewPr },
+  me: string[],
+): ActionReason[] => {
+  if ("review" in item) return ["reviewRequested"]
+  const p = item.pr
+  const logins = new Set(me.map((l) => l.toLowerCase()))
+  const isMe = (who: string) => logins.has(who.toLowerCase())
+  if (p.involved) {
+    const out: ActionReason[] = []
+    if (p.requested.some((r) => !r.team && isMe(r.who)))
+      out.push("reviewRequested")
+    if (p.threads.some((t) => t.comments.some((c) => isMe(c.author))))
+      out.push("inUnresolvedThread")
+    return out
+  }
+  const checks: [boolean, ActionReason][] = [
+    [p.ci === "FAILURE" || p.ci === "ERROR", "ciFailing"],
+    [p.decision === "CHANGES_REQUESTED", "changesRequested"],
+    [p.conflicting, "conflicting"],
+    [p.unresolved > 0, "unresolvedThreads"],
+    [p.canUpdateBranch, "behindBase"],
+  ]
+  return checks.filter(([on]) => on).map(([, r]) => r)
+}
+
+const PRS_ARGS = new Set(["repo", "scope", "needs_action", "limit"])
+
+/** Arguments de `get_prs` (déjà validés par le shim, revus ici par défense) ; `null` vaut absent. */
+export const parsePrsArgs = (
+  args: unknown,
+): { ok: true; filters: PrsFilters } | { ok: false; error: string } => {
+  if (args == null) return { ok: true, filters: NO_FILTERS }
+  if (typeof args !== "object" || Array.isArray(args))
+    return { ok: false, error: "get_prs: arguments must be an object" }
+  const a = args as Record<string, unknown>
+  const unknown = Object.keys(a).find((k) => !PRS_ARGS.has(k))
+  if (unknown)
+    return { ok: false, error: `get_prs: unknown argument \`${unknown}\`` }
+  const { repo, scope, needs_action, limit } = a
+  if (repo != null && typeof repo !== "string")
+    return { ok: false, error: "get_prs: `repo` must be a string" }
+  if (scope != null && !PRS_SCOPES.includes(scope as PrsScope))
+    return {
+      ok: false,
+      error: `get_prs: \`scope\` must be one of ${PRS_SCOPES.join(", ")}`,
+    }
+  if (needs_action != null && typeof needs_action !== "boolean")
+    return { ok: false, error: "get_prs: `needs_action` must be a boolean" }
+  if (
+    limit != null &&
+    !(typeof limit === "number" && Number.isInteger(limit) && limit >= 1)
+  )
+    return { ok: false, error: "get_prs: `limit` must be an integer >= 1" }
+  return {
+    ok: true,
+    filters: {
+      ...(repo != null && { repo }),
+      scope: (scope as PrsScope | null | undefined) ?? "all",
+      needsAction: needs_action ?? false,
+      ...(limit != null && { limit }),
+    },
+  }
+}
+
+/** Liste coupée à `limit` ; `cut` : éléments retirés. */
+const capped = <T>(list: T[], limit?: number) =>
+  limit === undefined
+    ? { kept: list, cut: 0 }
+    : { kept: list.slice(0, limit), cut: Math.max(0, list.length - limit) }
+
+/** `get_prs` : mes PR ouvertes et celles des autres qui me concernent (avec mentions Slack) et l'onglet « À reviewer », filtrés. Valeurs par défaut omises. */
 export const prsPayload = (
   ctx: McpContext,
   prs: Pr[],
   reviews: ReviewPr[],
   parents: Map<string, number | null>,
   mentionsOf: MentionsOf,
-) =>
-  omitDefaults({
+  filters: PrsFilters = NO_FILTERS,
+  me: string[] = [],
+) => {
+  const { scope, needsAction, limit } = filters
+  const needle = filters.repo?.toLowerCase() ?? ""
+  const inRepo = (repo: string) => repo.toLowerCase().includes(needle)
+  const all = scope === "all"
+  const keptPrs = prs.filter(
+    (p) =>
+      (p.involved ? all || scope === "involved" : all || scope === "mine") &&
+      inRepo(p.repo) &&
+      (!needsAction || actionReasons({ pr: p }, me).length > 0),
+  )
+  const keptReviews = reviews.filter(
+    (r) =>
+      (all || scope === "reviews") &&
+      inRepo(r.repo) &&
+      (!needsAction || actionReasons({ review: r }, me).length > 0),
+  )
+  const outPrs = capped(keptPrs, limit)
+  const outReviews = capped(keptReviews, limit)
+  return omitDefaults({
     ...ctx,
-    prs: prs.map((p) => compactPr(p, parents, mentionsOf)),
-    reviews,
+    prs: outPrs.kept.map((p) => compactPr(p, parents, mentionsOf)),
+    reviews: outReviews.kept,
+    // éléments au-delà de `limit`, par liste
+    truncated: { prs: outPrs.cut, reviews: outReviews.cut },
   }) as Record<string, unknown>
+}
 
 /** URL de PR comparable : sans `#…`, `?…`, `/files`, `/commits`, `/` final, casse ignorée. */
 export const normalizeUrl = (url: string) =>
