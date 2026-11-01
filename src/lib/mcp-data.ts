@@ -386,7 +386,8 @@ type AttentionItem = {
 /**
  * `get_attention` : une entrée par PR qui attend une action de ma part (raisons de `actionReasons`).
  * Une PR à la fois dans la file « À reviewer » et dans l'arbre : raisons réunies, date de la demande.
- * Tri : review demandée ou CI en échec d'abord, puis la plus ancienne. Valeurs par défaut omises.
+ * Tri : review demandée ou CI en échec d'abord, puis la plus ancienne ; à égalité, file « À reviewer »
+ * puis arbre, dans leur ordre. Valeurs par défaut omises.
  */
 export const attentionPayload = (
   ctx: McpContext,
@@ -402,8 +403,11 @@ export const attentionPayload = (
     if (!reasons.length || !p.repo.toLowerCase().includes(needle)) return
     const key = normalizeUrl(p.url)
     const prev = items.get(key)
-    if (prev) prev.reasons = [...new Set([...prev.reasons, ...reasons])]
-    else
+    if (prev) {
+      prev.reasons = [...new Set([...prev.reasons, ...reasons])]
+      // URL de l'arbre : canonique, celle que `get_pr` attend
+      prev.url = p.url
+    } else
       items.set(key, {
         url: p.url,
         repo: p.repo,

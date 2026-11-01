@@ -778,10 +778,34 @@ test("attention : PR à la fois dans la file et dans l'arbre → une entrée, ra
     ["me"],
     NOW,
   )
-  const items = out.items as { reasons: string[]; age: string }[]
+  const items = out.items as { url: string; reasons: string[]; age: string }[]
   assert.equal(items.length, 1)
+  assert.equal(items[0].url, url)
   assert.deepEqual(items[0].reasons, ["reviewRequested", "inUnresolvedThread"])
   assert.equal(items[0].age, "3d")
+})
+
+test("attention : à égalité de priorité et de date, file « À reviewer » puis arbre, dans leur ordre", () => {
+  const at = "2026-01-05T00:00:00Z"
+  const out = attentionPayload(
+    ctx,
+    [
+      pr(1, { ci: "FAILURE", updated: at }),
+      pr(2, { unresolved: 1, updated: at }),
+      pr(3, { conflicting: true, updated: at }),
+    ],
+    [
+      rv({ number: 8, url: "https://github.com/acme/api/pull/8", since: at }),
+      rv({ since: at }),
+    ],
+    ["me"],
+    NOW,
+  )
+  const items = out.items as { number: number }[]
+  assert.deepEqual(
+    items.map((i) => i.number),
+    [8, 9, 1, 2, 3],
+  )
 })
 
 test("attention : filtre repo sur une sous-chaîne, casse ignorée", () => {
