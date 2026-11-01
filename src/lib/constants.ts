@@ -73,11 +73,6 @@ export const ATTENTION_URGENT: ActionReason[] = ["reviewRequested", "ciFailing"]
 /** en dessous, `age` en heures (`5h`) ; au-delà, en jours (`3d`) */
 export const ATTENTION_AGE_HOURS_MAX = 48
 
-/* ---------- Durées ---------- */
-
-/** un jour en ms (fenêtre des PR mergées, `mergedDays`) */
-export const DAY_MS = 86_400_000
-
 /* ---------- Outils MCP `get_checks` et `get_merged` (mcp-data.ts) ---------- */
 
 /** nom donné aux statuts de commit (CI hors Actions), boîte sans workflow de la vue CI */
