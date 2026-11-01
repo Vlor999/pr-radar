@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 // extensions : chargé aussi par node --test
+import { log } from "./log.ts"
 import { openExternal } from "./open.ts"
 import { fetch, invoke, listen } from "./platform.ts"
 import {
@@ -273,6 +274,8 @@ async function call<T>(
   }
   if (!json.ok) {
     const error = new SlackError(method, json.error ?? `HTTP ${res.status}`)
+    // code d'erreur de l'API seulement : jamais le texte des messages
+    log("warn", "slack.error", { method, code: error.code })
     if (token && state.team && isAuthError(error))
       setState({ ...state, expired: true })
     throw error

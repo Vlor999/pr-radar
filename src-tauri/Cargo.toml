@@ -37,6 +37,12 @@ tauri-plugin-autostart = "2"
 axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "json"] }
 tokio = { version = "1", features = ["net"] }
 getrandom = "0.3"
+# sélecteurs du dossier et de l'export du journal (log.rs), ouverts depuis Rust
+tauri-plugin-dialog = "2"
+
+[target.'cfg(unix)'.dependencies]
+# O_NOFOLLOW : fichiers du journal jamais ouverts à travers un lien symbolique (log.rs)
+libc = "0.2"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

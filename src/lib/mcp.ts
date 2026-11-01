@@ -18,6 +18,7 @@ import {
   type McpReply,
   type MentionsOf,
 } from "./mcp-data"
+import { log } from "./log"
 import { getSettings, updateSettings } from "./settings"
 import {
   cachedMentions,
@@ -76,6 +77,14 @@ export const useMcpHistory = () =>
 const saveHistory = () => saveItem(HISTORY_KEY, JSON.stringify(history))
 
 function record(call: McpCall) {
+  // journal : outil, client, issue, durée ; jamais les arguments ni la réponse
+  log(call.ok ? "info" : "warn", "mcp.call", {
+    tool: call.tool,
+    client: call.client,
+    ok: call.ok,
+    ms: call.ms,
+    ...(call.error && { error: call.error }),
+  })
   history = pushCall(history, call)
   saveHistory()
   emit()

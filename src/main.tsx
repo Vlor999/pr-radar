@@ -4,6 +4,7 @@ import App from "./App"
 import "./index.css"
 import { WebWaiting } from "./components/web-waiting"
 import { routeLinksToBrowser } from "./lib/open"
+import { startLog } from "./lib/log"
 import { connectWeb, HttpError, isWeb } from "./lib/platform"
 import { setLowQuotaNotifier } from "./lib/quota"
 import { pull, seed } from "./lib/sync"
@@ -38,6 +39,8 @@ async function boot() {
     await hydrate(root)
   } else {
     await seed().catch(() => {})
+    // journal local : après `seed` (réglages du dossier et de la conservation en place)
+    startLog()
     setLowQuotaNotifier((title, body) => {
       notify(title, body).catch(() => {})
     })
