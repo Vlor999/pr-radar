@@ -31,6 +31,7 @@ import { plural } from "@/components/pr-card"
 import { RepoSidebar } from "@/components/repo-sidebar"
 import { Shortcut } from "@/components/shortcut"
 import { ReviewList } from "@/components/review-list"
+import { CrashBanner } from "@/components/crash-banner"
 import { UpdateBanner } from "@/components/update-banner"
 import { RunningDot } from "@/components/running-dot"
 import { WebMenu } from "@/components/web-menu"
@@ -678,6 +679,7 @@ export function PrDashboard({
       </header>
 
       <UpdateBanner />
+      <CrashBanner />
 
       {webError && (
         <div

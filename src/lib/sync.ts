@@ -12,6 +12,8 @@ const LOCAL_ONLY = [
   "pr-radar:theme",
   "pr-radar:last-notification",
   "pr-radar:mcp-history",
+  // réglages du journal local (log-settings.ts) : dossier de la machine, jamais lu ni changé par le navigateur
+  "pr-radar:log-settings",
 ]
 
 export const isSynced = (key: string) =>

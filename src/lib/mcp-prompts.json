@@ -1,0 +1,7 @@
+[
+  { "name": "triage", "args": "" },
+  { "name": "review-queue", "args": "" },
+  { "name": "fix-ci", "args": "url" },
+  { "name": "answer-threads", "args": "url" },
+  { "name": "standup", "args": "repo?" }
+]

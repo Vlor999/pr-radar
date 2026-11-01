@@ -3,7 +3,8 @@ import { Check, ChevronRight, Copy, Trash2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { HarnessLogo } from "@/components/harness-logo"
-import { Row, Section, settingDomId, Toggle } from "@/components/settings-ui"
+import { words, type SettingsEntry } from "@/components/settings/category"
+import { Row, Section, settingDomId, Toggle } from "@/components/settings/ui"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -12,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { locale, strings, useStrings } from "@/lib/i18n"
+import { MCP_PROMPTS } from "@/lib/constants"
+import { locale, strings, useStrings, type Lang } from "@/lib/i18n"
 import {
   clearMcpHistory,
   setMcpEnabled,
@@ -40,7 +42,7 @@ const CLIENTS: McpClient[] = [
   "other",
 ]
 
-export const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
+const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
   antigravity: "Antigravity",
   "claude-code": "Claude Code",
   "claude-desktop": "Claude Desktop",
@@ -54,7 +56,7 @@ export const CLIENT_LABEL: Record<Exclude<McpClient, "other">, string> = {
 }
 
 /** Textes de la catégorie, repris par l'index de recherche des réglages. */
-export const MCP_STRINGS = strings(
+const MCP_STRINGS = strings(
   {
     title: "Serveur MCP",
     subtitle:
@@ -105,9 +107,31 @@ export const MCP_STRINGS = strings(
       description:
         "Lecture seule : aucun outil n'écrit sur GitHub ni Slack. Les données sont celles affichées, sans requête supplémentaire.",
       getPrs:
-        "Mes PR ouvertes (CI, décision, conflits, reviewers, taille, fils non résolus, stack, mentions Slack), celles des autres où je suis assigné, mentionné ou impliqué (champ `involved`) et l'onglet « À reviewer ».",
+        "Mes PR ouvertes (CI, décision, conflits, reviewers, taille, fils non résolus, stack, mentions Slack), celles des autres où je suis assigné, mentionné ou impliqué (champ `involved`) et l'onglet « À reviewer ». Filtres optionnels : repo, scope (mine, involved, reviews, all), needs_action (ce qui attend une action de ma part), limit par liste.",
       getPr:
         "Une PR de l'arbre (à moi ou qui me concerne) : fils de review non résolus et conversation, en texte.",
+      getAttention:
+        "Liste courte de ce qui attend une action de ma part : une entrée par PR avec ses raisons (CI en échec, review demandée…) et son ancienneté. Reviews demandées et CI en échec d'abord, puis les plus anciennes. Filtre optionnel : repo.",
+      getChecks:
+        "Jobs de la CI d'une PR de l'arbre (état, workflow, durée, lien des jobs en échec), depuis la vue CI déjà ouverte dans l'app : pas lue, l'outil le dit et renvoie vers gh pr checks.",
+      getMerged:
+        "Mes PR mergées sur la période chargée (réglage « Mergées récemment »), avec le délai entre ouverture et merge, sa médiane et son p90. Filtres optionnels : from, to (YYYY-MM-DD), repo.",
+    },
+    prompts: {
+      title: "Prompts exposés",
+      description:
+        "Modèles de demande que ton agent propose comme commandes (Claude Code : /mcp__pr-radar__<nom>). Ils indiquent à l'agent quels outils appeler ; rien n'est publié sur GitHub sans ta confirmation.",
+      command: (name: string) => `Claude Code : /mcp__pr-radar__${name}`,
+      triage:
+        "Quoi faire maintenant : get_attention puis get_pr sur les premières PR, en une liste d'actions par priorité.",
+      reviewQueue:
+        "Les PR qui attendent ma review, les plus anciennes d'abord, avec une suggestion d'une ligne chacune.",
+      fixCi:
+        "Lit la PR, trouve les checks en échec (get_checks, sinon gh pr checks ; gh run view --log-failed si disponible), propose et applique un correctif dans le checkout local.",
+      answerThreads:
+        "Parcourt les fils non résolus de la PR et propose une réponse ou un changement de code pour chacun.",
+      standup:
+        "Point d'équipe court à partir de mes PR ouvertes et de leur état. Filtre optionnel : repo.",
     },
     history: {
       title: "Historique",
@@ -173,9 +197,31 @@ export const MCP_STRINGS = strings(
       description:
         "Read-only: no tool writes to GitHub or Slack. Data is what the app shows, with no extra request.",
       getPrs:
-        "My open PRs (CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions), other people's PRs where I am assigned, mentioned or involved (`involved` field), and the “To review” tab.",
+        "My open PRs (CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions), other people's PRs where I am assigned, mentioned or involved (`involved` field), and the “To review” tab. Optional filters: repo, scope (mine, involved, reviews, all), needs_action (what needs an action from me), limit per list.",
       getPr:
         "One PR of the tree (mine or one involving me): unresolved review threads and conversation, as text.",
+      getAttention:
+        "Short list of what needs an action from me: one item per PR with its reasons (CI failing, review requested…) and its age. Review requests and CI failures first, then the oldest. Optional filter: repo.",
+      getChecks:
+        "CI jobs of one PR of the tree (state, workflow, duration, link of failing jobs), from the CI view already opened in the app: not loaded, the tool says so and points to gh pr checks.",
+      getMerged:
+        "My PRs merged in the loaded window (“Recently merged” setting), with the time from opening to merge, its median and p90. Optional filters: from, to (YYYY-MM-DD), repo.",
+    },
+    prompts: {
+      title: "Exposed prompts",
+      description:
+        "Request templates your agent offers as commands (Claude Code: /mcp__pr-radar__<name>). They tell the agent which tools to call; nothing is posted to GitHub without your confirmation.",
+      command: (name: string) => `Claude Code: /mcp__pr-radar__${name}`,
+      triage:
+        "What to do now: get_attention, then get_pr on the top PRs, as a prioritized action list.",
+      reviewQueue:
+        "PRs waiting for my review, oldest first, with a one-line suggestion each.",
+      fixCi:
+        "Reads the PR, finds the failing checks (get_checks, else gh pr checks; gh run view --log-failed when available), proposes and applies a fix in the local checkout.",
+      answerThreads:
+        "Goes through the PR's unresolved threads and proposes a reply or a code change for each.",
+      standup:
+        "Short standup update from my open PRs and their states. Optional filter: repo.",
     },
     history: {
       title: "History",
@@ -340,13 +386,59 @@ function ToolsSection() {
       description={t.description}
     >
       <Row
-        label={<code className="font-mono">get_prs</code>}
+        label={
+          <code className="font-mono">
+            get_prs(repo?, scope?, needs_action?, limit?)
+          </code>
+        }
         description={t.getPrs}
       />
       <Row
         label={<code className="font-mono">get_pr(url)</code>}
         description={t.getPr}
       />
+      <Row
+        label={<code className="font-mono">get_attention(repo?)</code>}
+        description={t.getAttention}
+      />
+      <Row
+        label={<code className="font-mono">get_checks(url)</code>}
+        description={t.getChecks}
+      />
+      <Row
+        label={<code className="font-mono">get_merged(from?, to?, repo?)</code>}
+        description={t.getMerged}
+      />
+    </Section>
+  )
+}
+
+function PromptsSection() {
+  const t = useStrings(MCP_STRINGS).prompts
+  return (
+    <Section
+      id={settingDomId("mcp-prompts")}
+      title={t.title}
+      description={t.description}
+    >
+      {MCP_PROMPTS.map((p) => (
+        <Row
+          key={p.name}
+          label={
+            <code className="font-mono">
+              {p.name}({p.args})
+            </code>
+          }
+          description={
+            <>
+              {t[p.key]}
+              <span className="mt-1 block font-mono text-xs">
+                {t.command(p.name)}
+              </span>
+            </>
+          }
+        />
+      ))}
     </Section>
   )
 }
@@ -450,7 +542,60 @@ export function McpCategory() {
       <StateSection />
       <InstallSection />
       <ToolsSection />
+      <PromptsSection />
       <HistorySection />
     </>
   )
+}
+
+/** Lignes de la catégorie pour la recherche des réglages, dans l'ordre d'affichage. */
+export function mcpEntries(lang: Lang): SettingsEntry[] {
+  const mcp = MCP_STRINGS[lang]
+  return [
+    {
+      id: "mcp-server",
+      category: "mcp",
+      label: mcp.state.server,
+      description: mcp.state.description,
+      keywords: words(mcp.subtitle, mcp.state.socket, "agent"),
+    },
+    {
+      id: "mcp-calls",
+      category: "mcp",
+      label: mcp.state.today,
+    },
+    {
+      id: "mcp-client",
+      category: "mcp",
+      label: mcp.install.title,
+      description: mcp.install.description,
+      keywords: words(
+        mcp.install.client,
+        mcp.install.other,
+        ...Object.values(CLIENT_LABEL),
+      ),
+    },
+    {
+      id: "mcp-tools",
+      category: "mcp",
+      label: mcp.tools.title,
+      description: mcp.tools.description,
+      keywords:
+        "get_prs get_pr get_attention get_checks get_merged ci lead time",
+    },
+    {
+      id: "mcp-prompts",
+      category: "mcp",
+      label: mcp.prompts.title,
+      description: mcp.prompts.description,
+      keywords: "triage review-queue fix-ci answer-threads standup",
+    },
+    {
+      id: "mcp-history",
+      category: "mcp",
+      label: mcp.history.title,
+      description: mcp.history.description,
+      keywords: mcp.history.clear,
+    },
+  ]
 }

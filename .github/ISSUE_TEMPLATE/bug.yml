@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in PR Radar does not work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. This issue is public: do not paste tokens, private repo names or other confidential data.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+  - type: input
+    id: version
+    attributes:
+      label: PR Radar version
+      description: Settings › General › About.
+      placeholder: "0.11.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15 · desktop app"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Optional. Lines from Settings › Diagnostic › Latest entries (copy), reviewed before posting.
+      render: shell

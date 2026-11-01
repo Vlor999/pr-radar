@@ -2,10 +2,19 @@ import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { useSyncExternalStore } from "react"
 
+import { allAccounts } from "./auth"
+import { cachedChecks } from "./github"
 import {
+  attentionPayload,
+  checksPayload,
   htmlToText,
+  mergedPayload,
   parentsOf,
+  parseAttentionArgs,
+  parseChecksArgs,
   parseHistory,
+  parseMergedArgs,
+  parsePrsArgs,
   prPayload,
   prsPayload,
   pushCall,
@@ -14,6 +23,7 @@ import {
   type McpReply,
   type MentionsOf,
 } from "./mcp-data"
+import { log } from "./log"
 import { getSettings, updateSettings } from "./settings"
 import {
   cachedMentions,
@@ -27,7 +37,7 @@ import type { McpCall, McpInfo } from "./types"
 
 /**
  * Serveur MCP local, en lecture seule. Rust reçoit l'appel du shim (`pr-radar --mcp`) sur le socket,
- * émet `mcp-request` ; la réponse est calculée ici depuis les stores (aucun appel réseau) et renvoyée
+ * émet `mcp-request` ; la réponse est calculée ici depuis les stores et caches (aucun appel réseau) et renvoyée
  * par `mcp_response`. Sans réponse en 5 s, Rust répond une erreur et émet `mcp-timeout`.
  */
 
@@ -72,6 +82,14 @@ export const useMcpHistory = () =>
 const saveHistory = () => saveItem(HISTORY_KEY, JSON.stringify(history))
 
 function record(call: McpCall) {
+  // journal : outil, client, issue, durée ; jamais les arguments ni la réponse
+  log(call.ok ? "info" : "warn", "mcp.call", {
+    tool: call.tool,
+    client: call.client,
+    ok: call.ok,
+    ms: call.ms,
+    ...(call.error && { error: call.error }),
+  })
   history = pushCall(history, call)
   saveHistory()
   emit()
@@ -133,12 +151,68 @@ function answer(tool: string, args: unknown): McpReply {
     return c ? { at: c.at, list: filterMentions(c.list, settings) } : null
   }
   const parents = parentsOf(d.trees)
-  if (tool === "get_prs")
+  const me = allAccounts().flatMap((a) => (a.login ? [a.login] : []))
+  if (tool === "get_prs") {
+    const parsed = parsePrsArgs(args)
+    if (!parsed.ok) return { error: parsed.error }
     return {
       text: JSON.stringify(
-        prsPayload(ctx, d.prs, d.reviews.reviews, parents, mentionsOf),
+        prsPayload(
+          ctx,
+          d.prs,
+          d.reviews.reviews,
+          parents,
+          mentionsOf,
+          parsed.filters,
+          me,
+        ),
       ),
     }
+  }
+  if (tool === "get_attention") {
+    const parsed = parseAttentionArgs(args)
+    if (!parsed.ok) return { error: parsed.error }
+    return {
+      text: JSON.stringify(
+        attentionPayload(
+          ctx,
+          d.prs,
+          d.reviews.reviews,
+          me,
+          Date.now(),
+          parsed.repo,
+        ),
+      ),
+    }
+  }
+  if (tool === "get_checks") {
+    const parsed = parseChecksArgs(args)
+    if (!parsed.ok) return { error: parsed.error }
+    const r = checksPayload(
+      ctx,
+      parsed.url,
+      d.prs,
+      d.reviews.reviews,
+      (p) => cachedChecks(p.repo, p.number, p.sha, p.ci),
+      Date.now(),
+    )
+    return r.ok ? { text: JSON.stringify(r.data) } : { error: r.error }
+  }
+  if (tool === "get_merged") {
+    const parsed = parseMergedArgs(args)
+    if (!parsed.ok) return { error: parsed.error }
+    return {
+      text: JSON.stringify(
+        mergedPayload(
+          ctx,
+          d.trees.flatMap((t) => t.merged),
+          d.mergedWindow,
+          parsed.filters,
+          d.mergedError,
+        ),
+      ),
+    }
+  }
   if (tool === "get_pr") {
     const url = (args as { url?: unknown } | null)?.url
     if (typeof url !== "string") return { error: "get_pr: missing `url`" }

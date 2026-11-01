@@ -29,6 +29,7 @@ import {
 } from "./graphql"
 import { pick, strings } from "./i18n"
 import { mentionedIds, reasonOf, uniqueById } from "./involved"
+import { log } from "./log"
 import {
   toConversation,
   withStackFallback,
@@ -114,10 +115,20 @@ async function gql<T>(
   })
   // quota rangé par compte connecté ; pas de compte (connexion en cours) ou compte déconnecté entre-temps : ignoré
   if (c.account && findAccount(c.account)) trackQuota(res.headers, c.account)
-  if (res.status === 401) throw new AuthError(pick(S).tokenRejected, c.account)
+  if (res.status === 401) {
+    log("warn", "github.error", { account: c.account, status: 401 })
+    throw new AuthError(pick(S).tokenRejected, c.account)
+  }
   const json = (await res.json()) as GqlResponse
-  if (gqlFailed(json))
-    throw new Error(gqlMessage(json, pick(S).http(res.status)))
+  if (gqlFailed(json)) {
+    const error = gqlMessage(json, pick(S).http(res.status))
+    log("warn", "github.error", {
+      account: c.account,
+      status: res.status,
+      error,
+    })
+    throw new Error(error)
+  }
   return json.data as T
 }
 
@@ -318,9 +329,19 @@ function cached<T>(
   if (hit && now < hit.until) return hit.value
   sweep(caches, now)
   const value = load()
-  value.catch(() => caches.delete(key)) // ne garde pas une erreur en cache
-  caches.set(key, { until: now + ttl, value })
+  const entry: Entry<T> = { until: now + ttl, value }
+  value.then(
+    (v) => (entry.resolved = { value: v, at: Date.now() }),
+    () => caches.delete(key), // ne garde pas une erreur en cache
+  )
+  caches.set(key, entry)
   return value
+}
+
+/** Valeur déjà chargée et encore fraîche d'une clé, sans appel ; `null` : absente, en cours ou expirée. */
+function peek<T>(key: string): { value: T; at: number } | null {
+  const hit = caches.get(key) as Entry<T> | undefined
+  return hit?.resolved && Date.now() < hit.until ? hit.resolved : null
 }
 
 /** Rafraîchir : tout relire, sauf la liste des repos accessibles (lente, change rarement). */
@@ -432,6 +453,7 @@ export function fetchMerged(
         number: number
         title: string
         url: string
+        createdAt: string
         mergedAt: string
         repository: { nameWithOwner: string }
       }
@@ -443,7 +465,7 @@ export function fetchMerged(
                 conn(a),
                 `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
             pageInfo { hasNextPage endCursor }
-            nodes { ... on PullRequest { number title url mergedAt repository { nameWithOwner } } } } }`,
+            nodes { ... on PullRequest { number title url createdAt mergedAt repository { nameWithOwner } } } } }`,
                 `is:pr is:merged author:@me merged:${from}..${to} ` +
                   c.map((r) => "repo:" + r).join(" "),
                 0, // aucun merge sur la période est courant : pas de relance
@@ -460,6 +482,7 @@ export function fetchMerged(
           number: p.number,
           title: p.title,
           url: p.url,
+          createdAt: p.createdAt,
           mergedAt: p.mergedAt,
         }))
         .sort((a, b) => b.mergedAt.localeCompare(a.mergedAt))
@@ -724,6 +747,13 @@ export async function requestReviewer(
   )
 }
 
+const checksKey = (
+  repo: string,
+  number: number,
+  sha: string | null,
+  rollup: string | null,
+) => `checks:${repo}#${number}@${sha}|${rollup}`
+
 /** Vue CI d'une PR (ouverte depuis la pastille CI) ; commit de tête et état agrégé dans la clé du cache :
  * relue à un nouveau push ou quand l'état de la CI change. */
 export function fetchChecks(
@@ -733,7 +763,7 @@ export function fetchChecks(
   rollup: string | null,
 ): Promise<CiView> {
   return cached(
-    `checks:${repo}#${number}@${sha}|${rollup}`,
+    checksKey(repo, number, sha, rollup),
     checksTtlMs(rollup),
     async () => {
       const [owner, name] = splitKey(repo).name.split("/")
@@ -747,6 +777,14 @@ export function fetchChecks(
     },
   )
 }
+
+/** Vue CI déjà chargée et fraîche pour ce commit et cet état agrégé (serveur MCP : aucun appel) ; `at` : lecture. */
+export const cachedChecks = (
+  repo: string,
+  number: number,
+  sha: string | null,
+  rollup: string | null,
+) => peek<CiView>(checksKey(repo, number, sha, rollup))
 
 /** Relance les jobs en échec (et ceux qui en dépendent) d'un workflow run GitHub Actions. */
 export async function rerunFailedJobs(repo: string, runId: number) {

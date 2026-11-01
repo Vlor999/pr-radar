@@ -1,5 +1,10 @@
 /** Entrée de cache en mémoire : logique pure, sans Tauri. */
-export type Entry<T> = { until: number; value: Promise<T> }
+export type Entry<T> = {
+  until: number
+  value: Promise<T>
+  /** valeur résolue et son heure : lecture synchrone (serveur MCP), sans appel */
+  resolved?: { value: T; at: number }
+}
 
 /** Retire les entrées expirées : les clés changent (jour, repos suivis) et resteraient jusqu'à clearCache. */
 export const sweep = (m: Map<string, Entry<unknown>>, now: number) => {
