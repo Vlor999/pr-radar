@@ -24,6 +24,8 @@ import {
   gqlFailed,
   gqlMessage,
   restRepos,
+  takeCost,
+  withCost,
   type GqlResponse,
   type RepoNode,
 } from "./graphql"
@@ -43,7 +45,7 @@ import {
   withStackFallback,
   type RawConversation,
 } from "./pr-query"
-import { trackQuota, validQuota, type Quota } from "./quota"
+import { addCost, trackQuota } from "./quota"
 import { toReview, type RawReview } from "./review"
 import type { Reviewer } from "./reviewers"
 import type { CiView, Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
@@ -119,7 +121,7 @@ async function gql<T>(
       ...headers(c.token, c.account),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({ query: withCost(query), variables }),
   })
   // quota rangé par compte connecté ; pas de compte (connexion en cours) ou compte déconnecté entre-temps : ignoré
   if (c.account && findAccount(c.account)) trackQuota(res.headers, c.account)
@@ -128,6 +130,10 @@ async function gql<T>(
     throw new AuthError(pick(S).tokenRejected, c.account)
   }
   const json = (await res.json()) as GqlResponse
+  // points consommés même si la réponse est en échec : comptés avant le contrôle
+  const cost = takeCost(json)
+  if (cost !== undefined && c.account && findAccount(c.account))
+    addCost(c.account, cost)
   if (gqlFailed(json)) {
     const error = gqlMessage(json, pick(S).http(res.status))
     log("warn", "github.error", {
@@ -672,31 +678,6 @@ export async function updateBranch(prId: string, repo: string) {
     "mutation($id: ID!) { updatePullRequestBranch(input: { pullRequestId: $id }) { pullRequest { id } } }",
     { id: prId },
   )
-}
-
-/** Quota GraphQL d'un compte (`GET /rate_limit`, gratuit : ne compte pas dans la limite) ; null si absent ou en échec. */
-export async function rateLimit(a: Account): Promise<Quota | null> {
-  try {
-    const res = await fetch(`${apiUrl(a.host)}/rate_limit`, {
-      headers: headers(tokenOf(a.id), a.id),
-    })
-    if (!res.ok) return null
-    const { resources } = (await res.json()) as {
-      resources?: {
-        graphql?: { limit: number; remaining: number; reset: number }
-      }
-    }
-    const g = resources?.graphql
-    if (!g) return null
-    const q = {
-      limit: g.limit,
-      remaining: g.remaining,
-      resetAt: g.reset * 1000,
-    }
-    return validQuota(q) ? q : null
-  } catch {
-    return null
-  }
 }
 
 export type Profile = {

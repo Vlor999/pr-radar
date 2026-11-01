@@ -10,7 +10,7 @@ import {
 import { allAccounts } from "@/lib/auth"
 import { rerunError } from "@/lib/checks"
 import { HOUR_MS } from "@/lib/quiet"
-import { trackQuota, type Quota } from "@/lib/quota"
+import { addCost, trackQuota } from "@/lib/quota"
 import type { Reviewer } from "@/lib/reviewers"
 import type {
   CiJob,
@@ -27,6 +27,8 @@ import type {
 const MUTATION_MS = 800
 /** latence de la première lecture des jobs d'une PR : laisse voir le chargement de la vue CI */
 const CHECKS_MS = 600
+/** points GraphQL d'une actualisation (`rateLimit { cost }`) : avec le quota de `fetchReviews`, le mode auto affiche ~3 min */
+const REFRESH_POINTS = 120
 
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
@@ -426,14 +428,6 @@ export const updateBranch = async (prId: string, repo: string) => {
   console.info("[demo] update branch", prId, repo)
 }
 
-// quota qui baisse de 120 points par actualisation : le mode auto affiche ~3 min dès la 2e actualisation
-let demoRemaining = 3120
-const demoReset = Date.now() + 45 * 60_000
-export const rateLimit = async (_a: Account): Promise<Quota | null> => ({
-  limit: 5000,
-  remaining: (demoRemaining -= 120),
-  resetAt: demoReset,
-})
 export type Profile = {
   login: string
   name: string | null
@@ -506,10 +500,22 @@ const REVIEWS: ReviewPr[] = [
   }),
 ]
 
-export const fetchReviews = async () => ({
-  data: REVIEWS,
-  errors: [] as AccountError[],
-})
+// quota qui baisse de REFRESH_POINTS par actualisation, fenêtre de 45 min : 120 × 45 / (3000 - 1000) ≈ 3 min.
+// Lancé juste après `fetchPrs` (store.reload) : son quota bas déclenche la notification, celui-ci sert au mode auto.
+let demoRemaining = 3120
+const demoReset = Date.now() + 45 * 60_000
+export const fetchReviews = async () => {
+  addCost(DEFAULT_ID, REFRESH_POINTS)
+  trackQuota(
+    new Headers({
+      "x-ratelimit-limit": "5000",
+      "x-ratelimit-remaining": String((demoRemaining -= REFRESH_POINTS)),
+      "x-ratelimit-reset": String(Math.floor(demoReset / 1000)),
+    }),
+    DEFAULT_ID,
+  )
+  return { data: REVIEWS, errors: [] as AccountError[] }
+}
 
 const DEMO_USERS = ["alice", "bob", "carol", "dave", "erin", "frank"]
 const user = (login: string): Reviewer => ({ login, id: `U_${login}` })
