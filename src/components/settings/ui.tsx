@@ -76,7 +76,7 @@ export function Section(props: {
           // Section surlignée (data-highlight sur <section>) : bordure et fond teintés de la carte,
           // même langage que la ligne surlignée, titre et description intacts.
           className={cn(
-            "mt-3 overflow-hidden rounded-2xl border bg-card px-4 transition-colors duration-500 motion-reduce:transition-none",
+            "mt-3 overflow-hidden rounded-xl border bg-card px-4 transition-colors duration-500 motion-reduce:transition-none",
             props.destructive &&
               "border-destructive/40 *:border-destructive/20",
             "in-data-[highlight]:border-primary/50 in-data-[highlight]:bg-[color-mix(in_oklch,var(--card),var(--primary)_8%)]",

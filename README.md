@@ -128,4 +128,6 @@ Without Apple secrets, macOS builds are ad-hoc signed (first launch: "Open Anywa
 
 MIT, see [LICENSE](LICENSE). Third-party licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) (`npm run notices` regenerates it). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
 
+Credits: the app UI was polished with the [unslop](https://github.com/heydamir/unslop) skill by Damir Sokolovsky ([@heydamir](https://x.com/heydamir)), CC BY 4.0, vendored in [`.claude/skills/unslop/`](.claude/skills/unslop/).
+
 PR Radar is provided as is, without warranty (MIT license). Not affiliated with GitHub or Slack. GitHub, Slack, macOS, Windows and Linux are trademarks of their respective owners.

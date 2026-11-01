@@ -186,7 +186,7 @@ export function NotificationsCategory(props: CategoryProps) {
       {!isWeb && (
         <div
           id={settingDomId("last")}
-          className="flex scroll-mt-24 outline-none flex-col gap-2 rounded-2xl border bg-card px-4 py-3 transition-colors duration-500 data-[highlight]:bg-primary/10 motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+          className="flex scroll-mt-24 outline-none flex-col gap-2 rounded-xl border bg-card px-4 py-3 transition-colors duration-500 data-[highlight]:bg-primary/10 motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:gap-6"
         >
           <div className="min-w-0 text-sm">
             <span className="font-medium">{t.notifications.last}</span>

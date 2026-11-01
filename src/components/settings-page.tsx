@@ -221,7 +221,7 @@ function SearchResults(props: {
           >
             <ul
               role="presentation"
-              className="overflow-hidden rounded-2xl border bg-card"
+              className="overflow-hidden rounded-xl border bg-card"
             >
               {results.current.map((e) => option(e, true))}
             </ul>
@@ -245,13 +245,13 @@ function SearchResults(props: {
                 <div
                   id={`settings-results-${g.category}`}
                   aria-hidden
-                  className="mb-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                  className="mb-1.5 text-xs font-medium text-muted-foreground"
                 >
                   {t.categories[g.category]}
                 </div>
                 <ul
                   role="presentation"
-                  className="overflow-hidden rounded-2xl border bg-card"
+                  className="overflow-hidden rounded-xl border bg-card"
                 >
                   {g.entries.map((e) => option(e, true))}
                 </ul>

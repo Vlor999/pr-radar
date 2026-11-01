@@ -272,7 +272,7 @@ export function CommandPalette({
       <DialogContent
         showCloseButton={false}
         finalFocus={() => pending.current === null}
-        className="top-1/4 translate-y-0 overflow-hidden rounded-(--palette-radius)! p-0 [--palette-radius:1.625rem] sm:max-w-xl"
+        className="top-1/4 translate-y-0 overflow-hidden rounded-(--palette-radius)! p-0 [--palette-radius:1.125rem] sm:max-w-xl"
       >
         <DialogTitle className="sr-only">{t.title}</DialogTitle>
         <Command
