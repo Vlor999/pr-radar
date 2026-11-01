@@ -412,7 +412,7 @@ fn prompt_text(name: &str, arg: &dyn Fn(&str) -> Option<String>) -> String {
         "triage" => "Help me decide what to do now on my GitHub pull requests, with the PR Radar MCP tools.\n1. Call get_attention. If `items` is absent, say there is nothing waiting and stop. Check fetchedAt, loading and error, and say so if the data is stale or partial.\n2. Call get_pr on the top items (at most 5) to read their unresolved threads and conversation.\n3. Output a prioritized action list, most urgent first: one line per PR with its URL, the action to take now (review, fix CI, answer threads, resolve conflicts, update the branch…) and why.\nDo not change anything on GitHub.".to_string(),
         "review-queue" => "List the pull requests waiting for my review, with the PR Radar MCP tools.\n1. Call get_prs with scope \"reviews\". Check fetchedAt, loading and error, and say so if the data is stale or partial.\n2. Sort the review queue oldest first.\n3. Output one line per PR: URL, title, author, age, and a one-line suggestion (quick look, deep review, wait for CI, ask for a rebase…) based on its size, CI and state. Call get_pr only when a suggestion needs the conversation.\nDo not post reviews or comments on GitHub.".to_string(),
         "fix-ci" => format!(
-            "Fix the failing CI of a pull request, with the PR Radar MCP tools.\n{}\n1. Call get_pr with this url to read the PR (repository, branch, CI state, conversation).\n2. Find the failing checks. If the gh CLI is available, use `gh pr checks <url>` and `gh run view <run-id> --log-failed` to read the failing logs.\n3. Check that the local checkout is this PR's repository and branch; if not, stop and tell me.\n4. Find the cause, propose a fix, apply it in the local checkout and run the relevant checks locally.\nDo not push, comment or rerun jobs on GitHub without my confirmation.",
+            "Fix the failing CI of a pull request, with the PR Radar MCP tools.\n{}\n1. Call get_pr with this url to read the PR (repository, branch, CI state, conversation).\n2. Call get_checks with this url to find the failing jobs and their run ids. If it answers `notLoaded`, use `gh pr checks <url>` instead when the gh CLI is available. Read the failing logs with `gh run view <run-id> --log-failed`.\n3. Check that the local checkout is this PR's repository and branch; if not, stop and tell me.\n4. Find the cause, propose a fix, apply it in the local checkout and run the relevant checks locally.\nDo not push, comment or rerun jobs on GitHub without my confirmation.",
             url_rule(&arg("url").unwrap_or_default())
         ),
         "answer-threads" => format!(
@@ -1337,7 +1337,7 @@ mod tests {
         for (name, tool) in [
             ("triage", "get_attention"),
             ("review-queue", "get_prs"),
-            ("fix-ci", "get_pr"),
+            ("fix-ci", "get_checks"),
             ("answer-threads", "get_pr"),
             ("standup", "get_prs"),
         ] {
