@@ -2,7 +2,7 @@ import { cn } from "cn"
 import { Check, ChevronRight, Copy, Trash2, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
-import { Row, Section, settingDomId, Toggle } from "@/components/settings-ui"
+import { Row, Section, settingDomId, Toggle } from "@/components/settings/ui"
 import { Button } from "@/components/ui/button"
 import {
   Select,

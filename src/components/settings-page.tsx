@@ -49,7 +49,7 @@ import { formatUntil, pause, resume, useQuiet } from "@/hooks/use-quiet"
 import { resetSeen } from "@/hooks/use-seen"
 import { useTheme, type ThemeMode } from "@/hooks/use-theme"
 import { Login } from "@/components/login"
-import { CLIENT_LABEL, MCP_STRINGS, McpCategory } from "@/components/mcp-page"
+import { CLIENT_LABEL, MCP_STRINGS, McpCategory } from "@/components/settings/mcp"
 import {
   Feedback,
   Row,
@@ -59,8 +59,8 @@ import {
   Toggle,
   useConfirm,
   useFlash,
-} from "@/components/settings-ui"
-import { WEB_STRINGS, WebCategory } from "@/components/web-page"
+} from "@/components/settings/ui"
+import { WEB_STRINGS, WebCategory } from "@/components/settings/web"
 import { GITHUB, type Account } from "@/lib/accounts"
 import { accountAdded, refreshPrs, signOut } from "@/lib/actions"
 import { CLIENT_ID, forgetTokens, useAuth } from "@/lib/auth"

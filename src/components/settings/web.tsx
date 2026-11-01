@@ -8,7 +8,7 @@ import {
   Toggle,
   useConfirm,
   useFlash,
-} from "@/components/settings-ui"
+} from "@/components/settings/ui"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { strings, useStrings } from "@/lib/i18n"
