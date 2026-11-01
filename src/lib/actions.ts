@@ -99,12 +99,15 @@ export async function accessibleRepos(): Promise<{
   }
 }
 
-/** Bouton Rafraîchir et actualisation automatique : ignore le cache et relit GitHub. */
-export async function refreshPrs() {
+/**
+ * Bouton Rafraîchir et actualisation automatique : ignore le cache et relit GitHub.
+ * `auto` (minuterie, retour sur la fenêtre) : seules les PR changées sont relues en entier ; manuelle : tout.
+ */
+export async function refreshPrs({ auto = false } = {}) {
   // réglages et repos suivis changés dans l'autre fenêtre (app ou version web)
   await pull().catch(() => {})
   clearCache()
-  await reload({ measure: true })
+  await reload({ measure: true, delta: auto })
 }
 
 /** Publie un message sur le nœud GitHub `id`, puis relit GitHub pour l'afficher. */
