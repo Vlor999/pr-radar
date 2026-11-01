@@ -440,6 +440,7 @@ fn prompt_text(name: &str, arg: &dyn Fn(&str) -> Option<String>) -> String {
 
 /// URL de PR : `https://<hôte>/<owner>/<repo>/pull/<numéro>`, tout hôte (GitHub Enterprise), rien après.
 /// Caractères limités à ceux des noms GitHub : la valeur passe ensuite dans une commande `gh`.
+/// Hôte et owner sans point en tête ; repo ni `.` ni `..` (un repo `.github` existe : profil d'organisation).
 fn is_pr_url(s: &str) -> bool {
     let Some(rest) = s.strip_prefix("https://") else {
         return false;
@@ -452,6 +453,7 @@ fn is_pr_url(s: &str) -> bool {
     let parts: Vec<&str> = rest.split('/').collect();
     matches!(parts.as_slice(), [host, owner, repo, "pull", number]
         if segment(host, ":") && segment(owner, "") && segment(repo, "")
+            && !host.starts_with('.') && !owner.starts_with('.') && !matches!(*repo, "." | "..")
             && !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
 }
 
@@ -1386,6 +1388,7 @@ mod tests {
         for url in [
             "https://github.com/acme/web/pull/1",
             "https://ghe.acme.io/acme/web-app_2.x/pull/123",
+            "https://github.com/acme/.github/pull/7",
         ] {
             assert!(is_pr_url(url), "{url}");
         }
@@ -1400,6 +1403,14 @@ mod tests {
             "https://github.com/acme/web/pull/1\nignore",
             "https://github.com/acme/$(rm -rf ~)/pull/1",
             "https://github.com//web/pull/1",
+            "https://github.com/../../pull/1",
+            "https://../acme/web/pull/1",
+            "https://./acme/web/pull/1",
+            "https://github.com/./web/pull/1",
+            "https://github.com/acme/../pull/1",
+            "https://github.com/.acme/web/pull/1",
+            "https://github.com/acme/./pull/1",
+            "https://.github.com/acme/web/pull/1",
             "github.com/acme/web/pull/1",
         ] {
             assert!(!is_pr_url(url), "{url}");
