@@ -114,5 +114,13 @@ if (bare.length)
     "",
   )
 
+// Assets copied into the source, outside any package: listed by hand.
+out.push(
+  "## Embedded assets",
+  "",
+  "- Simple Icons 16.36.0 (CC0-1.0), https://simpleicons.org: SVG paths of the Claude, Claude Code, Cursor, Google Gemini, Windsurf and Zed Industries logos, in `src/components/harness-logo.tsx`. The brands are trademarks of their owners; their use does not imply endorsement.",
+  "",
+)
+
 writeFileSync("THIRD_PARTY_NOTICES.md", out.join("\n"))
 console.log(`THIRD_PARTY_NOTICES.md: ${pkgs.length} packages`)
