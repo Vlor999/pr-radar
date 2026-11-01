@@ -108,7 +108,15 @@ const el = (
   getAttribute: (n) => attrs[n] ?? null,
 })
 
-test("get_prs : mention cherchée → liste, PR à reviewer → slack null", () => {
+type Payload = {
+  prs?: Record<string, unknown>[]
+  reviews?: Record<string, unknown>[]
+} & Record<string, unknown>
+
+const prs = (...args: Parameters<typeof prsPayload>) =>
+  prsPayload(...args) as Payload
+
+test("get_prs : mentions absentes si pas cherchées, checkedAt seul si aucune", () => {
   const seen = pr(1)
   const empty = pr(2)
   const unread = pr(3)
@@ -116,51 +124,89 @@ test("get_prs : mention cherchée → liste, PR à reviewer → slack null", () 
     [seen.url, { at: 0, list: [mention()] }],
     [empty.url, { at: 0, list: [] }],
   ])
-  const out = prsPayload(
+  const out = prs(
     ctx,
     [seen, empty, unread],
     [rv()],
     new Map(),
     (u) => known.get(u) ?? null,
   )
+  const checkedAt = "1970-01-01T00:00:00.000Z"
   assert.deepEqual(
-    out.prs.map((p) => p.slack),
-    [[mention()], [], null],
+    out.prs?.map((p) => p.slack),
+    [{ checkedAt, mentions: [mention()] }, { checkedAt }, undefined],
   )
-  assert.deepEqual(
-    out.prs.map((p) => p.slackCheckedAt),
-    ["1970-01-01T00:00:00.000Z", "1970-01-01T00:00:00.000Z", null],
-  )
-  assert.equal(out.reviews[0].slack, null)
+  assert.equal("slack" in (out.reviews?.[0] ?? {}), false)
 })
 
-test("get_prs : format compact, sans fils ni conversation", () => {
-  const out = prsPayload(
+test("get_prs : valeurs par défaut omises, sans fils ni conversation", () => {
+  const out = prs(
+    { ...ctx, fetchedAt: null },
+    [pr(1, { ci: null, additions: 0 })],
+    [rv({ direct: false })],
+    new Map(),
+    noMentions,
+  )
+  assert.deepEqual(out, {
+    slack: { status: "connected" },
+    prs: [
+      {
+        repo: "acme/web",
+        number: 1,
+        title: "PR 1",
+        url: "https://github.com/acme/web/pull/1",
+        head: "b1",
+        base: "main",
+        deletions: 2,
+        files: 1,
+        updated: "2026-01-01T00:00:00Z",
+      },
+    ],
+    reviews: [
+      {
+        repo: "acme/api",
+        number: 9,
+        title: "Review me",
+        url: "https://github.com/acme/api/pull/9",
+        author: "alice",
+        decision: "REVIEW_REQUIRED",
+        since: "2026-01-01T00:00:00Z",
+      },
+    ],
+  })
+})
+
+test("get_prs : reviewers en listes de logins par état, équipes à part", () => {
+  const out = prs(
     ctx,
-    [pr(1, { threads: [], conversation: [] })],
+    [
+      pr(1, {
+        reviews: [
+          { who: "alice", state: "APPROVED" },
+          { who: "bob", state: "CHANGES_REQUESTED" },
+          { who: "carol", state: "APPROVED" },
+        ],
+        requested: [{ who: "dave" }, { who: "Platform", team: true }],
+      }),
+    ],
     [],
     new Map(),
     noMentions,
   )
-  assert.equal(out.fetchedAt, ctx.fetchedAt)
-  assert.equal(out.slack.status, "connected")
-  assert.equal("threads" in out.prs[0], false)
-  assert.equal("conversation" in out.prs[0], false)
-  assert.deepEqual(out.prs[0].reviewers, { reviews: [], requested: [] })
+  assert.deepEqual(out.prs?.[0].reviewers, {
+    approved: ["alice", "carol"],
+    changesRequested: ["bob"],
+    requested: ["dave"],
+    requestedTeams: ["Platform"],
+  })
 })
 
-test("get_prs : la PR d'un autre donne son motif, la mienne null", () => {
+test("get_prs : la PR d'un autre donne son motif, la mienne rien", () => {
   const involved = { reason: "mentioned" as const, author: "bob" }
-  const out = prsPayload(
-    ctx,
-    [pr(1), pr(2, { involved })],
-    [],
-    new Map(),
-    noMentions,
-  )
+  const out = prs(ctx, [pr(1), pr(2, { involved })], [], new Map(), noMentions)
   assert.deepEqual(
-    out.prs.map((p) => p.involved),
-    [null, involved],
+    out.prs?.map((p) => p.involved),
+    [undefined, involved],
   )
 })
 
@@ -170,10 +216,42 @@ test("get_prs : une PR stackée donne le numéro de sa PR parente", () => {
   const parents = parentsOf([
     { repo: "acme/web", roots: buildTree([a, b]), merged: [] },
   ])
-  const out = prsPayload(ctx, [a, b], [], parents, noMentions)
+  const out = prs(ctx, [a, b], [], parents, noMentions)
   assert.deepEqual(
-    out.prs.map((p) => p.stack.parent),
-    [null, 1],
+    out.prs?.map((p) => p.parent),
+    [undefined, 1],
+  )
+})
+
+test("get_prs : réponse compacte plus courte que la forme complète", () => {
+  const list = Array.from({ length: 20 }, (_, i) =>
+    pr(i + 1, {
+      draft: i % 5 === 0,
+      ci: i % 4 === 0 ? null : "SUCCESS",
+      comments: i % 3,
+      reviews: i % 2 ? [{ who: "alice", state: "APPROVED" }] : [],
+      requested: [{ who: "bob" }],
+    }),
+  )
+  const queue = Array.from({ length: 5 }, (_, i) => rv({ number: 100 + i }))
+  const full = JSON.stringify({
+    ...ctx,
+    prs: list.map((p) => ({
+      ...p,
+      reviewers: { reviews: p.reviews, requested: p.requested },
+      stack: { parent: null, native: null },
+      involved: null,
+      slack: null,
+      slackCheckedAt: null,
+    })),
+    reviews: queue.map((r) => ({ ...r, slack: null })),
+  })
+  const compact = JSON.stringify(
+    prsPayload(ctx, list, queue, new Map(), noMentions),
+  )
+  assert.ok(
+    compact.length < full.length * 0.6,
+    `${compact.length} / ${full.length}`,
   )
 })
 
@@ -214,7 +292,6 @@ test("get_pr : fils et conversation en texte, URL avec /files acceptée", () => 
     {
       path: "a.ts",
       line: 3,
-      outdated: false,
       hunk: "+x",
       comments: [{ author: "alice", at: "t", url: "u", body: "fix" }],
     },
