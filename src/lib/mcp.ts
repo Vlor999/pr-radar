@@ -2,10 +2,12 @@ import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { useSyncExternalStore } from "react"
 
+import { allAccounts } from "./auth"
 import {
   htmlToText,
   parentsOf,
   parseHistory,
+  parsePrsArgs,
   prPayload,
   prsPayload,
   pushCall,
@@ -133,12 +135,24 @@ function answer(tool: string, args: unknown): McpReply {
     return c ? { at: c.at, list: filterMentions(c.list, settings) } : null
   }
   const parents = parentsOf(d.trees)
-  if (tool === "get_prs")
+  if (tool === "get_prs") {
+    const parsed = parsePrsArgs(args)
+    if (!parsed.ok) return { error: parsed.error }
+    const me = allAccounts().flatMap((a) => (a.login ? [a.login] : []))
     return {
       text: JSON.stringify(
-        prsPayload(ctx, d.prs, d.reviews.reviews, parents, mentionsOf),
+        prsPayload(
+          ctx,
+          d.prs,
+          d.reviews.reviews,
+          parents,
+          mentionsOf,
+          parsed.filters,
+          me,
+        ),
       ),
     }
+  }
   if (tool === "get_pr") {
     const url = (args as { url?: unknown } | null)?.url
     if (typeof url !== "string") return { error: "get_pr: missing `url`" }
