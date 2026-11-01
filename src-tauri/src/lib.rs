@@ -8,6 +8,7 @@ use tauri::{AppHandle, Emitter, Manager, ipc::CapabilityBuilder};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
 
+mod crash;
 mod log;
 pub mod mcp;
 mod web;
@@ -446,6 +447,8 @@ pub fn run() {
         .manage(Mutex::new(TrayLabels::default()))
         .manage(mcp::McpState::default())
         .setup(|app| {
+            // marqueur de session et hook de panic : avant tout le reste
+            crash::init(app.handle());
             // serveur MCP : verrou de présence pris au lancement, socket créé seulement si activé
             mcp::hold_lock(&app.state::<mcp::McpState>());
             // retour de la connexion Slack ; Windows/Linux : arrive par single-instance (feature deep-link)
@@ -501,15 +504,19 @@ pub fn run() {
             log::log_purge,
             log::log_reveal,
             log::log_pick_dir,
-            log::log_export
+            log::log_export,
+            crash::crash_status,
+            crash::session_clean
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app, e| {
-            // fermeture : serveur web arrêté, le socket MCP disparaît avec l'app
+            // fermeture : serveur web arrêté, le socket MCP disparaît avec l'app, la session est close
+            // (Quitter, désinstallation et redémarrage après mise à jour passent tous par ici)
             if let tauri::RunEvent::Exit = e {
                 web::shutdown(app);
                 let _ = mcp::mcp_disable(app.state::<mcp::McpState>());
+                crash::shutdown();
             }
             // clic sur l'icône du Dock alors que la fenêtre est cachée
             #[cfg(target_os = "macos")]
