@@ -46,6 +46,15 @@ export const CRASH_HOME_DIRS = [
 export const CRASH_EMAIL =
   /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g
 
+/* ---------- Actualisation des PR (github.ts, delta.ts, pr-query.ts) ---------- */
+
+/** au-delà, une actualisation automatique relit toutes les PR en entier au lieu des seules PR changées */
+export const FULL_REFRESH_MAX_AGE_MS = 10 * 60_000
+/** PR par page du sondage : 30 coûte 1 point, 50 en coûte 2 (le coût GraphQL suit les bornes demandées) */
+export const PROBE_PAGE_SIZE = 30
+/** ids par lecture complète `nodes(ids:)` (GitHub : 100 au plus) ; 20 = taille d'une page de l'ancienne recherche complète */
+export const NODES_PER_QUERY = 20
+
 /* ---------- Réglages ---------- */
 
 /** durée du surlignage d'un réglage ouvert depuis la recherche */
