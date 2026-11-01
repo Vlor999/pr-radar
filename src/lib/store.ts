@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react"
 
 import { describeErrors, splitKey } from "./accounts"
 import { allAccounts, findAccount } from "./auth"
+import { DAY_MS } from "./constants"
 import {
   fetchMerged,
   fetchPrs,
@@ -45,6 +46,10 @@ export type Data = {
   /** PR des autres qui attendent ma review, tous repos confondus, et comptes lus */
   reviews: Reviews
   fetchedAt: string
+  /** jours (UTC, inclus) des PR mergées lues au dernier chargement (`RepoTree.merged`) */
+  mergedWindow?: { from: string; to: string }
+  /** lecture des PR mergées en échec au dernier chargement : `mergedWindow` absent, listes vides */
+  mergedError?: string
   loading: boolean
   error?: string
   /** erreur de jeton : l'interface propose de se reconnecter */
@@ -107,13 +112,19 @@ export async function reload({ measure = false } = {}) {
     repos = repos.filter((r) => findAccount(splitKey(r).account))
     const now = new Date()
     const queried = allAccounts()
-    const [{ data: fetched, errors }, recent, found] = await Promise.all([
+    const mergedWindow = {
+      from: day(new Date(now.getTime() - getSettings().mergedDays * DAY_MS)),
+      to: day(now),
+    }
+    const [{ data: fetched, errors }, merged, found] = await Promise.all([
       fetchPrs(repos),
-      fetchMerged(
-        repos,
-        day(new Date(now.getTime() - getSettings().mergedDays * 86_400_000)),
-        day(now),
-      ).catch(() => [] as MergedPr[]),
+      fetchMerged(repos, mergedWindow.from, mergedWindow.to).then(
+        (list) => ({ list, error: undefined }),
+        (e: unknown) => ({
+          list: [] as MergedPr[],
+          error: e instanceof Error ? e.message.slice(0, 300) : String(e),
+        }),
+      ),
       // tous les comptes en échec : même traitement qu'un échec partiel
       fetchReviews().catch((error: unknown) => ({
         data: [],
@@ -150,9 +161,12 @@ export async function reload({ measure = false } = {}) {
       trees: live.map((repo) => ({
         repo,
         roots: buildTree(prs.filter((p) => p.repo === repo)),
-        merged: recent.filter((p) => p.repo === repo),
+        merged: merged.list.filter((p) => p.repo === repo),
       })),
       fetchedAt: now.toISOString(),
+      // lecture en échec : pas de fenêtre, `get_merged` répond `notLoaded` au lieu d'une liste vide
+      mergedWindow: merged.error ? undefined : mergedWindow,
+      mergedError: merged.error,
       loading: false,
     })
     log(shown.length ? "warn" : "info", "refresh", {

@@ -70,6 +70,8 @@ export type MergedPr = {
   number: number
   title: string
   url: string
+  /** ouverture de la PR : délai de merge (`mergedAt - createdAt`) */
+  createdAt: string
   mergedAt: string
 }
 

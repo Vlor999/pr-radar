@@ -112,6 +112,10 @@ const MCP_STRINGS = strings(
         "Une PR de l'arbre (à moi ou qui me concerne) : fils de review non résolus et conversation, en texte.",
       getAttention:
         "Liste courte de ce qui attend une action de ma part : une entrée par PR avec ses raisons (CI en échec, review demandée…) et son ancienneté. Reviews demandées et CI en échec d'abord, puis les plus anciennes. Filtre optionnel : repo.",
+      getChecks:
+        "Jobs de la CI d'une PR de l'arbre (état, workflow, durée, lien des jobs en échec), depuis la vue CI déjà ouverte dans l'app : pas lue, l'outil le dit et renvoie vers gh pr checks.",
+      getMerged:
+        "Mes PR mergées sur la période chargée (réglage « Mergées récemment »), avec le délai entre ouverture et merge, sa médiane et son p90. Filtres optionnels : from, to (YYYY-MM-DD), repo.",
     },
     prompts: {
       title: "Prompts exposés",
@@ -123,7 +127,7 @@ const MCP_STRINGS = strings(
       reviewQueue:
         "Les PR qui attendent ma review, les plus anciennes d'abord, avec une suggestion d'une ligne chacune.",
       fixCi:
-        "Lit la PR, trouve les checks en échec (gh pr checks, gh run view --log-failed si disponible), propose et applique un correctif dans le checkout local.",
+        "Lit la PR, trouve les checks en échec (get_checks, sinon gh pr checks ; gh run view --log-failed si disponible), propose et applique un correctif dans le checkout local.",
       answerThreads:
         "Parcourt les fils non résolus de la PR et propose une réponse ou un changement de code pour chacun.",
       standup:
@@ -198,6 +202,10 @@ const MCP_STRINGS = strings(
         "One PR of the tree (mine or one involving me): unresolved review threads and conversation, as text.",
       getAttention:
         "Short list of what needs an action from me: one item per PR with its reasons (CI failing, review requested…) and its age. Review requests and CI failures first, then the oldest. Optional filter: repo.",
+      getChecks:
+        "CI jobs of one PR of the tree (state, workflow, duration, link of failing jobs), from the CI view already opened in the app: not loaded, the tool says so and points to gh pr checks.",
+      getMerged:
+        "My PRs merged in the loaded window (“Recently merged” setting), with the time from opening to merge, its median and p90. Optional filters: from, to (YYYY-MM-DD), repo.",
     },
     prompts: {
       title: "Exposed prompts",
@@ -209,7 +217,7 @@ const MCP_STRINGS = strings(
       reviewQueue:
         "PRs waiting for my review, oldest first, with a one-line suggestion each.",
       fixCi:
-        "Reads the PR, finds the failing checks (gh pr checks, gh run view --log-failed when available), proposes and applies a fix in the local checkout.",
+        "Reads the PR, finds the failing checks (get_checks, else gh pr checks; gh run view --log-failed when available), proposes and applies a fix in the local checkout.",
       answerThreads:
         "Goes through the PR's unresolved threads and proposes a reply or a code change for each.",
       standup:
@@ -393,6 +401,14 @@ function ToolsSection() {
         label={<code className="font-mono">get_attention(repo?)</code>}
         description={t.getAttention}
       />
+      <Row
+        label={<code className="font-mono">get_checks(url)</code>}
+        description={t.getChecks}
+      />
+      <Row
+        label={<code className="font-mono">get_merged(from?, to?, repo?)</code>}
+        description={t.getMerged}
+      />
     </Section>
   )
 }
@@ -564,7 +580,8 @@ export function mcpEntries(lang: Lang): SettingsEntry[] {
       category: "mcp",
       label: mcp.tools.title,
       description: mcp.tools.description,
-      keywords: "get_prs get_pr get_attention",
+      keywords:
+        "get_prs get_pr get_attention get_checks get_merged ci lead time",
     },
     {
       id: "mcp-prompts",

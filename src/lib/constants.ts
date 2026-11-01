@@ -73,6 +73,17 @@ export const ATTENTION_URGENT: ActionReason[] = ["reviewRequested", "ciFailing"]
 /** en dessous, `age` en heures (`5h`) ; au-delà, en jours (`3d`) */
 export const ATTENTION_AGE_HOURS_MAX = 48
 
+/* ---------- Outils MCP `get_checks` et `get_merged` (mcp-data.ts) ---------- */
+
+/** nom donné aux statuts de commit (CI hors Actions), boîte sans workflow de la vue CI */
+export const MCP_STATUSES_NAME = "commit statuses"
+/** arguments acceptés par `get_merged` (mêmes que `check_merged_args` du shim) */
+export const MCP_MERGED_ARGS = new Set(["from", "to", "repo"])
+/** forme d'un jour `YYYY-MM-DD`, chiffres ASCII seulement (`\d` sans drapeau `u`) */
+export const MCP_DAY_FORMAT = /^\d{4}-\d{2}-\d{2}$/
+/** rang du centile `p90LeadTime` (rang le plus proche) */
+export const MCP_LEAD_TIME_PERCENTILE = 0.9
+
 /* ---------- Prompts MCP (settings/mcp.tsx) ---------- */
 
 /** Prompts servis par le shim (`prompts()` de `src-tauri/src/mcp.rs`) : nom, arguments affichés, clé du texte. Liste vérifiée par `mcp-prompts.json`. */
