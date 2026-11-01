@@ -9,28 +9,39 @@ import { strings, useStrings } from "@/lib/i18n"
 
 const S = strings(
   {
-    stopped: "PR Radar s'est arrêté de façon inattendue.",
+    headline: {
+      panic: "PR Radar s'est arrêté de façon inattendue.",
+      webview: "PR Radar s'est arrêté de façon inattendue.",
+      unclean: "PR Radar a été fermé de façon inattendue.",
+    } satisfies Record<CrashKind, string>,
     kinds: {
       panic: "Erreur interne de l'app.",
       webview: "Erreur de l'interface.",
-      unclean: "La session précédente ne s'est pas fermée normalement.",
+      unclean: "Si c'était un plantage, tu peux le signaler.",
     } satisfies Record<CrashKind, string>,
     report: "Signaler sur GitHub",
     dismiss: "Ignorer",
   },
   {
-    stopped: "PR Radar stopped unexpectedly.",
+    headline: {
+      panic: "PR Radar stopped unexpectedly.",
+      webview: "PR Radar stopped unexpectedly.",
+      unclean: "PR Radar was closed unexpectedly.",
+    },
     kinds: {
       panic: "Internal app error.",
       webview: "Interface error.",
-      unclean: "The previous session did not close normally.",
+      unclean: "If it was a crash, you can report it.",
     },
     report: "Report on GitHub",
     dismiss: "Dismiss",
   },
 )
 
-/** Bandeau non bloquant au lancement qui suit un plantage : signaler (aperçu du rapport) ou ignorer. */
+/**
+ * Bandeau non bloquant au lancement qui suit un plantage : signaler (aperçu du rapport) ou ignorer.
+ * Rust ne renvoie le plantage qu'une fois (`crash_status`) : une fenêtre rechargée ne le revoit pas.
+ */
 export function CrashBanner() {
   const t = useStrings(S)
   const crash = usePreviousCrash()
@@ -43,10 +54,15 @@ export function CrashBanner() {
     >
       <TriangleAlert className="size-4 shrink-0 text-destructive" />
       <span className="min-w-0 flex-1">
-        <span className="font-medium">{t.stopped}</span>{" "}
+        <span className="font-medium">{t.headline[crash.kind]}</span>{" "}
         <span className="text-muted-foreground">{t.kinds[crash.kind]}</span>
       </span>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      {/* fermeture sans panic (souvent pas un plantage) : signaler en action secondaire */}
+      <Button
+        size="sm"
+        variant={crash.kind === "unclean" ? "outline" : "default"}
+        onClick={() => setOpen(true)}
+      >
         <Bug data-icon="inline-start" />
         {t.report}
       </Button>

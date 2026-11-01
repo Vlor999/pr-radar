@@ -14,7 +14,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { buildCrashReport } from "@/lib/crash"
-import { crashIssueUrl, type Crash, type CrashReport } from "@/lib/crash-data"
+import {
+  crashIssueUrl,
+  minimalReport,
+  type Crash,
+  type CrashReport,
+} from "@/lib/crash-data"
 import { currentLang, strings, useStrings } from "@/lib/i18n"
 import { exportLog } from "@/lib/log"
 import { openExternal } from "@/lib/open"
@@ -39,6 +44,8 @@ const S = strings(
     open: "Ouvrir sur GitHub",
     cancel: "Annuler",
     loading: "Préparation du rapport…",
+    failed:
+      "Le rapport complet n'a pas pu être préparé : seuls le type et l'heure du plantage sont repris. Ajoute ce que tu sais avant de l'ouvrir.",
   },
   {
     title: "Report the crash on GitHub",
@@ -56,6 +63,8 @@ const S = strings(
     open: "Open on GitHub",
     cancel: "Cancel",
     loading: "Preparing the report…",
+    failed:
+      "The full report could not be prepared: only the crash kind and time are included. Add what you know before opening it.",
   },
 )
 
@@ -81,13 +90,23 @@ export function CrashReportDialog({
     web: isWeb,
   })
   const [exported, setExported] = useState(false)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     if (!open) return
     let live = true
     setReport(null)
     setExported(false)
-    void buildCrashReport(crash, lang).then((r) => live && setReport(r))
+    setFailed(false)
+    buildCrashReport(crash, lang).then(
+      (r) => live && setReport(r),
+      () => {
+        if (!live) return
+        // rapport réduit (type et heure) plutôt qu'une attente sans fin
+        setReport(minimalReport(crash, lang))
+        setFailed(true)
+      },
+    )
     getVersion().then(
       (version) => live && setCtx((c) => ({ ...c, version })),
       () => {},
@@ -114,6 +133,11 @@ export function CrashReportDialog({
           </p>
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
+            {failed && (
+              <p role="alert" className="text-destructive">
+                {t.failed}
+              </p>
+            )}
             <label className="flex flex-col gap-1.5">
               <span className="font-medium">{t.issueTitle}</span>
               <Input
