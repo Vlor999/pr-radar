@@ -10,7 +10,7 @@ import {
 import { allAccounts } from "@/lib/auth"
 import { rerunError } from "@/lib/checks"
 import { HOUR_MS } from "@/lib/quiet"
-import { trackQuota, type Quota } from "@/lib/quota"
+import { trackQuota } from "@/lib/quota"
 import type { Reviewer } from "@/lib/reviewers"
 import type {
   CiJob,
@@ -419,14 +419,6 @@ export const updateBranch = async (prId: string, repo: string) => {
   console.info("[demo] update branch", prId, repo)
 }
 
-// quota qui baisse de 120 points par actualisation : le mode auto affiche ~3 min dès la 2e actualisation
-let demoRemaining = 3120
-const demoReset = Date.now() + 45 * 60_000
-export const rateLimit = async (_a: Account): Promise<Quota | null> => ({
-  limit: 5000,
-  remaining: (demoRemaining -= 120),
-  resetAt: demoReset,
-})
 export type Profile = {
   login: string
   name: string | null
