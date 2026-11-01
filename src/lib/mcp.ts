@@ -4,8 +4,10 @@ import { useSyncExternalStore } from "react"
 
 import { allAccounts } from "./auth"
 import {
+  attentionPayload,
   htmlToText,
   parentsOf,
+  parseAttentionArgs,
   parseHistory,
   parsePrsArgs,
   prPayload,
@@ -135,10 +137,10 @@ function answer(tool: string, args: unknown): McpReply {
     return c ? { at: c.at, list: filterMentions(c.list, settings) } : null
   }
   const parents = parentsOf(d.trees)
+  const me = allAccounts().flatMap((a) => (a.login ? [a.login] : []))
   if (tool === "get_prs") {
     const parsed = parsePrsArgs(args)
     if (!parsed.ok) return { error: parsed.error }
-    const me = allAccounts().flatMap((a) => (a.login ? [a.login] : []))
     return {
       text: JSON.stringify(
         prsPayload(
@@ -149,6 +151,22 @@ function answer(tool: string, args: unknown): McpReply {
           mentionsOf,
           parsed.filters,
           me,
+        ),
+      ),
+    }
+  }
+  if (tool === "get_attention") {
+    const parsed = parseAttentionArgs(args)
+    if (!parsed.ok) return { error: parsed.error }
+    return {
+      text: JSON.stringify(
+        attentionPayload(
+          ctx,
+          d.prs,
+          d.reviews.reviews,
+          me,
+          Date.now(),
+          parsed.repo,
         ),
       ),
     }

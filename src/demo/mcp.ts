@@ -30,6 +30,15 @@ const HISTORY: McpCall[] = [
     bytes: 18_432,
   },
   {
+    at: ago(2),
+    client: "claude-code",
+    tool: "get_attention",
+    args: {},
+    ms: 2,
+    ok: true,
+    bytes: 1_204,
+  },
+  {
     at: ago(3),
     client: "codex-mcp-client",
     tool: "get_pr",

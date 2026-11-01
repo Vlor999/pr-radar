@@ -3,12 +3,15 @@ import { test } from "node:test"
 
 import {
   actionReasons,
+  ageLabel,
+  attentionPayload,
   callsToday,
   htmlToText,
   installSnippet,
   MCP_HISTORY_MAX,
   normalizeUrl,
   parentsOf,
+  parseAttentionArgs,
   parseHistory,
   parsePrsArgs,
   prPayload,
@@ -683,5 +686,169 @@ test("installation : JSON au format d'Antigravity, Cursor, Windsurf et Zed", () 
   })
   assert.deepEqual(JSON.parse(installSnippet("zed", exe)), {
     context_servers: { "pr-radar": server },
+  })
+})
+
+/* ---------- get_attention ---------- */
+
+const NOW = Date.parse("2026-01-10T00:00:00Z")
+
+test("attention : seulement les PR avec une raison d'agir, une entrée compacte par PR", () => {
+  const out = attentionPayload(
+    ctx,
+    [pr(1), pr(2, { ci: "FAILURE", updated: "2026-01-09T21:00:00Z" })],
+    [],
+    ["me"],
+    NOW,
+  )
+  assert.deepEqual(out, {
+    fetchedAt: "2026-01-01T00:00:00Z",
+    items: [
+      {
+        url: "https://github.com/acme/web/pull/2",
+        repo: "acme/web",
+        number: 2,
+        title: "PR 2",
+        reasons: ["ciFailing"],
+        age: "3h",
+      },
+    ],
+  })
+})
+
+test("attention : rien à faire → pas de liste, contexte de fraîcheur seul", () => {
+  const out = attentionPayload(
+    { ...ctx, loading: true, error: "boom" },
+    [pr(1)],
+    [],
+    ["me"],
+    NOW,
+  )
+  assert.deepEqual(out, {
+    fetchedAt: "2026-01-01T00:00:00Z",
+    loading: true,
+    error: "boom",
+  })
+})
+
+test("attention : review demandée et CI en échec d'abord, puis la plus ancienne", () => {
+  const out = attentionPayload(
+    ctx,
+    [
+      pr(1, { unresolved: 1, updated: "2026-01-02T00:00:00Z" }),
+      pr(2, { conflicting: true, updated: "2026-01-05T00:00:00Z" }),
+      pr(3, { ci: "FAILURE", updated: "2026-01-08T00:00:00Z" }),
+    ],
+    [rv({ since: "2026-01-09T00:00:00Z" })],
+    ["me"],
+    NOW,
+  )
+  const items = out.items as { number: number; age: string }[]
+  assert.deepEqual(
+    items.map((i) => [i.number, i.age]),
+    [
+      [3, "2d"],
+      [9, "24h"],
+      [1, "8d"],
+      [2, "5d"],
+    ],
+  )
+})
+
+test("attention : PR à la fois dans la file et dans l'arbre → une entrée, raisons réunies, âge de la demande", () => {
+  const url = "https://github.com/acme/web/pull/5"
+  const out = attentionPayload(
+    ctx,
+    [
+      pr(5, {
+        involved: other,
+        requested: [{ who: "me" }],
+        threads: [thread("me")],
+        updated: "2026-01-09T23:00:00Z",
+      }),
+    ],
+    [
+      rv({
+        repo: "acme/web",
+        number: 5,
+        url: `${url}/files`,
+        since: "2026-01-07T00:00:00Z",
+      }),
+    ],
+    ["me"],
+    NOW,
+  )
+  const items = out.items as { url: string; reasons: string[]; age: string }[]
+  assert.equal(items.length, 1)
+  assert.equal(items[0].url, url)
+  assert.deepEqual(items[0].reasons, ["reviewRequested", "inUnresolvedThread"])
+  assert.equal(items[0].age, "3d")
+})
+
+test("attention : à égalité de priorité et de date, file « À reviewer » puis arbre, dans leur ordre", () => {
+  const at = "2026-01-05T00:00:00Z"
+  const out = attentionPayload(
+    ctx,
+    [
+      pr(1, { ci: "FAILURE", updated: at }),
+      pr(2, { unresolved: 1, updated: at }),
+      pr(3, { conflicting: true, updated: at }),
+    ],
+    [
+      rv({ number: 8, url: "https://github.com/acme/api/pull/8", since: at }),
+      rv({ since: at }),
+    ],
+    ["me"],
+    NOW,
+  )
+  const items = out.items as { number: number }[]
+  assert.deepEqual(
+    items.map((i) => i.number),
+    [8, 9, 1, 2, 3],
+  )
+})
+
+test("attention : filtre repo sur une sous-chaîne, casse ignorée", () => {
+  const out = attentionPayload(
+    ctx,
+    [pr(1, { ci: "FAILURE" }), pr(2, { repo: "globex/api", ci: "FAILURE" })],
+    [rv()],
+    ["me"],
+    NOW,
+    "ACME/W",
+  )
+  const items = out.items as { repo: string }[]
+  assert.deepEqual(
+    items.map((i) => i.repo),
+    ["acme/web"],
+  )
+})
+
+test("attention : âge en minutes, heures jusqu'à 48 h, puis jours", () => {
+  const h = 3_600_000
+  assert.equal(ageLabel(-5), "0m")
+  assert.equal(ageLabel(45 * 60_000), "45m")
+  assert.equal(ageLabel(47 * h), "47h")
+  assert.equal(ageLabel(48 * h), "2d")
+})
+
+test("attention : arguments validés comme ceux de get_prs", () => {
+  assert.deepEqual(parseAttentionArgs(undefined), { ok: true })
+  assert.deepEqual(parseAttentionArgs({ repo: null }), { ok: true })
+  assert.deepEqual(parseAttentionArgs({ repo: "acme" }), {
+    ok: true,
+    repo: "acme",
+  })
+  assert.deepEqual(parseAttentionArgs({ repo: 1 }), {
+    ok: false,
+    error: "get_attention: `repo` must be a string",
+  })
+  assert.deepEqual(parseAttentionArgs({ limit: 3 }), {
+    ok: false,
+    error: "get_attention: unknown argument `limit`",
+  })
+  assert.deepEqual(parseAttentionArgs([]), {
+    ok: false,
+    error: "get_attention: arguments must be an object",
   })
 })

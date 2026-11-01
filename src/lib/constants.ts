@@ -1,4 +1,5 @@
 import type { Harness } from "./harness.ts"
+import type { ActionReason } from "./mcp-data.ts"
 
 /** page de soutien du mainteneur (Buy Me a Coffee) */
 export const BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/Vlor999"
@@ -64,3 +65,10 @@ export const HARNESS_PATTERNS: [Harness, RegExp][] = [
   // `name: productService.nameLong` (« Visual Studio Code », « … - Insiders », « Code - OSS »)
   ["vscode", /visual studio code|\bvs ?code\b|^code - oss\b/i],
 ]
+
+/* ---------- Outil MCP `get_attention` (mcp-data.ts) ---------- */
+
+/** raisons servies en premier : quelqu'un attend ma review, ou ma CI est cassée */
+export const ATTENTION_URGENT: ActionReason[] = ["reviewRequested", "ciFailing"]
+/** en dessous, `age` en heures (`5h`) ; au-delà, en jours (`3d`) */
+export const ATTENTION_AGE_HOURS_MAX = 48
