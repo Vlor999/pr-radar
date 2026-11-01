@@ -55,6 +55,8 @@ Only radius and the card shadow were edited. Everything else stays as shadcn gen
 
 - Counts are text, not a nested `Badge`: `tabular-nums`, muted (`opacity-70` inside a button, `text-muted-foreground` elsewhere).
 - Cards: `Card` default `shadow-xs` + hairline. No `shadow-md`/`shadow-lg`; keyboard focus = ring + `bg-primary/5`.
+- Branch rails and elbows (`repo-section.tsx`, `thread-panel.tsx`, `pr-card.tsx`): `border-rail`, an opaque token, never `border-border`. That one is translucent in dark, so overlapping segments look brighter.
+- Toolbar dropdowns: `ui/select` (`SelectTrigger size="sm"`, styled like the `ghost sm` buttons next to it), not a native `<select>`.
 - Icons: `lucide-react` only, one size per context (badge icons from `Badge`, `size-4` in tabs and nav). No text glyphs as icons (`✓ ✗ … ● ◌`).
 
 ## Type and spacing
