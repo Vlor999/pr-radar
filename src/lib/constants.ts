@@ -4,6 +4,15 @@ import type { ActionReason } from "./mcp-data.ts"
 /** page de soutien du mainteneur (Buy Me a Coffee) */
 export const BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/Vlor999"
 
+/* ---------- Retours sur GitHub (report.ts) ---------- */
+
+/** dépôt de l'app : code source, issues et discussions */
+export const REPO_URL = "https://github.com/Vlor999/pr-radar"
+/** catégorie des discussions ouvertes par « Envoyer un avis » (slug GitHub) */
+export const FEEDBACK_DISCUSSION_CATEGORY = "ideas"
+/** longueur max. d'une adresse préremplie : au-delà, GitHub ou le navigateur la refusent */
+export const GITHUB_PREFILL_MAX_URL_LENGTH = 8_000
+
 /* ---------- Réglages ---------- */
 
 /** durée du surlignage d'un réglage ouvert depuis la recherche */
@@ -64,7 +73,7 @@ export const ATTENTION_URGENT: ActionReason[] = ["reviewRequested", "ciFailing"]
 /** en dessous, `age` en heures (`5h`) ; au-delà, en jours (`3d`) */
 export const ATTENTION_AGE_HOURS_MAX = 48
 
-/* ---------- Prompts MCP (mcp-page.tsx) ---------- */
+/* ---------- Prompts MCP (settings/mcp.tsx) ---------- */
 
 /** Prompts servis par le shim (`prompts()` de `src-tauri/src/mcp.rs`) : nom, arguments affichés, clé du texte. Liste vérifiée par `mcp-prompts.json`. */
 export const MCP_PROMPTS = [
