@@ -31,9 +31,34 @@ test("les jetons GitHub de chaque préfixe sont masqués", () => {
   )
 })
 
-test("les jetons Slack sont masqués", () => {
-  for (const kind of "abprs")
+test("les jetons Slack sont masqués, jetons d'app et de rotation compris", () => {
+  for (const kind of "abprsecd")
     assert.equal(redact(`xox${kind}-1234-5678-abcdefgh`), "[redacted]")
+  assert.equal(redact("xapp-1-A0123-4567-abcdef"), "[redacted]")
+})
+
+test("un jeton collé à un autre mot est masqué", () => {
+  assert.equal(redact(`x_${GH}`), "x_[redacted]")
+  assert.equal(redact(`id:xoxb-1234-5678-abcdefgh`), "id:[redacted]")
+})
+
+test("un paramètre secret d'une adresse ou d'un formulaire est masqué", () => {
+  assert.equal(
+    redact("https://slack.com/api/x?access_token=abc123&channel=C1"),
+    "https://slack.com/api/x?access_token=[redacted]&channel=C1",
+  )
+  assert.equal(
+    redact("code=1&client_secret=s3cr3t&refresh_token=r1"),
+    "code=1&client_secret=[redacted]&refresh_token=[redacted]",
+  )
+  assert.equal(redact("x_token=abc def"), "x_token=[redacted] def")
+})
+
+test("un champ secret d'un JSON resté en texte est masqué", () => {
+  assert.equal(
+    redact('{"ok":true,"access_token":"abc","team":"T1"}'),
+    '{"ok":true,"access_token":"[redacted]","team":"T1"}',
+  )
 })
 
 test("la valeur d'un en-tête Authorization ou Bearer est masquée", () => {

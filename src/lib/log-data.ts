@@ -7,19 +7,30 @@ export const LOG_LEVELS: LogLevel[] = ["info", "warn", "error"]
 
 const REDACTED = "[redacted]"
 
-/** Jetons reconnus dans le texte : GitHub (ghp_, gho_, ghu_, ghs_, ghr_, github_pat_), Slack (xox?-). */
+/**
+ * Jetons reconnus dans le texte : GitHub (ghp_, gho_, ghu_, ghs_, ghr_, github_pat_), Slack (xox<lettre>-,
+ * xapp-). Sans limite de mot en tête (`x_ghp_…` est masqué aussi) ; pas de lookbehind non plus : WebKit
+ * avant Safari 16.4 (macOS sans minimumSystemVersion, Tauri : 10.13) refuserait de charger le module.
+ */
 const TOKEN_PATTERNS = [
-  /\bgh[pousr]_[A-Za-z0-9]{16,}/g,
-  /\bgithub_pat_[A-Za-z0-9_]{16,}/g,
-  /\bxox[abprs]-[A-Za-z0-9-]{8,}/g,
+  /gh[pousr]_[A-Za-z0-9]{16,}/g,
+  /github_pat_[A-Za-z0-9_]{16,}/g,
+  /xox[a-z]-[A-Za-z0-9-]{8,}/g,
+  /xapp-[A-Za-z0-9-]{8,}/g,
 ]
 /** `Authorization: …` (avec ou sans schéma), puis `Bearer …` / `token …` seuls */
 const AUTH_HEADER =
   /(\bauthorization["']?\s*[:=]\s*["']?)(?:(?:bearer|token|basic)\s+)?[^\s"',;}]+/gi
 const AUTH_SCHEME = /(\b(?:bearer|token)\s+)[A-Za-z0-9._~+/=-]{8,}/gi
+/** noms de paramètres secrets (adresse, formulaire, JSON) */
+const SECRET_PARAM =
+  "access_token|refresh_token|id_token|client_secret|password|secret|token"
+/** `access_token=…` dans une adresse ou un corps de formulaire (`x_token=` compris) */
+const SECRET_QUERY = new RegExp(`(${SECRET_PARAM})=[^&\\s"',;#]+`, "gi")
+/** `"access_token": "…"` dans du JSON resté en texte */
+const SECRET_JSON = new RegExp(`("(?:${SECRET_PARAM})"\\s*:\\s*)"[^"]*"`, "gi")
 /** clés dont la valeur n'est jamais écrite */
-const SECRET_KEY =
-  /^(authorization|token|access_token|refresh_token|password|secret)$/i
+const SECRET_KEY = new RegExp(`^(authorization|${SECRET_PARAM})$`, "i")
 
 const redactText = (s: string) => {
   let out = s
@@ -27,6 +38,8 @@ const redactText = (s: string) => {
   out = out
     .replace(AUTH_HEADER, `$1${REDACTED}`)
     .replace(AUTH_SCHEME, `$1${REDACTED}`)
+    .replace(SECRET_QUERY, `$1=${REDACTED}`)
+    .replace(SECRET_JSON, `$1"${REDACTED}"`)
   return out.length > LOG_STRING_MAX_CHARS
     ? `${out.slice(0, LOG_STRING_MAX_CHARS)}…`
     : out
