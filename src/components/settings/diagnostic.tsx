@@ -30,10 +30,10 @@ import {
 import { toJsonl } from "@/lib/log-data"
 import {
   logDaysOf,
-  updateSettings,
-  useSettings,
+  updateLogSettings,
+  useLogSettings,
   type LogRetention,
-} from "@/lib/settings"
+} from "@/lib/log-settings"
 import type { LogDir, LogEntry, LogLevel } from "@/lib/types"
 
 const S = strings(
@@ -54,6 +54,8 @@ const S = strings(
       `Nombre de jours (${min} à ${max})`,
     folder: "Dossier",
     folderDefault: "Dossier par défaut de l'app",
+    moved:
+      "Les fichiers déjà écrits restent dans l'ancien dossier : supprime-les à la main si besoin.",
     change: "Changer…",
     reset: "Par défaut",
     open: "Ouvrir le dossier",
@@ -87,6 +89,8 @@ const S = strings(
       `Number of days (${min} to ${max})`,
     folder: "Folder",
     folderDefault: "App's default folder",
+    moved:
+      "Files already written stay in the previous folder: delete them by hand if needed.",
     change: "Change…",
     reset: "Reset to default",
     open: "Open folder",
@@ -118,36 +122,41 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 /** Réglages du journal : activation, conservation, dossier. */
 function LogSection() {
   const t = useStrings(S)
-  const s = useSettings()
+  const s = useLogSettings()
+  /** dossier changé pendant cette visite : rappel que les anciens fichiers restent où ils sont */
+  const [moved, setMoved] = useState(false)
   const [dir, setDir] = useState<LogDir | null>(null)
-  const [days, setDays] = useState(String(s.logRetentionDays))
+  const [days, setDays] = useState(String(s.retentionDays))
   const [error, setError] = useState("")
 
   // dossier effectif affiché ; un dossier enregistré devenu inutilisable : erreur affichée
   useEffect(() => {
-    resolveLogDir(s.logDir).then(
+    resolveLogDir(s.dir).then(
       (d) => {
         setDir(d)
         setError("")
       },
       (e: unknown) => setError(message(e)),
     )
-  }, [s.logDir])
-  useEffect(() => setDays(String(s.logRetentionDays)), [s.logRetentionDays])
+  }, [s.dir])
+  useEffect(() => setDays(String(s.retentionDays)), [s.retentionDays])
 
   /** conservation changée : purge tout de suite avec la nouvelle durée */
   const retain = (patch: {
-    logRetention?: LogRetention
-    logRetentionDays?: number
+    retention?: LogRetention
+    retentionDays?: number
   }) => {
-    updateSettings(patch)
+    updateLogSettings(patch)
     purgeLog().catch((e: unknown) => setError(message(e)))
   }
 
   const change = async () => {
     try {
       const picked = await pickLogDir()
-      if (picked) updateSettings({ logDir: picked })
+      if (picked && picked !== s.dir) {
+        updateLogSettings({ dir: picked })
+        setMoved(true)
+      }
     } catch (e) {
       setError(message(e))
     }
@@ -156,8 +165,8 @@ function LogSection() {
   const applyDays = () => {
     const n = Number(days)
     const valid = logDaysOf(n) === n
-    if (!valid) setDays(String(s.logRetentionDays))
-    else if (n !== s.logRetentionDays) retain({ logRetentionDays: n })
+    if (!valid) setDays(String(s.retentionDays))
+    else if (n !== s.retentionDays) retain({ retentionDays: n })
   }
 
   return (
@@ -173,8 +182,8 @@ function LogSection() {
         description={t.enableDescription}
       >
         <Toggle
-          checked={s.logEnabled}
-          onChange={(v) => updateSettings({ logEnabled: v })}
+          checked={s.enabled}
+          onChange={(v) => updateLogSettings({ enabled: v })}
           labelledBy="log-enable-label"
         />
       </Row>
@@ -186,14 +195,14 @@ function LogSection() {
       >
         <Segmented<LogRetention>
           labelledBy="log-retention-label"
-          value={s.logRetention}
-          onChange={(v) => retain({ logRetention: v })}
+          value={s.retention}
+          onChange={(v) => retain({ retention: v })}
           options={(["24h", "7d", "custom"] as const).map((v) => ({
             value: v,
             label: t.retentions[v],
           }))}
         />
-        {s.logRetention === "custom" && (
+        {s.retention === "custom" && (
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Input
               type="number"
@@ -216,19 +225,22 @@ function LogSection() {
         label={t.folder}
         description={
           <span className="break-all">
-            {dir?.dir ?? s.logDir ?? ""}
-            {!s.logDir && dir && ` · ${t.folderDefault}`}
+            {dir?.dir ?? s.dir ?? ""}
+            {!s.dir && dir && ` · ${t.folderDefault}`}
           </span>
         }
       >
         <Button variant="outline" size="sm" onClick={() => void change()}>
           {t.change}
         </Button>
-        {s.logDir && (
+        {s.dir && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => updateSettings({ logDir: null })}
+            onClick={() => {
+              updateLogSettings({ dir: null })
+              setMoved(true)
+            }}
           >
             {t.reset}
           </Button>
@@ -244,6 +256,11 @@ function LogSection() {
           {t.open}
         </Button>
       </Row>
+      {moved && (
+        <p aria-live="polite" className="pb-3 text-xs text-muted-foreground">
+          {t.moved}
+        </p>
+      )}
       {error && (
         <p role="alert" className="pb-3 text-xs break-all text-destructive">
           {t.error(error)}
@@ -265,7 +282,7 @@ const time = (ts: number) =>
 /** Dernières entrées du journal, filtrées par niveau ; copie et export. */
 function ViewerSection() {
   const t = useStrings(S)
-  const { logEnabled, logDir } = useSettings()
+  const { enabled, dir: logDir } = useLogSettings()
   const [filter, setFilter] = useState<Filter>("all")
   const [entries, setEntries] = useState<LogEntry[] | null>(null)
   const [error, setError] = useState("")
@@ -332,7 +349,7 @@ function ViewerSection() {
         </Button>
         <Feedback msg={msg} />
       </div>
-      {!logEnabled && (
+      {!enabled && (
         <p className="pb-2 text-xs text-muted-foreground">{t.disabled}</p>
       )}
       {error && (

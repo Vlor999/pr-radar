@@ -42,6 +42,10 @@ test("le thème, la dernière notification et l'historique MCP restent propres �
   assert.equal(isSynced("pr-radar:mcp-history"), false)
 })
 
+test("les réglages du journal local restent dans la fenêtre de l'app", () => {
+  assert.equal(isSynced("pr-radar:log-settings"), false)
+})
+
 test("une clé d'une autre application n'est pas partagée", () => {
   assert.equal(isSynced("other"), false)
 })

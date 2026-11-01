@@ -9,7 +9,7 @@ import {
 import { parseEntries, redact, retentionCutoff } from "./log-data.ts"
 import { invoke, isWeb } from "./platform.ts"
 import { osName } from "./report.ts"
-import { getSettings } from "./settings.ts"
+import { getLogSettings } from "./log-settings.ts"
 import type { LogDir, LogEntry, LogLevel } from "./types.ts"
 
 /**
@@ -24,7 +24,7 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let started = false
 
 /** dossier des réglages, null = celui par défaut ; relu à chaque commande : un changement vaut tout de suite */
-const dir = () => getSettings().logDir
+const dir = () => getLogSettings().dir
 
 /** Écrit le lot en attente ; résolu une fois écrit (ou perdu). */
 function flush(): Promise<void> {
@@ -42,7 +42,7 @@ function flush(): Promise<void> {
 /** Ajoute une entrée au journal (si activé). `data` : identifiants, compteurs, codes d'erreur ; jamais de texte saisi ou lu. */
 export function log(level: LogLevel, event: string, data?: unknown) {
   try {
-    if (isWeb || !getSettings().logEnabled) return
+    if (isWeb || !getLogSettings().enabled) return
     buffer.push({
       ts: Date.now(),
       level,
@@ -61,7 +61,7 @@ export function log(level: LogLevel, event: string, data?: unknown) {
 export const purgeLog = () =>
   invoke<number>("log_purge", {
     dir: dir(),
-    cutoffMs: retentionCutoff(getSettings(), Date.now()),
+    cutoffMs: retentionCutoff(getLogSettings(), Date.now()),
   })
 
 /** Au lancement de l'app de bureau : entrée de démarrage, purge maintenant puis toutes les heures. */
@@ -74,7 +74,7 @@ export function startLog() {
       log("info", "app.start", { version, os: osName(navigator.userAgent) }),
     )
   const purge = () => {
-    if (getSettings().logEnabled) purgeLog().catch(() => {})
+    if (getLogSettings().enabled) purgeLog().catch(() => {})
   }
   purge()
   setInterval(purge, LOG_PURGE_INTERVAL_MS)

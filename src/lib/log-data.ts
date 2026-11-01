@@ -1,5 +1,5 @@
 import { DAY_MS, LOG_STRING_MAX_CHARS } from "./constants.ts"
-import type { Settings } from "./settings.ts"
+import type { LogSettings } from "./log-settings.ts"
 import type { LogEntry, LogLevel, Pr } from "./types.ts"
 
 /** Niveaux du journal, du moins au plus grave (mêmes valeurs que src-tauri/src/log.rs). */
@@ -66,17 +66,12 @@ export function redact(v: unknown, depth = 0): unknown {
 
 /** Jours gardés selon le réglage de conservation. */
 export const retentionDays = (
-  s: Pick<Settings, "logRetention" | "logRetentionDays">,
-) =>
-  s.logRetention === "24h"
-    ? 1
-    : s.logRetention === "7d"
-      ? 7
-      : s.logRetentionDays
+  s: Pick<LogSettings, "retention" | "retentionDays">,
+) => (s.retention === "24h" ? 1 : s.retention === "7d" ? 7 : s.retentionDays)
 
 /** Horodatage (ms) avant lequel les entrées sont purgées. */
 export const retentionCutoff = (
-  s: Pick<Settings, "logRetention" | "logRetentionDays">,
+  s: Pick<LogSettings, "retention" | "retentionDays">,
   now: number,
 ) => now - retentionDays(s) * DAY_MS
 

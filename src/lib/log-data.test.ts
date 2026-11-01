@@ -115,22 +115,19 @@ test("une structure cyclique ne boucle pas", () => {
 })
 
 test("conservation : 24 h, 7 jours, ou le nombre de jours choisi", () => {
-  assert.equal(retentionDays({ logRetention: "24h", logRetentionDays: 30 }), 1)
-  assert.equal(retentionDays({ logRetention: "7d", logRetentionDays: 30 }), 7)
-  assert.equal(
-    retentionDays({ logRetention: "custom", logRetentionDays: 30 }),
-    30,
-  )
+  assert.equal(retentionDays({ retention: "24h", retentionDays: 30 }), 1)
+  assert.equal(retentionDays({ retention: "7d", retentionDays: 30 }), 7)
+  assert.equal(retentionDays({ retention: "custom", retentionDays: 30 }), 30)
 })
 
 test("la limite de purge est la conservation avant maintenant", () => {
   const now = Date.UTC(2026, 10, 1, 12)
   assert.equal(
-    retentionCutoff({ logRetention: "24h", logRetentionDays: 30 }, now),
+    retentionCutoff({ retention: "24h", retentionDays: 30 }, now),
     now - DAY_MS,
   )
   assert.equal(
-    retentionCutoff({ logRetention: "custom", logRetentionDays: 3 }, now),
+    retentionCutoff({ retention: "custom", retentionDays: 3 }, now),
     Date.UTC(2026, 9, 29, 12),
   )
 })
