@@ -44,6 +44,8 @@ export type Data = {
   /** PR des autres qui attendent ma review, tous repos confondus, et comptes lus */
   reviews: Reviews
   fetchedAt: string
+  /** jours (UTC, inclus) des PR mergées lues au dernier chargement (`RepoTree.merged`) */
+  mergedWindow?: { from: string; to: string }
   loading: boolean
   error?: string
   /** erreur de jeton : l'interface propose de se reconnecter */
@@ -104,13 +106,17 @@ export async function reload({ measure = false } = {}) {
     repos = repos.filter((r) => findAccount(splitKey(r).account))
     const now = new Date()
     const queried = allAccounts()
+    const mergedWindow = {
+      from: day(
+        new Date(now.getTime() - getSettings().mergedDays * 86_400_000),
+      ),
+      to: day(now),
+    }
     const [{ data: fetched, errors }, recent, found] = await Promise.all([
       fetchPrs(repos),
-      fetchMerged(
-        repos,
-        day(new Date(now.getTime() - getSettings().mergedDays * 86_400_000)),
-        day(now),
-      ).catch(() => [] as MergedPr[]),
+      fetchMerged(repos, mergedWindow.from, mergedWindow.to).catch(
+        () => [] as MergedPr[],
+      ),
       // tous les comptes en échec : même traitement qu'un échec partiel
       fetchReviews().catch((error: unknown) => ({
         data: [],
@@ -150,6 +156,7 @@ export async function reload({ measure = false } = {}) {
         merged: recent.filter((p) => p.repo === repo),
       })),
       fetchedAt: now.toISOString(),
+      mergedWindow,
       loading: false,
     })
     // relevé du quota de chaque compte, sans faire attendre la fin de l'actualisation : base du mode « auto »
