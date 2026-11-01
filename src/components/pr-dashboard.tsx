@@ -46,6 +46,13 @@ import { RepoSection, type OpenState } from "@/components/repo-section"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Sheet,
   SheetContent,
   SheetTitle,
@@ -804,24 +811,44 @@ export function PrDashboard({
                       ))}
                     </div>
                     <div className="flex flex-wrap items-center gap-1">
-                      <label
-                        htmlFor="sort"
-                        className="text-sm text-muted-foreground"
+                      <span
+                        id="sort"
+                        className="pl-1 text-sm text-muted-foreground"
                       >
                         {t.sort}
-                      </label>
-                      <select
-                        id="sort"
+                      </span>
+                      {/* même gabarit que les boutons ghost `sm` voisins ; liste aux couleurs du thème */}
+                      <Select
+                        items={SORTS.map((s) => ({
+                          value: s.id,
+                          label: t.sorts[s.id],
+                        }))}
                         value={sort}
-                        onChange={(e) => setSort(e.target.value)}
-                        className="h-8 rounded-lg border bg-background px-2 text-sm"
+                        onValueChange={(v) => v && setSort(v)}
                       >
-                        {SORTS.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {t.sorts[s.id]}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger
+                          size="sm"
+                          aria-labelledby="sort"
+                          className="rounded-md bg-transparent px-2.5 font-medium hover:bg-muted dark:bg-transparent dark:hover:bg-muted/50"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent
+                          alignItemWithTrigger={false}
+                          align="start"
+                          className="rounded-xl p-1"
+                        >
+                          {SORTS.map((s) => (
+                            <SelectItem
+                              key={s.id}
+                              value={s.id}
+                              className="rounded-lg py-1.5 pl-2.5 focus:bg-muted data-highlighted:bg-muted"
+                            >
+                              {t.sorts[s.id]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       {seen.count > 0 && (
                         <Button
                           size="sm"
