@@ -3,12 +3,17 @@ import { listen } from "@tauri-apps/api/event"
 import { useSyncExternalStore } from "react"
 
 import { allAccounts } from "./auth"
+import { cachedChecks } from "./github"
 import {
   attentionPayload,
+  checksPayload,
   htmlToText,
+  mergedPayload,
   parentsOf,
   parseAttentionArgs,
+  parseChecksArgs,
   parseHistory,
+  parseMergedArgs,
   parsePrsArgs,
   prPayload,
   prsPayload,
@@ -31,7 +36,7 @@ import type { McpCall, McpInfo } from "./types"
 
 /**
  * Serveur MCP local, en lecture seule. Rust reçoit l'appel du shim (`pr-radar --mcp`) sur le socket,
- * émet `mcp-request` ; la réponse est calculée ici depuis les stores (aucun appel réseau) et renvoyée
+ * émet `mcp-request` ; la réponse est calculée ici depuis les stores et caches (aucun appel réseau) et renvoyée
  * par `mcp_response`. Sans réponse en 5 s, Rust répond une erreur et émet `mcp-timeout`.
  */
 
@@ -167,6 +172,33 @@ function answer(tool: string, args: unknown): McpReply {
           me,
           Date.now(),
           parsed.repo,
+        ),
+      ),
+    }
+  }
+  if (tool === "get_checks") {
+    const parsed = parseChecksArgs(args)
+    if (!parsed.ok) return { error: parsed.error }
+    const r = checksPayload(
+      ctx,
+      parsed.url,
+      d.prs,
+      d.reviews.reviews,
+      (p) => cachedChecks(p.repo, p.number, p.sha, p.ci),
+      Date.now(),
+    )
+    return r.ok ? { text: JSON.stringify(r.data) } : { error: r.error }
+  }
+  if (tool === "get_merged") {
+    const parsed = parseMergedArgs(args)
+    if (!parsed.ok) return { error: parsed.error }
+    return {
+      text: JSON.stringify(
+        mergedPayload(
+          ctx,
+          d.trees.flatMap((t) => t.merged),
+          d.mergedWindow,
+          parsed.filters,
         ),
       ),
     }

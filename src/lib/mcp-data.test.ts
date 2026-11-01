@@ -6,13 +6,19 @@ import {
   ageLabel,
   attentionPayload,
   callsToday,
+  checksPayload,
   htmlToText,
   installSnippet,
+  isDay,
+  leadTimeStats,
   MCP_HISTORY_MAX,
+  mergedPayload,
   normalizeUrl,
   parentsOf,
   parseAttentionArgs,
+  parseChecksArgs,
   parseHistory,
+  parseMergedArgs,
   parsePrsArgs,
   prPayload,
   prsPayload,
@@ -22,7 +28,15 @@ import {
   type McpContext,
 } from "./mcp-data.ts"
 import { buildTree } from "./tree.ts"
-import type { McpCall, Pr, ReviewPr, SlackMention } from "./types.ts"
+import type {
+  CiJob,
+  CiView,
+  McpCall,
+  MergedPr,
+  Pr,
+  ReviewPr,
+  SlackMention,
+} from "./types.ts"
 
 const pr = (number: number, extra: Partial<Pr> = {}): Pr => ({
   id: `PR_${number}`,
@@ -851,4 +865,335 @@ test("attention : arguments validés comme ceux de get_prs", () => {
     ok: false,
     error: "get_attention: arguments must be an object",
   })
+})
+
+/* ---------- get_checks ---------- */
+
+const ciJob = (extra: Partial<CiJob> = {}): CiJob => ({
+  name: "test",
+  state: "success",
+  startedAt: "2026-01-01T10:00:00Z",
+  completedAt: "2026-01-01T10:01:31Z",
+  url: "https://github.com/acme/web/actions/runs/1/job/2",
+  ...extra,
+})
+
+const view = (jobs: CiJob[]): CiView => ({
+  workflows: [
+    {
+      key: "s1",
+      name: "CI",
+      file: "ci.yml",
+      event: "pull_request",
+      runId: 7,
+      jobs,
+      hiddenJobs: 0,
+    },
+  ],
+  moreChecks: false,
+})
+
+const CI_NOW = Date.parse("2026-01-01T10:05:00Z")
+
+test("checks : vue CI en cache → jobs compacts, durée, lien seulement sur les échecs, compte par état", () => {
+  const cached = view([
+    ciJob({ name: "lint" }),
+    ciJob({ name: "test", state: "failure" }),
+    ciJob({ name: "e2e", state: "queued", startedAt: null, completedAt: null }),
+  ])
+  const r = checksPayload(
+    ctx,
+    "https://github.com/acme/web/pull/1/checks",
+    [pr(1, { sha: "abc", ci: "FAILURE" })],
+    [],
+    () => ({ value: cached, at: CI_NOW }),
+    CI_NOW,
+  )
+  assert.deepEqual(r, {
+    ok: true,
+    data: {
+      fetchedAt: "2026-01-01T00:00:00Z",
+      pr: {
+        url: "https://github.com/acme/web/pull/1",
+        repo: "acme/web",
+        number: 1,
+        sha: "abc",
+        ci: "FAILURE",
+      },
+      checkedAt: "2026-01-01T10:05:00.000Z",
+      counts: { success: 1, failure: 1, queued: 1 },
+      workflows: [
+        {
+          name: "CI",
+          file: "ci.yml",
+          runId: 7,
+          jobs: [
+            { name: "lint", state: "success", duration: "1m 31s" },
+            {
+              name: "test",
+              state: "failure",
+              duration: "1m 31s",
+              url: "https://github.com/acme/web/actions/runs/1/job/2",
+            },
+            { name: "e2e", state: "queued" },
+          ],
+        },
+      ],
+    },
+  })
+})
+
+test("checks : job en cours → durée jusqu'à maintenant", () => {
+  const cached = view([ciJob({ state: "running", completedAt: null })])
+  const r = checksPayload(
+    ctx,
+    pr(1).url,
+    [pr(1)],
+    [],
+    () => ({
+      value: cached,
+      at: CI_NOW,
+    }),
+    CI_NOW,
+  )
+  const data = (
+    r as { data: { workflows: { jobs: { duration: string }[] }[] } }
+  ).data
+  assert.equal(data.workflows[0].jobs[0].duration, "5m 0s")
+})
+
+test("checks : statuts de commit nommés, sans fichier ni run", () => {
+  const cached: CiView = {
+    workflows: [
+      {
+        key: "statuses",
+        name: null,
+        file: null,
+        event: null,
+        runId: null,
+        jobs: [
+          ciJob({ name: "ci/circleci", startedAt: null, completedAt: null }),
+        ],
+        hiddenJobs: 0,
+      },
+    ],
+    moreChecks: true,
+  }
+  const r = checksPayload(
+    ctx,
+    pr(1).url,
+    [pr(1)],
+    [],
+    () => ({
+      value: cached,
+      at: CI_NOW,
+    }),
+    CI_NOW,
+  )
+  const data = (r as { data: Record<string, unknown> }).data
+  assert.deepEqual(data.workflows, [
+    {
+      name: "commit statuses",
+      jobs: [{ name: "ci/circleci", state: "success" }],
+    },
+  ])
+  assert.equal(data.moreChecks, true)
+})
+
+test("checks : pas en cache → notLoaded renvoie vers la vue CI ou gh pr checks, sans jobs", () => {
+  const r = checksPayload(
+    ctx,
+    pr(1).url,
+    [pr(1, { ci: "FAILURE" })],
+    [],
+    () => null,
+    CI_NOW,
+  )
+  assert.equal(r.ok, true)
+  const data = (r as { data: Record<string, unknown> }).data
+  assert.equal(data.workflows, undefined)
+  assert.match(String(data.notLoaded), /CI pill/)
+  assert.match(
+    String(data.notLoaded),
+    /gh pr checks https:\/\/github\.com\/acme\/web\/pull\/1/,
+  )
+  assert.deepEqual((data.pr as Record<string, unknown>).ci, "FAILURE")
+})
+
+test("checks : PR de la file « À reviewer » ou inconnue → erreur explicite", () => {
+  const queued = checksPayload(ctx, rv().url, [], [rv()], () => null, CI_NOW)
+  assert.equal(queued.ok, false)
+  assert.match(
+    (queued as { error: string }).error,
+    /^PR waiting for your review: get_checks/,
+  )
+  const missing = checksPayload(ctx, pr(2).url, [pr(1)], [], () => null, CI_NOW)
+  assert.match((missing as { error: string }).error, /^PR not found/)
+})
+
+test("checks : arguments validés comme dans le shim", () => {
+  assert.deepEqual(parseChecksArgs({ url: "u" }), { ok: true, url: "u" })
+  for (const [args, error] of [
+    [{}, "get_checks: missing `url` argument"],
+    [null, "get_checks: missing `url` argument"],
+    [{ url: 1 }, "get_checks: missing `url` argument"],
+    [{ url: "u", sha: "x" }, "get_checks: unknown argument `sha`"],
+    [[1], "get_checks: arguments must be an object"],
+  ] as const)
+    assert.deepEqual(
+      parseChecksArgs(args),
+      { ok: false, error },
+      JSON.stringify(args),
+    )
+})
+
+/* ---------- get_merged ---------- */
+
+const merged = (number: number, extra: Partial<MergedPr> = {}): MergedPr => ({
+  repo: "acme/web",
+  number,
+  title: `Merged ${number}`,
+  url: `https://github.com/acme/web/pull/${number}`,
+  createdAt: "2026-01-01T00:00:00Z",
+  mergedAt: "2026-01-02T00:00:00Z",
+  ...extra,
+})
+
+const WINDOW = { from: "2026-01-01", to: "2026-01-08" }
+
+test("merged : délai ouverture → merge par PR, plus récentes d'abord, stats médiane et p90", () => {
+  const r = mergedPayload(
+    ctx,
+    [
+      merged(1, { mergedAt: "2026-01-01T00:45:00Z" }),
+      merged(2, { mergedAt: "2026-01-04T00:00:00Z" }),
+      merged(3, { mergedAt: "2026-01-01T05:00:00Z" }),
+    ],
+    WINDOW,
+  )
+  assert.deepEqual(r, {
+    fetchedAt: "2026-01-01T00:00:00Z",
+    window: WINDOW,
+    stats: { count: 3, medianLeadTime: "5h", p90LeadTime: "3d" },
+    prs: [
+      {
+        repo: "acme/web",
+        number: 2,
+        title: "Merged 2",
+        url: "https://github.com/acme/web/pull/2",
+        mergedAt: "2026-01-04T00:00:00Z",
+        leadTime: "3d",
+      },
+      {
+        repo: "acme/web",
+        number: 3,
+        title: "Merged 3",
+        url: "https://github.com/acme/web/pull/3",
+        mergedAt: "2026-01-01T05:00:00Z",
+        leadTime: "5h",
+      },
+      {
+        repo: "acme/web",
+        number: 1,
+        title: "Merged 1",
+        url: "https://github.com/acme/web/pull/1",
+        mergedAt: "2026-01-01T00:45:00Z",
+        leadTime: "45m",
+      },
+    ],
+  })
+})
+
+test("merged : médiane d'un nombre pair = moyenne des deux du milieu, p90 au rang le plus proche", () => {
+  assert.deepEqual(leadTimeStats([4, 1, 3, 2]), { median: 2.5, p90: 4 })
+  assert.deepEqual(leadTimeStats([...Array(10).keys()].map((i) => i + 1)), {
+    median: 5.5,
+    p90: 9,
+  })
+  assert.equal(leadTimeStats([]), null)
+})
+
+test("merged : from, to (jour UTC du merge, inclus) et repo filtrent", () => {
+  const list = [
+    merged(1, { mergedAt: "2026-01-02T23:59:00Z" }),
+    merged(2, { mergedAt: "2026-01-03T00:00:00Z" }),
+    merged(3, { repo: "Globex/api", mergedAt: "2026-01-03T10:00:00Z" }),
+    merged(4, { mergedAt: "2026-01-05T00:00:00Z" }),
+  ]
+  const numbers = (f: Parameters<typeof mergedPayload>[3]) =>
+    ((mergedPayload(ctx, list, WINDOW, f).prs ?? []) as MergedPr[]).map(
+      (p) => p.number,
+    )
+  assert.deepEqual(numbers({ from: "2026-01-03", to: "2026-01-03" }), [3, 2])
+  assert.deepEqual(numbers({ to: "2026-01-02" }), [1])
+  assert.deepEqual(numbers({ repo: "globex" }), [3])
+})
+
+test("merged : plage au-delà de la fenêtre chargée → outsideWindow nomme la fenêtre", () => {
+  const r = mergedPayload(ctx, [merged(1)], WINDOW, { from: "2025-12-01" })
+  assert.match(String(r.outsideWindow), /2025-12-01\.\.2026-01-08/)
+  assert.match(String(r.outsideWindow), /\(2026-01-01\.\.2026-01-08,/)
+  assert.equal(mergedPayload(ctx, [merged(1)], WINDOW).outsideWindow, undefined)
+})
+
+test("merged : aucune PR → stats et prs absentes ; rien chargé → notLoaded", () => {
+  assert.deepEqual(mergedPayload(ctx, [], WINDOW), {
+    fetchedAt: "2026-01-01T00:00:00Z",
+    window: WINDOW,
+  })
+  assert.match(
+    String(mergedPayload(ctx, [], undefined).notLoaded),
+    /not loaded yet/,
+  )
+})
+
+test("merged : createdAt absent (donnée ancienne) → pas de leadTime, PR gardée", () => {
+  const old = { ...merged(1), createdAt: undefined } as unknown as MergedPr
+  const r = mergedPayload(ctx, [old], WINDOW)
+  assert.deepEqual(r.stats, { count: 1 })
+  assert.equal((r.prs as Record<string, unknown>[])[0].leadTime, undefined)
+})
+
+test("merged : jour YYYY-MM-DD réel, mêmes règles que le shim", () => {
+  for (const ok of ["2024-02-29", "2000-02-29", "2026-12-31", "2026-04-30"])
+    assert.equal(isDay(ok), true, ok)
+  for (const bad of [
+    "2025-02-29",
+    "1900-02-29",
+    "2026-04-31",
+    "2026-13-01",
+    "2026-00-10",
+    "2026-01-00",
+    "2026-1-01",
+    "2026-10-01T00:00",
+    "２０２６-10-01",
+  ])
+    assert.equal(isDay(bad), false, bad)
+})
+
+test("merged : arguments validés comme dans le shim", () => {
+  assert.deepEqual(
+    parseMergedArgs({ from: "2026-01-01", to: null, repo: "a" }),
+    {
+      ok: true,
+      filters: { from: "2026-01-01", repo: "a" },
+    },
+  )
+  assert.deepEqual(parseMergedArgs(null), { ok: true, filters: {} })
+  for (const [args, error] of [
+    [{ from: "2026-13-01" }, "get_merged: `from` must be a date YYYY-MM-DD"],
+    [{ to: 20261001 }, "get_merged: `to` must be a date YYYY-MM-DD"],
+    [
+      { from: "2026-10-02", to: "2026-10-01" },
+      "get_merged: `from` must not be after `to`",
+    ],
+    [{ repo: 1 }, "get_merged: `repo` must be a string"],
+    [{ days: 7 }, "get_merged: unknown argument `days`"],
+    ["acme", "get_merged: arguments must be an object"],
+  ] as const)
+    assert.deepEqual(
+      parseMergedArgs(args),
+      { ok: false, error },
+      JSON.stringify(args),
+    )
 })

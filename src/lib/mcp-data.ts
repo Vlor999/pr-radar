@@ -1,8 +1,11 @@
 // Serveur MCP local : logique pure (testée). Le câblage Tauri est dans `mcp.ts`.
+import { formatDuration, jobDurationMs } from "./checks.ts"
 import { ATTENTION_AGE_HOURS_MAX, ATTENTION_URGENT } from "./constants.ts"
 import { HOUR_MS, MINUTE_MS } from "./quiet.ts"
 import type {
+  CiView,
   McpCall,
+  MergedPr,
   Note,
   Pr,
   PrNode,
@@ -36,7 +39,8 @@ const BLOCKS = new Set([
   "HR",
 ])
 
-export type McpTool = "get_prs" | "get_pr" | "get_attention"
+export type McpTool =
+  "get_prs" | "get_pr" | "get_attention" | "get_checks" | "get_merged"
 
 export type SlackStatus = "connected" | "expired" | "disabled"
 
@@ -456,15 +460,9 @@ export const prPayload = (
   mentionsOf: MentionsOf,
   toText: (html: string) => string,
 ): { ok: true; data: unknown } | { ok: false; error: string } => {
-  const key = normalizeUrl(url)
-  const pr = prs.find((p) => normalizeUrl(p.url) === key)
-  if (!pr)
-    return {
-      ok: false,
-      error: reviews.some((r) => normalizeUrl(r.url) === key)
-        ? `PR waiting for your review: get_pr only covers the open PRs of the "Open PRs" tree, yours and those where you are assigned, mentioned or involved (details of the review queue are not loaded). Use get_prs for its summary.`
-        : `PR not found among the open PRs loaded in PR Radar (yours, or where you are assigned, mentioned or involved): ${url}`,
-    }
+  const found = findTreePr("get_pr", url, prs, reviews)
+  if (!found.ok) return found
+  const pr = found.pr
   const comment = (c: Thread["comments"][number] | Note) => ({
     author: c.author,
     at: c.at,
@@ -489,6 +487,230 @@ export const prPayload = (
       },
     }),
   }
+}
+
+/* ---------- `get_checks` ---------- */
+
+/** Arguments de `get_checks` (déjà validés par le shim, revus ici par défense, mêmes règles) : `url` seul, requis. */
+export const parseChecksArgs = (
+  args: unknown,
+): { ok: true; url: string } | { ok: false; error: string } => {
+  if (args != null && (typeof args !== "object" || Array.isArray(args)))
+    return { ok: false, error: "get_checks: arguments must be an object" }
+  const a = (args ?? {}) as Record<string, unknown>
+  const unknown = Object.keys(a).find((k) => k !== "url")
+  if (unknown)
+    return { ok: false, error: `get_checks: unknown argument \`${unknown}\`` }
+  if (typeof a.url !== "string")
+    return { ok: false, error: "get_checks: missing `url` argument" }
+  return { ok: true, url: a.url }
+}
+
+/** Vue CI en mémoire d'une PR de l'arbre (`cachedChecks`), `null` : pas lue ou plus fraîche. */
+export type ChecksOf = (pr: Pr) => { value: CiView; at: number } | null
+
+/** PR ouverte de l'arbre par URL ; sinon le message d'erreur pour l'agent (file « À reviewer » ou inconnue). */
+const findTreePr = (
+  tool: string,
+  url: string,
+  prs: Pr[],
+  reviews: ReviewPr[],
+): { ok: true; pr: Pr } | { ok: false; error: string } => {
+  const key = normalizeUrl(url)
+  const pr = prs.find((p) => normalizeUrl(p.url) === key)
+  if (pr) return { ok: true, pr }
+  return {
+    ok: false,
+    error: reviews.some((r) => normalizeUrl(r.url) === key)
+      ? `PR waiting for your review: ${tool} only covers the open PRs of the "Open PRs" tree, yours and those where you are assigned, mentioned or involved (details of the review queue are not loaded). Use get_prs for its summary.`
+      : `PR not found among the open PRs loaded in PR Radar (yours, or where you are assigned, mentioned or involved): ${url}`,
+  }
+}
+
+/**
+ * `get_checks` : jobs de la CI d'une PR de l'arbre, depuis le cache de la vue CI seulement (aucun appel).
+ * Pas en cache : `notLoaded` dit d'ouvrir la vue CI dans PR Radar ou d'utiliser `gh pr checks`.
+ * Durées comme la vue CI (`1m 31s`), lien seulement sur les jobs en échec. Valeurs par défaut omises.
+ */
+export const checksPayload = (
+  ctx: McpContext,
+  url: string,
+  prs: Pr[],
+  reviews: ReviewPr[],
+  checksOf: ChecksOf,
+  now: number,
+): { ok: true; data: unknown } | { ok: false; error: string } => {
+  const found = findTreePr("get_checks", url, prs, reviews)
+  if (!found.ok) return found
+  const p = found.pr
+  const head = {
+    fetchedAt: ctx.fetchedAt,
+    loading: ctx.loading,
+    error: ctx.error,
+    pr: { url: p.url, repo: p.repo, number: p.number, sha: p.sha, ci: p.ci },
+  }
+  const hit = checksOf(p)
+  if (!hit)
+    return {
+      ok: true,
+      data: omitDefaults({
+        ...head,
+        notLoaded: `CI jobs of this PR are not loaded in PR Radar (read only when its CI view is opened, no network call from this tool). Open the CI pill of the PR in PR Radar, then retry, or run \`gh pr checks ${p.url}\`.`,
+      }),
+    }
+  const counts: Record<string, number> = {}
+  const workflows = hit.value.workflows.map((w) => ({
+    name: w.name ?? "commit statuses",
+    file: w.file,
+    runId: w.runId,
+    jobs: w.jobs.map((j) => {
+      counts[j.state] = (counts[j.state] ?? 0) + 1
+      const ms = jobDurationMs(j, now)
+      return {
+        name: j.name,
+        state: j.state,
+        duration: ms === null ? null : formatDuration(ms),
+        url: j.state === "failure" ? j.url : null,
+      }
+    }),
+    // jobs au-delà de la borne de la requête : non lus
+    hiddenJobs: w.hiddenJobs,
+  }))
+  return {
+    ok: true,
+    data: omitDefaults({
+      ...head,
+      checkedAt: new Date(hit.at).toISOString(),
+      counts,
+      workflows,
+      moreChecks: hit.value.moreChecks,
+    }),
+  }
+}
+
+/* ---------- `get_merged` ---------- */
+
+const MERGED_ARGS = new Set(["from", "to", "repo"])
+const DAY_FORMAT = /^\d{4}-\d{2}-\d{2}$/
+
+/** Jour `YYYY-MM-DD` réel (mois 1-12, jour du mois, années bissextiles) ; mêmes règles que `is_day` du shim. */
+export const isDay = (s: string) => {
+  if (!DAY_FORMAT.test(s)) return false
+  const [y, m, d] = s.split("-").map(Number)
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  return m >= 1 && m <= 12 && d >= 1 && d <= days[m - 1]
+}
+
+export type MergedFilters = { from?: string; to?: string; repo?: string }
+
+/** Arguments de `get_merged` (déjà validés par le shim, revus ici par défense, mêmes règles) ; `null` vaut absent. */
+export const parseMergedArgs = (
+  args: unknown,
+): { ok: true; filters: MergedFilters } | { ok: false; error: string } => {
+  if (args == null) return { ok: true, filters: {} }
+  if (typeof args !== "object" || Array.isArray(args))
+    return { ok: false, error: "get_merged: arguments must be an object" }
+  const a = args as Record<string, unknown>
+  const unknown = Object.keys(a).find((k) => !MERGED_ARGS.has(k))
+  if (unknown)
+    return { ok: false, error: `get_merged: unknown argument \`${unknown}\`` }
+  const { from, to, repo } = a
+  if (repo != null && typeof repo !== "string")
+    return { ok: false, error: "get_merged: `repo` must be a string" }
+  for (const [k, v] of [
+    ["from", from],
+    ["to", to],
+  ] as const)
+    if (v != null && !(typeof v === "string" && isDay(v)))
+      return {
+        ok: false,
+        error: `get_merged: \`${k}\` must be a date YYYY-MM-DD`,
+      }
+  if (typeof from === "string" && typeof to === "string" && from > to)
+    return { ok: false, error: "get_merged: `from` must not be after `to`" }
+  return {
+    ok: true,
+    filters: {
+      ...(typeof from === "string" && { from }),
+      ...(typeof to === "string" && { to }),
+      ...(typeof repo === "string" && { repo }),
+    },
+  }
+}
+
+/** Médiane et p90 (rang le plus proche) de délais en ms ; `null` sans valeur. */
+export const leadTimeStats = (ms: number[]) => {
+  if (!ms.length) return null
+  const s = [...ms].sort((a, b) => a - b)
+  const mid = s.length >> 1
+  return {
+    median: s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2,
+    p90: s[Math.ceil(s.length * 0.9) - 1],
+  }
+}
+
+/**
+ * `get_merged` : mes PR mergées chargées (`RepoTree.merged`, fenêtre `mergedDays`), filtrées par jour de merge
+ * (UTC, bornes incluses) et repo, plus récentes d'abord, avec le délai ouverture → merge (`leadTime`, format de
+ * `ageLabel`) et ses stats. Plage hors de la fenêtre chargée : `outsideWindow` le dit. Valeurs par défaut omises.
+ */
+export const mergedPayload = (
+  ctx: McpContext,
+  merged: MergedPr[],
+  window: { from: string; to: string } | undefined,
+  filters: MergedFilters = {},
+) => {
+  const head = {
+    fetchedAt: ctx.fetchedAt,
+    loading: ctx.loading,
+    error: ctx.error,
+  }
+  if (!window)
+    return omitDefaults({
+      ...head,
+      notLoaded:
+        "Merged PRs are not loaded yet in PR Radar: retry once it has finished loading.",
+    }) as Record<string, unknown>
+  const from = filters.from ?? window.from
+  const to = filters.to ?? window.to
+  const needle = filters.repo?.toLowerCase() ?? ""
+  const kept = merged
+    .filter((p) => {
+      const day = p.mergedAt.slice(0, 10)
+      return day >= from && day <= to && p.repo.toLowerCase().includes(needle)
+    })
+    .sort((a, b) => b.mergedAt.localeCompare(a.mergedAt))
+  const lead = (p: MergedPr) => {
+    const ms = Date.parse(p.mergedAt) - Date.parse(p.createdAt)
+    return Number.isFinite(ms) ? Math.max(0, ms) : null
+  }
+  const leads = kept.map(lead).filter((ms): ms is number => ms !== null)
+  const stats = leadTimeStats(leads)
+  return omitDefaults({
+    ...head,
+    window,
+    outsideWindow:
+      from < window.from || to > window.to
+        ? `Requested range ${from}..${to} goes beyond the merged PRs loaded in PR Radar (${window.from}..${window.to}, setting "Recently merged"): only merges inside the loaded window are listed.`
+        : null,
+    stats: {
+      count: kept.length,
+      medianLeadTime: stats && ageLabel(stats.median),
+      p90LeadTime: stats && ageLabel(stats.p90),
+    },
+    prs: kept.map((p) => {
+      const ms = lead(p)
+      return {
+        repo: p.repo,
+        number: p.number,
+        title: p.title,
+        url: p.url,
+        mergedAt: p.mergedAt,
+        leadTime: ms === null ? null : ageLabel(ms),
+      }
+    }),
+  }) as Record<string, unknown>
 }
 
 /* ---------- Historique ---------- */
