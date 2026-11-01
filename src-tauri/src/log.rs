@@ -28,7 +28,7 @@ const DAY_MS: i64 = 86_400_000;
 /// niveaux, du moins au plus grave
 const LEVELS: [&str; 3] = ["info", "warn", "error"];
 
-/// écritures, purges et lectures l'une après l'autre (commandes, futur code Rust)
+/// écritures, purges et lectures l'une après l'autre (commandes, hook de panic)
 static LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -142,6 +142,7 @@ pub fn resolve(app: &AppHandle, dir: Option<&str>) -> Result<PathBuf, String> {
         None => default_dir(app)?,
     };
     ensure_dir(&p)?;
+    crate::crash::remember_log_dir(&p);
     Ok(p)
 }
 
@@ -191,6 +192,18 @@ pub struct Appended {
 /// les entrées suivantes du jour sont ignorées et une entrée `log.full` (une seule par jour) le signale.
 pub fn append(dir: &Path, entries: &[Entry]) -> Result<Appended, String> {
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    write_entries(dir, entries)
+}
+
+/// Hook de panic (crash.rs) : le verrou est peut-être tenu par le fil qui panique, on n'attend pas ;
+/// une ligne ajoutée en mode `append` ne se mélange pas à une autre.
+pub fn append_from_panic(dir: &Path, entry: Entry) -> Result<Appended, String> {
+    let _guard = LOCK.try_lock();
+    ensure_dir(dir)?;
+    write_entries(dir, &[entry])
+}
+
+fn write_entries(dir: &Path, entries: &[Entry]) -> Result<Appended, String> {
     let limit = MAX_FILE_BYTES - FULL_RESERVE_BYTES;
     let mut out = Appended::default();
     let mut by_file: Vec<(String, Vec<String>)> = Vec::new();

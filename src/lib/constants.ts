@@ -13,6 +13,39 @@ export const FEEDBACK_DISCUSSION_CATEGORY = "ideas"
 /** longueur max. d'une adresse préremplie : au-delà, GitHub ou le navigateur la refusent */
 export const GITHUB_PREFILL_MAX_URL_LENGTH = 8_000
 
+/* ---------- Plantages (crash.ts, crash-data.ts, src-tauri/src/crash.rs) ---------- */
+
+/** formulaire d'issue des plantages (.github/ISSUE_TEMPLATE/crash.yml) et son label */
+export const CRASH_ISSUE_TEMPLATE = "crash.yml"
+export const CRASH_ISSUE_LABEL = "crash"
+/** avertissements et erreurs lus dans le journal pour le rapport, puis lignes gardées autour du plantage */
+export const CRASH_LOG_READ_LIMIT = 500
+export const CRASH_LOG_LINES = 30
+/** erreurs de la webview journalisées : même message ignoré pendant ce délai, et au plus N par minute */
+export const WEBVIEW_ERROR_DEDUPE_MS = 60_000
+export const WEBVIEW_ERROR_MAX_PER_MIN = 10
+/** fenêtre de ce plafond */
+export const WEBVIEW_ERROR_WINDOW_MS = 60_000
+/** anonymisation : valeur plus courte jamais remplacée (abîmerait le texte, n'identifie rien seule) */
+export const CRASH_MIN_SECRET_CHARS = 3
+/** `owner/name` dans une adresse d'API (`/repos/owner/name`) ou de github.com */
+export const CRASH_REPO_IN_URL =
+  /(?:\/repos\/|github\.com\/(?!(?:repos|orgs|users)\/))([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/g
+/** organisation ou utilisateur dans une adresse d'API (`/orgs/acme`, `/users/jdoe`) */
+export const CRASH_OWNER_IN_URL = /\/(?:orgs|users)\/([A-Za-z0-9_.-]+)/g
+/**
+ * dossier personnel dans un chemin (macOS, Linux, Windows) : remplacé par `~`. Le nom s'arrête au
+ * séparateur, à un guillemet ou à la fin de ligne, pas à une espace (`C:\Users\John Smith\…`) : sans
+ * séparateur après, la suite de la ligne part avec (plutôt trop masquer que laisser un nom).
+ */
+export const CRASH_HOME_DIRS = [
+  /\/(?:Users|home)\/[^/"'`:\r\n]+/g,
+  /\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/"'`\r\n]+/gi,
+]
+/** adresse e-mail */
+export const CRASH_EMAIL =
+  /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g
+
 /* ---------- Réglages ---------- */
 
 /** durée du surlignage d'un réglage ouvert depuis la recherche */

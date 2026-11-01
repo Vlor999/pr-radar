@@ -1,6 +1,8 @@
 // Démo navigateur : journal d'activité local (src-tauri/src/log.rs) gardé en mémoire, avec des entrées plausibles.
 import type { LogEntry, LogLevel } from "@/lib/types"
 
+import { crashLogEntries } from "./crash"
+
 const DEFAULT_DIR = "/Users/demo/Library/Logs/io.github.vlor999.prradar"
 const PICKED_DIR = "/Users/demo/Documents/pr-radar-logs"
 const LEVELS: LogLevel[] = ["info", "warn", "error"]
@@ -89,6 +91,7 @@ let entries: LogEntry[] = [
     event: "refresh",
     data: { ms: 980, measure: true, repos: 4, prs: 10, reviews: 2 },
   },
+  ...crashLogEntries,
 ]
 
 const dirOf = (dir: unknown) => (typeof dir === "string" && dir) || DEFAULT_DIR
