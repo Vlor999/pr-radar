@@ -258,7 +258,7 @@ export const actionReasons = (
 
 const PRS_ARGS = new Set(["repo", "scope", "needs_action", "limit"])
 
-/** Arguments de `get_prs` (déjà validés par le shim, revus ici par défense) ; `null` vaut absent. */
+/** Arguments de `get_prs` (déjà validés par le shim, revus ici par défense, mêmes règles) ; `null` vaut absent, `limit` : entier exact ≥ 1 (`1.0` accepté, `1e20` refusé). */
 export const parsePrsArgs = (
   args: unknown,
 ): { ok: true; filters: PrsFilters } | { ok: false; error: string } => {
@@ -281,7 +281,7 @@ export const parsePrsArgs = (
     return { ok: false, error: "get_prs: `needs_action` must be a boolean" }
   if (
     limit != null &&
-    !(typeof limit === "number" && Number.isInteger(limit) && limit >= 1)
+    !(typeof limit === "number" && Number.isSafeInteger(limit) && limit >= 1)
   )
     return { ok: false, error: "get_prs: `limit` must be an integer >= 1" }
   return {
