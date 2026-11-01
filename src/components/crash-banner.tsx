@@ -50,7 +50,7 @@ export function CrashBanner() {
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm duration-300 animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none"
+      className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm duration-300 animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none"
     >
       <TriangleAlert className="size-4 shrink-0 text-destructive" />
       <span className="min-w-0 flex-1">
