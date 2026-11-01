@@ -432,6 +432,7 @@ export function fetchMerged(
         number: number
         title: string
         url: string
+        createdAt: string
         mergedAt: string
         repository: { nameWithOwner: string }
       }
@@ -443,7 +444,7 @@ export function fetchMerged(
                 conn(a),
                 `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
             pageInfo { hasNextPage endCursor }
-            nodes { ... on PullRequest { number title url mergedAt repository { nameWithOwner } } } } }`,
+            nodes { ... on PullRequest { number title url createdAt mergedAt repository { nameWithOwner } } } } }`,
                 `is:pr is:merged author:@me merged:${from}..${to} ` +
                   c.map((r) => "repo:" + r).join(" "),
                 0, // aucun merge sur la période est courant : pas de relance
@@ -460,6 +461,7 @@ export function fetchMerged(
           number: p.number,
           title: p.title,
           url: p.url,
+          createdAt: p.createdAt,
           mergedAt: p.mergedAt,
         }))
         .sort((a, b) => b.mergedAt.localeCompare(a.mergedAt))

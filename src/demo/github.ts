@@ -269,6 +269,7 @@ const MERGED: MergedPr[] = [
     number: 405,
     title: "Header responsive",
     url: "#",
+    createdAt: ago(20 + 26),
     mergedAt: ago(20),
   },
   {
@@ -276,6 +277,7 @@ const MERGED: MergedPr[] = [
     number: 85,
     title: "Rate limiting par clé API",
     url: "#",
+    createdAt: ago(70 + 3 * 24),
     mergedAt: ago(70),
   },
   {
@@ -283,6 +285,7 @@ const MERGED: MergedPr[] = [
     number: 5,
     title: "TVA intracommunautaire",
     url: "#",
+    createdAt: ago(120 + 9),
     mergedAt: ago(120),
   },
 ]
