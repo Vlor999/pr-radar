@@ -2,7 +2,7 @@ import { useMemo, useSyncExternalStore } from "react"
 
 // extensions : chargé aussi par node --test
 import { matchRecipients, type Reviewer } from "./reviewers.ts"
-import { fold } from "./settings-search.ts"
+import { fold, foldQuery } from "./settings-search.ts"
 import { onPulled, saveItem } from "./sync.ts"
 import type { SlackRecipient } from "./types.ts"
 
@@ -170,9 +170,9 @@ export function contactCounts(
   return out
 }
 
-/** Recherche : nom affiché, noms Slack, identifiant (`@` initial ignoré) et logins liés, casse et accents ignorés. */
+/** Recherche (`foldQuery`) : nom affiché, noms Slack, identifiant et logins liés. */
 export const matchesContact = (row: ContactRow, query: string) => {
-  const q = fold(query.trim().replace(/^@/, ""))
+  const q = foldQuery(query)
   return (
     !q ||
     [row.name, ...row.names, row.handle ?? "", ...row.links.map((l) => l.login)]

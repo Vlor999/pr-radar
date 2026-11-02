@@ -31,6 +31,9 @@ export const fold = (s: string) =>
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
 
+/** Recherche dans une liste de noms : `fold`, espaces et `@` / `#` initial (identifiant, channel) ignorés. */
+export const foldQuery = (q: string) => fold(q.trim().replace(/^[@#]/, ""))
+
 /** Distance de Damerau-Levenshtein (transpositions adjacentes comprises, variante OSA). */
 export function editDistance(a: string, b: string): number {
   const d = Array.from({ length: a.length + 1 }, (_, i) =>
