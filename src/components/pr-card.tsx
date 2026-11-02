@@ -23,6 +23,7 @@ import { useEffect, useState, useTransition } from "react"
 import { AddReviewer } from "@/components/add-reviewer"
 import { Avatar } from "@/components/avatar"
 import { CiGraph } from "@/components/ci-graph"
+import { DmSuggestion } from "@/components/dm-suggestion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -31,6 +32,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { useDmSuggestions } from "@/hooks/use-dm-suggestions"
 import { ready, syncBranch } from "@/lib/actions"
 import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
 import { DONE_ICON, DONE_MS, pause, wait } from "@/lib/motion"
@@ -259,6 +261,8 @@ export function PrCard({
   // reviewers demandés depuis l'app : affichés tout de suite, jusqu'au rechargement qui les lit sur GitHub
   const pending = usePendingReviews(pr.url)
   const requested = withPending(pr.requested, pending.pending)
+  // destinataires de mes DM Slack sur la PR, proposés en reviewers fantômes
+  const suggestions = useDmSuggestions(pr, pending.pending)
 
   return (
     <Card
@@ -448,6 +452,9 @@ export function PrCard({
                     {t.requested}
                   </Badge>
                 </li>
+              ))}
+              {suggestions.map((u) => (
+                <DmSuggestion key={u.id} pr={pr} user={u} />
               ))}
               <li className="flex items-center gap-2 text-muted-foreground">
                 <AddReviewer pr={pr} />
