@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react"
 
+import { FULL_REFRESH_MAX_AGE_MS } from "./constants.ts"
 import { locale, pick, strings } from "./i18n.ts" // extension : chargé aussi par node --test
 
 const S = strings(
@@ -27,8 +28,9 @@ export const AUTO_DEFAULT_MS = 5 * 60_000 // coût d'une actualisation encore in
 
 const quotas = new Map<string, Quota>() // par compte, d'après les en-têtes
 const warned = new Map<string, number>() // fenêtre déjà notifiée, par compte
-const snapshots = new Map<string, Quota>() // dernier GET /rate_limit après une actualisation
-const costs = new Map<string, number>() // points consommés par la dernière actualisation mesurée
+const spent = new Map<string, number>() // points cumulés renvoyés par `rateLimit { cost }`, par compte
+// comptes mesurés → points de leur dernière actualisation mesurée, complète et par différence (undefined : inconnu)
+const costs = new Map<string, { full?: number; delta?: number }>()
 let worst: Quota | null = null
 let autoMs = AUTO_DEFAULT_MS
 // notification du quota bas, branchée par l'app (main.tsx) : Tauri reste hors de ce module testé par node --test
@@ -61,10 +63,13 @@ function updateWorst() {
   emit()
 }
 
-// intervalle auto recalculé sur les comptes relevés (5 min s'il n'y en a plus)
+// intervalle auto recalculé sur les comptes mesurés, quota des en-têtes (5 min s'il n'y en a plus)
 function updateAuto(now: number) {
   const next = autoIntervalMs(
-    [...snapshots].map(([id, quota]) => ({ quota, cost: costs.get(id) })),
+    [...costs].flatMap(([id, { full, delta }]) => {
+      const quota = quotas.get(id)
+      return quota ? [{ quota, cost: full, delta }] : []
+    }),
     now,
   )
   if (next === autoMs) return
@@ -74,18 +79,20 @@ function updateAuto(now: number) {
 
 /** Compte déconnecté : son quota n'est plus affiché ni pris en compte. */
 export function forgetQuota(account: string, now = Date.now()) {
-  for (const m of [quotas, warned, snapshots, costs]) m.delete(account)
+  for (const m of [quotas, warned, spent, costs]) m.delete(account)
   updateWorst()
   updateAuto(now)
 }
 
-/** Passage en mode auto : un ancien relevé (fenêtre peut-être encore ouverte) gonflerait le premier coût. */
-export const dropSnapshots = () => snapshots.clear()
-
 export const getQuota = () => worst
 
-/** Points consommés par la dernière actualisation mesurée du compte (journal), undefined si inconnu. */
-export const lastCost = (account: string) => costs.get(account)
+/** Ajoute le `rateLimit { cost }` d'une réponse GraphQL au compteur du compte. */
+export const addCost = (account: string, cost: number) => {
+  spent.set(account, (spent.get(account) ?? 0) + cost)
+}
+
+/** Points GraphQL cumulés du compte depuis le lancement. */
+export const spentBy = (account: string) => spent.get(account) ?? 0
 
 export function trackQuota(h: Headers, account: string) {
   const quota = {
@@ -107,29 +114,46 @@ export function trackQuota(h: Headers, account: string) {
   )
 }
 
-/** Coût d'une actualisation entre deux relevés ; garde l'ancien si la fenêtre a changé ou si rien n'a été consommé (cache). */
+/** Coût d'une actualisation : écart du compteur ; garde l'ancien si rien n'a été consommé (cache, coût absent). */
 export const measureCost = (
-  prev: Quota | undefined,
-  now: Quota,
+  before: number,
+  after: number,
   cost: number | undefined,
 ) => {
-  if (!prev || prev.resetAt !== now.resetAt) return cost
-  const used = prev.remaining - now.remaining
+  const used = after - before
   return used > 0 ? used : cost
 }
 
-/** Intervalle du mode auto : le plus long des comptes, pour garder `RESERVE` du quota en fin de fenêtre. */
+/**
+ * Intervalle T dont le coût par actualisation tient dans le budget : `cost(T) × left / budget = T`.
+ * `delta` connu : une actualisation auto coûte `delta`, plus une relecture complète (`full`) toutes les
+ * `FULL_REFRESH_MAX_AGE_MS`, soit `delta + full × min(1, T / max)` en moyenne ; sinon `full` à chaque fois.
+ * `ratio` = left / budget (ms par point).
+ */
+export function solveInterval(ratio: number, full: number, delta?: number) {
+  if (delta === undefined) return full * ratio
+  const max = FULL_REFRESH_MAX_AGE_MS
+  // T < max : T = (delta + full × T / max) × ratio
+  const below =
+    full * ratio < max ? (delta * ratio) / (1 - (full * ratio) / max) : Infinity
+  return below < max ? below : (delta + full) * ratio
+}
+
+/**
+ * Intervalle du mode auto : le plus long des comptes, pour garder `RESERVE` du quota en fin de fenêtre.
+ * `cost` : dernière actualisation complète ; `delta` : dernière actualisation par différence.
+ */
 export function autoIntervalMs(
-  accounts: { quota: Quota; cost?: number }[],
+  accounts: { quota: Quota; cost?: number; delta?: number }[],
   now: number,
 ): number {
   if (!accounts.length) return AUTO_DEFAULT_MS
   return Math.max(
-    ...accounts.map(({ quota, cost }) => {
+    ...accounts.map(({ quota, cost, delta }) => {
       if (cost === undefined) return AUTO_DEFAULT_MS
       const left = quota.resetAt - now
       const budget = quota.remaining - RESERVE * quota.limit
-      const ms = budget <= 0 ? left : (cost * left) / budget
+      const ms = budget <= 0 ? left : solveInterval(left / budget, cost, delta)
       if (Number.isNaN(ms)) return AUTO_DEFAULT_MS
       // plancher aussi quand la fenêtre est finie (reset passé) : pas de boucle d'actualisations
       return Math.min(Math.max(ms, AUTO_MIN_MS), AUTO_MAX_MS)
@@ -137,20 +161,24 @@ export function autoIntervalMs(
   )
 }
 
-/** Relevés `GET /rate_limit` des comptes après une actualisation (null : en-têtes à la place). */
-export function recordRateLimits(
-  snaps: (readonly [account: string, Quota | null])[],
+/**
+ * Fin d'une actualisation mesurée : coût par compte d'après son compteur avant (`spentBy`), pour le journal.
+ * `full` : toutes les PR relues en entier ; sinon actualisation par différence, son coût est rangé à part.
+ */
+export function recordCosts(
+  before: (readonly [account: string, spent: number])[],
   now = Date.now(),
+  full = true,
 ) {
-  const measured = snaps.flatMap(([account, snap]) => {
-    const quota = snap ?? quotas.get(account)
-    if (!quota) return []
-    const cost = measureCost(snapshots.get(account), quota, costs.get(account))
-    if (cost !== undefined) costs.set(account, cost)
-    snapshots.set(account, quota)
-    return [account]
+  const measured = before.map(([account, from]) => {
+    const known = costs.get(account) ?? {}
+    const kind = full ? "full" : "delta"
+    const cost = measureCost(from, spentBy(account), known[kind])
+    costs.set(account, { ...known, [kind]: cost })
+    return { account, remaining: quotas.get(account)?.remaining, cost }
   })
   if (measured.length) updateAuto(now)
+  return measured
 }
 
 const subscribe = (l: () => void) => {

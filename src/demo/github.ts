@@ -10,7 +10,7 @@ import {
 import { allAccounts } from "@/lib/auth"
 import { rerunError } from "@/lib/checks"
 import { HOUR_MS } from "@/lib/quiet"
-import { trackQuota, type Quota } from "@/lib/quota"
+import { addCost, trackQuota } from "@/lib/quota"
 import type { Reviewer } from "@/lib/reviewers"
 import type {
   CiJob,
@@ -27,6 +27,17 @@ import type {
 const MUTATION_MS = 800
 /** latence de la première lecture des jobs d'une PR : laisse voir le chargement de la vue CI */
 const CHECKS_MS = 600
+/** points GraphQL d'une actualisation (`rateLimit { cost }`) : avec le quota de `fetchReviews`, le mode auto affiche ~3 min */
+const REFRESH_POINTS = 120
+/** latence d'une actualisation (pas du premier chargement) : laisse voir la pastille grise et l'icône qui tourne */
+const REFRESH_MS = 800
+/**
+ * issue des actualisations après le premier chargement : `?refresh=partial` (PR mergées en échec,
+ * pastille orange), `?refresh=failed` (lecture des PR en échec, pastille rouge) ; sans paramètre, réussies
+ */
+const refreshMode = new URLSearchParams(location.search).get("refresh")
+let prReads = 0
+let mergedReads = 0
 
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
@@ -349,7 +360,14 @@ export const viewerLogin = async (_token: string, _host?: string) => "me"
 // acme/api#91 (CI en échec) : déjà lue au lancement, `get_checks` la sert depuis le cache
 const checksRead = new Set<string>(["acme/api#91"])
 export const clearCache = () => checksRead.clear()
-export const fetchPrs = async (repos: string[]) => {
+export const fetchPrs = async (
+  repos: string[],
+  { delta = false }: { delta?: boolean } = {},
+) => {
+  if (prReads++) {
+    await new Promise((r) => setTimeout(r, REFRESH_MS))
+    if (refreshMode === "failed") throw new Error("HTTP 502 (démo)")
+  }
   // quota bas pour montrer la notification et la ligne des réglages
   trackQuota(
     new Headers({
@@ -359,9 +377,13 @@ export const fetchPrs = async (repos: string[]) => {
     }),
     DEFAULT_ID,
   )
+  const data = [...PRS, ...otherPrs()].filter((p) => has(repos)(p.repo))
+  // actualisation automatique : rien n'a changé depuis la lecture précédente
   return {
-    data: [...PRS, ...otherPrs()].filter((p) => has(repos)(p.repo)),
+    data,
     errors: [] as AccountError[],
+    full: !delta,
+    refetched: delta ? 0 : data.length,
   }
 }
 export const reposWithMyOpenPrs = async () => [
@@ -370,13 +392,20 @@ export const reposWithMyOpenPrs = async () => [
     ...otherRepos(),
   ]),
 ]
-export const fetchMerged = async (repos: string[], from: string, to: string) =>
-  MERGED.filter(
+export const fetchMerged = async (
+  repos: string[],
+  from: string,
+  to: string,
+) => {
+  if (mergedReads++ && refreshMode === "partial")
+    throw new Error("HTTP 502 (démo)")
+  return MERGED.filter(
     (m) =>
       has(repos)(m.repo) &&
       m.mergedAt.slice(0, 10) >= from &&
       m.mergedAt.slice(0, 10) <= to,
   )
+}
 export const listRepos = async () => [...REPOS, ...otherRepos()]
 export async function resolveRepo(repo: string) {
   if (!REPO_NAME.test(repo))
@@ -419,14 +448,6 @@ export const updateBranch = async (prId: string, repo: string) => {
   console.info("[demo] update branch", prId, repo)
 }
 
-// quota qui baisse de 120 points par actualisation : le mode auto affiche ~3 min dès la 2e actualisation
-let demoRemaining = 3120
-const demoReset = Date.now() + 45 * 60_000
-export const rateLimit = async (_a: Account): Promise<Quota | null> => ({
-  limit: 5000,
-  remaining: (demoRemaining -= 120),
-  resetAt: demoReset,
-})
 export type Profile = {
   login: string
   name: string | null
@@ -499,10 +520,22 @@ const REVIEWS: ReviewPr[] = [
   }),
 ]
 
-export const fetchReviews = async () => ({
-  data: REVIEWS,
-  errors: [] as AccountError[],
-})
+// quota qui baisse de REFRESH_POINTS par actualisation, fenêtre de 45 min : 120 × 45 / (3000 - 1000) ≈ 3 min.
+// Lancé juste après `fetchPrs` (store.reload) : son quota bas déclenche la notification, celui-ci sert au mode auto.
+let demoRemaining = 3120
+const demoReset = Date.now() + 45 * 60_000
+export const fetchReviews = async () => {
+  addCost(DEFAULT_ID, REFRESH_POINTS)
+  trackQuota(
+    new Headers({
+      "x-ratelimit-limit": "5000",
+      "x-ratelimit-remaining": String((demoRemaining -= REFRESH_POINTS)),
+      "x-ratelimit-reset": String(Math.floor(demoReset / 1000)),
+    }),
+    DEFAULT_ID,
+  )
+  return { data: REVIEWS, errors: [] as AccountError[] }
+}
 
 const DEMO_USERS = ["alice", "bob", "carol", "dave", "erin", "frank"]
 const user = (login: string): Reviewer => ({ login, id: `U_${login}` })

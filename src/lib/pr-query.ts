@@ -1,14 +1,10 @@
 /** Requête GraphQL des PR ouvertes : logique pure, sans Tauri. */
 import { GITHUB } from "./accounts.ts"
+import { PROBE_PAGE_SIZE } from "./constants.ts"
 import type { Note } from "./types.ts"
 
-const PAGE_SIZE = 20 // le coût GraphQL suit les bornes demandées, pas les nœuds renvoyés : 20 × 50 fils × 20 messages ≈ 21 points (103 avec 50 × 100 × 50) ; les connexions propres à chaque PR (commentaires, reviews…) ajoutent ~1 point
-
-const QUERY = `
-query($q: String!, $after: String) {
-  search(query: $q, type: ISSUE, first: ${PAGE_SIZE}, after: $after) {
-    pageInfo { hasNextPage endCursor }
-    nodes { ... on PullRequest {
+/** Champs d'une PR affichée ; `STACK` remplacé par `queryFor`. */
+const PR_FIELDS = `
       id number title url isDraft updatedAt mergeable viewerCanUpdateBranch reviewDecision headRefName baseRefName additions deletions changedFiles
       repository { nameWithOwner }
       isCrossRepository author { login } assignees(first: 10) { nodes { login } }
@@ -21,10 +17,40 @@ query($q: String!, $after: String) {
       latestOpinionatedReviews(first: 20) { nodes { author { login } state } }
       reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
       commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } }
+      STACK`
+
+/**
+ * Lecture complète de PR connues par leur id. Coût proportionnel au nombre d'ids (mesuré : 1 id = 1 point,
+ * 20 ids = 22 points), quand une page de recherche paie ses 20 places même à moitié vide.
+ */
+const NODES_QUERY = `
+query($ids: [ID!]!) {
+  nodes(ids: $ids) { ... on PullRequest { ${PR_FIELDS} } }
+}`
+
+/**
+ * Sondage : empreinte de chaque PR ouverte, 1 point par page de ${PROBE_PAGE_SIZE} (mesuré).
+ * `updatedAt` ne suffit pas : CI, mergeabilité, branche en retard et reviews d'une GitHub App (Copilot, Vercel)
+ * ne le changent pas ; une résolution de fil n'a pas de date lisible. Ces champs sont donc lus ici.
+ */
+const PROBE_QUERY = `
+query($q: String!, $after: String) {
+  search(query: $q, type: ISSUE, first: ${PROBE_PAGE_SIZE}, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ... on PullRequest {
+      id updatedAt mergeable viewerCanUpdateBranch reviewDecision
+      commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } }
+      reviewThreads(first: 50) { nodes { isResolved } }
+      latestOpinionatedReviews(first: 20) { nodes { author { login } state } }
+      reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { name } } } }
+      reviews { totalCount } comments { totalCount }
       STACK
     } }
   }
 }`
+const QUERIES = { nodes: NODES_QUERY, probe: PROBE_QUERY }
+export type QueryKind = keyof typeof QUERIES
+
 type RawNote = {
   author: { login: string } | null
   bodyHTML: string
@@ -59,8 +85,12 @@ export const toConversation = ({
 // stacks natifs (preview GitHub.com, juillet 2026) : champ absent du schéma GHES, la requête y échouerait
 const STACK = "stackEntry { position stack { number size } }"
 /** `withoutStack` : GitHub a déjà refusé le champ pour ce compte. */
-export const queryFor = (host: string, withoutStack = false) =>
-  QUERY.replace("STACK", host === GITHUB && !withoutStack ? STACK : "")
+export const queryFor = (
+  host: string,
+  withoutStack = false,
+  kind: QueryKind = "nodes",
+) =>
+  QUERIES[kind].replace("STACK", host === GITHUB && !withoutStack ? STACK : "")
 /** Erreur de validation GraphQL sur le champ des stacks natifs (preview retirée, compte sans accès). */
 export const isStackFieldError = (e: unknown) =>
   e instanceof Error && e.message.includes("stackEntry")
@@ -74,9 +104,10 @@ export const withStackFallback = <T>(
   skip: boolean,
   run: (query: string) => Promise<T>,
   onRefused: () => void,
+  kind: QueryKind = "nodes",
 ): Promise<T> =>
-  run(queryFor(host, skip)).catch((e: unknown) => {
+  run(queryFor(host, skip, kind)).catch((e: unknown) => {
     if (skip || !isStackFieldError(e)) throw e
     onRefused()
-    return run(queryFor(host, true))
+    return run(queryFor(host, true, kind))
   })

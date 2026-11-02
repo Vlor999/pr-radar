@@ -33,6 +33,7 @@ import { Shortcut } from "@/components/shortcut"
 import { ReviewList } from "@/components/review-list"
 import { CrashBanner } from "@/components/crash-banner"
 import { UpdateBanner } from "@/components/update-banner"
+import { RefreshDot } from "@/components/refresh-dot"
 import { RunningDot } from "@/components/running-dot"
 import { WebMenu } from "@/components/web-menu"
 import { checkForUpdate, useUpdate } from "@/lib/updater"
@@ -116,7 +117,6 @@ const S = strings(
     auto: (min: number) => `auto toutes les ${min} min`,
     autoMode: (min: number) => `Auto (${min} min)`,
     manual: "actualisation manuelle",
-    refreshing: "Rafraîchissement…",
     refresh: "Rafraîchir",
     settings: "Réglages",
     settingsUpdate: (v: string) => `Réglages (version ${v} disponible)`,
@@ -174,7 +174,6 @@ const S = strings(
     auto: (min: number) => `auto every ${min} min`,
     autoMode: (min: number) => `Auto (${min} min)`,
     manual: "manual refresh",
-    refreshing: "Refreshing…",
     refresh: "Refresh",
     settings: "Settings",
     settingsUpdate: (v: string) => `Settings (version ${v} available)`,
@@ -304,7 +303,10 @@ export function PrDashboard({
   const t = useStrings(S)
   const wide = useWide()
   const [reposOpen, setReposOpen] = useState(false)
+  // manuelle : l'icône tourne ; automatique (minuteur, focus, retour sur l'onglet) : seule la pastille grise
   const [refreshing, startRefresh] = useTransition()
+  const [autoRefreshing, startAutoRefresh] = useTransition()
+  const busy = refreshing || autoRefreshing
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<keyof typeof S.fr.filters>("all")
   const settings = useSettings()
@@ -410,29 +412,32 @@ export function PrDashboard({
   // version web : pas d'actualisation automatique tant que l'onglet est caché (l'app, elle, continue)
   const paused = useHidden() && isWeb
   useEffect(() => {
-    if (!intervalMs || refreshing || paused) return
-    const id = setTimeout(() => startRefresh(() => refreshPrs()), intervalMs)
+    if (!intervalMs || busy || paused) return
+    const id = setTimeout(
+      () => startAutoRefresh(() => refreshPrs({ auto: true })),
+      intervalMs,
+    )
     return () => clearTimeout(id)
-  }, [intervalMs, refreshing, fetchedAt, paused])
+  }, [intervalMs, busy, fetchedAt, paused])
 
   // version web, retour sur l'onglet : actualisation si la dernière lecture date de plus d'une période
   useEffect(() => {
-    if (paused || !isWeb || !intervalMs || refreshing) return
+    if (paused || !isWeb || !intervalMs || busy) return
     if (Date.now() - Date.parse(fetchedAt) > intervalMs)
-      startRefresh(() => refreshPrs())
+      startAutoRefresh(() => refreshPrs({ auto: true }))
   }, [paused]) // seulement au changement de visibilité
 
   useEffect(() => {
-    if (!settings.refreshOnFocus || refreshing) return
+    if (!settings.refreshOnFocus || busy) return
     const onFocus = () => {
       // pas plus souvent que l'actualisation automatique (5 min en mode manuel)
       const min = intervalMs || FOCUS_REFRESH_MIN_MS
       if (Date.now() - Date.parse(fetchedAt) > min)
-        startRefresh(() => refreshPrs())
+        startAutoRefresh(() => refreshPrs({ auto: true }))
     }
     window.addEventListener("focus", onFocus)
     return () => window.removeEventListener("focus", onFocus)
-  }, [settings.refreshOnFocus, refreshing, intervalMs, fetchedAt])
+  }, [settings.refreshOnFocus, busy, intervalMs, fetchedAt])
 
   // mise à jour : vérifiée au lancement puis toutes les 6 h (bandeau + badge sur l'engrenage)
   useEffect(() => {
@@ -630,13 +635,18 @@ export function PrDashboard({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <RefreshDot auto={autoRefreshing} manual={refreshing} />
           <Button
             variant="outline"
             disabled={refreshing}
             onClick={() => startRefresh(() => refreshPrs())}
           >
-            <RefreshCw className={cn(refreshing && "animate-spin")} />
-            {refreshing ? t.refreshing : t.refresh}
+            <RefreshCw
+              className={cn(
+                refreshing && "animate-spin motion-reduce:animate-none",
+              )}
+            />
+            {t.refresh}
           </Button>
           {mcp.info?.supported && (
             <Button

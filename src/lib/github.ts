@@ -24,9 +24,20 @@ import {
   gqlFailed,
   gqlMessage,
   restRepos,
+  takeCost,
+  withCost,
   type GqlResponse,
   type RepoNode,
 } from "./graphql"
+import { NODES_PER_QUERY } from "./constants"
+import {
+  fingerprint,
+  isFullRead,
+  mergeProbe,
+  nextFullAt,
+  splitProbe,
+  type Snapshot,
+} from "./delta"
 import { pick, strings } from "./i18n"
 import { mentionedIds, reasonOf, uniqueById } from "./involved"
 import { log } from "./log"
@@ -35,7 +46,7 @@ import {
   withStackFallback,
   type RawConversation,
 } from "./pr-query"
-import { trackQuota, validQuota, type Quota } from "./quota"
+import { addCost, trackQuota } from "./quota"
 import { toReview, type RawReview } from "./review"
 import type { Reviewer } from "./reviewers"
 import type { CiView, Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
@@ -111,7 +122,7 @@ async function gql<T>(
       ...headers(c.token, c.account),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({ query: withCost(query), variables }),
   })
   // quota rangé par compte connecté ; pas de compte (connexion en cours) ou compte déconnecté entre-temps : ignoré
   if (c.account && findAccount(c.account)) trackQuota(res.headers, c.account)
@@ -120,6 +131,10 @@ async function gql<T>(
     throw new AuthError(pick(S).tokenRejected, c.account)
   }
   const json = (await res.json()) as GqlResponse
+  // points consommés même si la réponse est en échec : comptés avant le contrôle
+  const cost = takeCost(json)
+  if (cost !== undefined && c.account && findAccount(c.account))
+    addCost(c.account, cost)
   if (gqlFailed(json)) {
     const error = gqlMessage(json, pick(S).http(res.status))
     log("warn", "github.error", {
@@ -318,6 +333,8 @@ const who = (p: RawPr) => ({
 
 // ponytail: caches en mémoire de la fenêtre, suffisent pour une app mono-utilisateur
 const caches = new Map<string, Entry<unknown>>()
+// dernière lecture par compte, puis par lot de repos (clé : ses noms) : un lot changé n'a pas d'instantané
+const snapshots = new Map<string, Map<string, Snapshot<Pr>>>()
 
 function cached<T>(
   key: string,
@@ -344,11 +361,17 @@ function peek<T>(key: string): { value: T; at: number } | null {
   return hit?.resolved && Date.now() < hit.until ? hit.resolved : null
 }
 
-/** Rafraîchir : tout relire, sauf la liste des repos accessibles (lente, change rarement). */
+/**
+ * Rafraîchir : tout relire, sauf la liste des repos accessibles (lente, change rarement).
+ * `all` (compte ajouté ou déconnecté) : aussi les logins et les instantanés des PR (actualisation par différence).
+ */
 export function clearCache({ all = false } = {}) {
   for (const k of caches.keys())
     if (all || !k.startsWith("repos:")) caches.delete(k)
-  if (all) viewers.clear()
+  if (all) {
+    viewers.clear()
+    snapshots.clear()
+  }
 }
 
 /** Une requête par compte connecté, chacun avec son jeton et sur son hôte ; comptes en échec ignorés. */
@@ -370,56 +393,114 @@ const perFollowed = <T>(
 // comptes dont GitHub a refusé `stackEntry` : la session continue sans les stacks natifs
 const withoutStack = new Set<string>()
 
-// ids seulement : ~1 point par page, contre ~21 pour une page de la requête complète
+// ids seulement : ~1 point par page
 const MENTIONS_QUERY = `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
   pageInfo { hasNextPage endCursor } nodes { ... on PullRequest { id } } } }`
+
+/** Lecture complète de PR par leur id, par paquets de `NODES_PER_QUERY` ; id introuvable (PR supprimée) ignoré. */
+async function fetchNodes(a: Account, ids: string[]): Promise<RawPr[]> {
+  const out: RawPr[] = []
+  for (const part of chunk(ids, NODES_PER_QUERY)) {
+    const { nodes } = await withStackFallback(
+      a.host,
+      withoutStack.has(a.id),
+      (query) =>
+        gql<{ nodes: (RawPr | null)[] }>(conn(a), query, { ids: part }),
+      () => withoutStack.add(a.id),
+    )
+    out.push(
+      ...nodes.filter((n): n is RawPr => !!n && Object.keys(n).length > 0),
+    )
+  }
+  return out
+}
 
 /**
  * PR ouvertes des repos suivis qui me concernent : les miennes, et celles des autres où je suis assigné,
  * mentionné ou impliqué (commentaire, review). `errors` : comptes en échec, les autres sont gardés.
  *
- * Coût : `involves:@me` (auteur OU assigné OU mentionné OU commentateur) remplace `author:@me`, même nombre de
- * recherches complètes. Auteur et assignés sont lus dans la réponse ; seul « mentionné » n'a pas de champ
- * GraphQL : une recherche légère `mentions:@me` (ids seulement), lancée uniquement s'il reste une PR d'un
- * autre où je ne suis pas assigné.
+ * Coût : `involves:@me` (auteur OU assigné OU mentionné OU commentateur) remplace `author:@me`. Auteur et
+ * assignés sont lus dans la réponse ; seul « mentionné » n'a pas de champ GraphQL : une recherche légère
+ * `mentions:@me` (ids seulement), lancée uniquement s'il reste une PR relue d'un autre où je ne suis pas assigné.
+ *
+ * Par lot de repos, un sondage léger donne l'empreinte de chaque PR ; seules les PR nouvelles ou changées sont
+ * relues en entier (`nodes(ids:)`), les autres reprises de la lecture précédente. `delta` faux (actualisation
+ * manuelle, action, premier chargement), lot inconnu ou dernière relecture complète trop ancienne : tout est relu.
+ * `full` : tous les lots relus en entier ; `refetched` : PR relues en entier.
  */
 export function fetchPrs(
   repos: string[],
-): Promise<{ data: Pr[]; errors: AccountError[] }> {
-  return cached(`prs:${repos.join(",")}`, CACHE_TTL_MS, () =>
-    perFollowed(repos, async (a, names) => {
+  { delta = false } = {},
+): Promise<{
+  data: Pr[]
+  errors: AccountError[]
+  full: boolean
+  refetched: number
+}> {
+  return cached(`prs:${repos.join(",")}`, CACHE_TTL_MS, async () => {
+    let full = true
+    let refetched = 0
+    const result = await perFollowed(repos, async (a, names) => {
       const login = await me(a)
+      const known = snapshots.get(a.id)
+      const next = new Map<string, Snapshot<Pr>>()
+      const now = Date.now()
       const parts = await Promise.all(
         chunk(names, REPOS_PER_QUERY).map(async (c) => {
+          const key = c.join(",")
           const filter = c.map((r) => "repo:" + r).join(" ")
+          const prev = known?.get(key)
+          const whole = isFullRead(prev, now, !delta)
           // ponytail: au premier chargement, chaque requête parallèle peut relancer une fois (accepté)
-          const nodes = uniqueById(
+          const probe = uniqueById(
             await withStackFallback(
               a.host,
               withoutStack.has(a.id),
               (query) =>
-                searchAll<RawPr>(
+                searchAll<{ id: string }>(
                   conn(a),
                   query,
                   "is:pr is:open involves:@me " + filter,
                 ),
               () => withoutStack.add(a.id),
+              "probe",
             ),
-          )
+          ).map((n) => ({ id: n.id, fp: fingerprint(n) }))
+          const { changed, kept } = splitProbe(probe, whole ? null : prev!.prs)
+          const nodes = await fetchNodes(a, changed)
+          let mentionsFailed = false
           const ids = await mentionedIds(nodes.map(who), login, () =>
             searchAll<{ id: string }>(
               conn(a),
               MENTIONS_QUERY,
               "is:pr is:open mentions:@me " + filter,
               MENTION_SEARCH_RETRIES,
-            ),
+            ).catch((e: unknown) => {
+              mentionsFailed = true
+              throw e
+            }),
           )
-          return nodes.map((p) => toPr(p, login, a.id, ids))
+          const fetched = new Map(
+            nodes.map((p) => [p.id, toPr(p, login, a.id, ids)]),
+          )
+          const merged = mergeProbe(
+            probe,
+            kept,
+            fetched,
+            nextFullAt(whole, now, prev?.fullAt ?? 0, mentionsFailed),
+          )
+          next.set(key, merged.snapshot)
+          if (!whole) full = false
+          refetched += nodes.length
+          return merged.prs
         }),
       )
+      // compte en échec : rejeté avant, son instantané précédent reste
+      snapshots.set(a.id, next)
       return parts.flat()
-    }),
-  )
+    })
+    return { ...result, full, refetched }
+  })
 }
 
 /** Repos (suivis ou non) où j'ai au moins une PR ouverte. */
@@ -602,31 +683,6 @@ export async function updateBranch(prId: string, repo: string) {
     "mutation($id: ID!) { updatePullRequestBranch(input: { pullRequestId: $id }) { pullRequest { id } } }",
     { id: prId },
   )
-}
-
-/** Quota GraphQL d'un compte (`GET /rate_limit`, gratuit : ne compte pas dans la limite) ; null si absent ou en échec. */
-export async function rateLimit(a: Account): Promise<Quota | null> {
-  try {
-    const res = await fetch(`${apiUrl(a.host)}/rate_limit`, {
-      headers: headers(tokenOf(a.id), a.id),
-    })
-    if (!res.ok) return null
-    const { resources } = (await res.json()) as {
-      resources?: {
-        graphql?: { limit: number; remaining: number; reset: number }
-      }
-    }
-    const g = resources?.graphql
-    if (!g) return null
-    const q = {
-      limit: g.limit,
-      remaining: g.remaining,
-      resetAt: g.reset * 1000,
-    }
-    return validQuota(q) ? q : null
-  } catch {
-    return null
-  }
 }
 
 export type Profile = {

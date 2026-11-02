@@ -8,11 +8,11 @@ import {
   fetchPrs,
   fetchReviews,
   listRepos,
-  rateLimit,
   reposWithMyOpenPrs,
 } from "./github"
 import { log } from "./log"
-import { lastCost, recordRateLimits } from "./quota"
+import { recordCosts, spentBy } from "./quota"
+import { refreshStatus, type RefreshStatus } from "./refresh-status"
 import { mergeReviews, type Reviews } from "./review"
 import { getSettings } from "./settings"
 import { saveItem } from "./sync"
@@ -52,6 +52,10 @@ export type Data = {
   mergedError?: string
   loading: boolean
   error?: string
+  /** issue de la dernière actualisation demandée (`refreshPrs` : bouton, automatique), absente avant */
+  status?: RefreshStatus
+  /** fin de cette actualisation, réussie ou non (`fetchedAt` ne bouge pas sur un échec) */
+  statusAt?: string
   /** erreur de jeton : l'interface propose de se reconnecter */
   authError?: boolean
   /** compte dont le jeton a été refusé */
@@ -92,11 +96,19 @@ export function useData(): Data {
 /**
  * (Re)charge tout depuis GitHub. Les réponses d'un chargement dépassé sont ignorées.
  * `measure` : chargement sans cache (actualisation), son coût en quota sert au mode « auto ».
+ * `delta` : actualisation automatique, seules les PR changées depuis la lecture précédente sont relues en entier.
+ * `track` : actualisation demandée (bouton, automatique) : son issue alimente `status` ; les autres chargements le laissent.
  */
-export async function reload({ measure = false } = {}) {
+export async function reload({
+  measure = false,
+  delta = false,
+  track = false,
+} = {}) {
   const id = ++seq
   const start = performance.now()
   const ms = () => Math.round(performance.now() - start)
+  // compteur de points GraphQL de chaque compte avant l'actualisation : base du coût mesuré
+  const spent = allAccounts().map((a) => [a.id, spentBy(a.id)] as const)
   set({ ...data, loading: true })
   // préchauffe la liste du panneau des repos (1 requête GraphQL par 100 repos), au premier chargement seulement
   if (!data.fetchedAt) listRepos().catch(() => {})
@@ -116,21 +128,22 @@ export async function reload({ measure = false } = {}) {
       from: day(new Date(now.getTime() - getSettings().mergedDays * DAY_MS)),
       to: day(now),
     }
-    const [{ data: fetched, errors }, merged, found] = await Promise.all([
-      fetchPrs(repos),
-      fetchMerged(repos, mergedWindow.from, mergedWindow.to).then(
-        (list) => ({ list, error: undefined }),
-        (e: unknown) => ({
-          list: [] as MergedPr[],
-          error: e instanceof Error ? e.message.slice(0, 300) : String(e),
-        }),
-      ),
-      // tous les comptes en échec : même traitement qu'un échec partiel
-      fetchReviews().catch((error: unknown) => ({
-        data: [],
-        errors: queried.map((account) => ({ account, error })),
-      })),
-    ])
+    const [{ data: fetched, errors, full, refetched }, merged, found] =
+      await Promise.all([
+        fetchPrs(repos, { delta }),
+        fetchMerged(repos, mergedWindow.from, mergedWindow.to).then(
+          (list) => ({ list, error: undefined }),
+          (e: unknown) => ({
+            list: [] as MergedPr[],
+            error: e instanceof Error ? e.message.slice(0, 300) : String(e),
+          }),
+        ),
+        // tous les comptes en échec : même traitement qu'un échec partiel
+        fetchReviews().catch((error: unknown) => ({
+          data: [],
+          errors: queried.map((account) => ({ account, error })),
+        })),
+      ])
     if (id !== seq) return
     // compte dont seule la recherche des reviews échoue : nommé lui aussi dans le bandeau
     const shown = [
@@ -168,10 +181,21 @@ export async function reload({ measure = false } = {}) {
       mergedWindow: merged.error ? undefined : mergedWindow,
       mergedError: merged.error,
       loading: false,
+      ...(track && {
+        status: refreshStatus({
+          accounts: queried.map((a) => a.id),
+          prErrors: errors.map((e) => e.account.id),
+          reviewErrors: found.errors.map((e) => e.account.id),
+          mergedError: merged.error,
+        }),
+        statusAt: new Date().toISOString(),
+      }),
     })
     log(shown.length ? "warn" : "info", "refresh", {
       ms: ms(),
       measure,
+      mode: full ? "full" : "delta",
+      refetched,
       repos: live.length,
       prs: prs.length,
       reviews: reviews.known.reviews.length,
@@ -179,23 +203,16 @@ export async function reload({ measure = false } = {}) {
         errors: shown.map((e) => ({ account: e.account.id, error: e.error })),
       }),
     })
-    // relevé du quota de chaque compte, sans faire attendre la fin de l'actualisation : base du mode « auto »
+    // coût de l'actualisation par compte (toutes ses requêtes GraphQL pendant ce temps) : base du mode « auto »
     if (measure && getSettings().refreshMinutes === "auto")
-      Promise.all(queried.map(async (a) => [a.id, await rateLimit(a)] as const))
-        .then((snaps) => {
-          // compte déconnecté pendant le relevé : ignoré
-          if (id !== seq) return
-          const known = snaps.filter(([a]) => findAccount(a))
-          recordRateLimits(known)
-          log("info", "refresh.quota", {
-            accounts: known.map(([account, q]) => ({
-              account,
-              remaining: q?.remaining,
-              cost: lastCost(account),
-            })),
-          })
-        })
-        .catch(() => {})
+      log("info", "refresh.quota", {
+        // compte déconnecté pendant l'actualisation : ignoré
+        accounts: recordCosts(
+          spent.filter(([a]) => findAccount(a)),
+          Date.now(),
+          full,
+        ),
+      })
   } catch (e) {
     if (id !== seq) return
     log("error", "refresh.failed", {
@@ -209,6 +226,10 @@ export async function reload({ measure = false } = {}) {
       error: e instanceof Error ? e.message.slice(0, 300) : String(e),
       authError: e instanceof Error && e.name === "AuthError",
       authAccount: (e as { account?: string }).account,
+      ...(track && {
+        status: "failed" as const,
+        statusAt: new Date().toISOString(),
+      }),
     })
   }
 }
