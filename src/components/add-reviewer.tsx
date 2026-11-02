@@ -8,17 +8,22 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { UserCommand } from "@/components/user-command"
+import { splitKey } from "@/lib/accounts"
 import { addReviewer } from "@/lib/actions"
 import { fetchReviewerOptions } from "@/lib/github"
 import { strings, useStrings } from "@/lib/i18n"
 import {
   dmNames as namesOf,
   dmRecipients,
-  matchRecipients,
   reviewerCandidates,
   type Reviewer,
 } from "@/lib/reviewers"
-import { useMentions } from "@/lib/slack"
+import { useMentions, useSlack } from "@/lib/slack"
+import {
+  dmReviewers,
+  lookupRecipients,
+  useSlackGithubMap,
+} from "@/lib/slack-github-map"
 import { usePendingReviews } from "@/lib/store"
 import type { Pr } from "@/lib/types"
 
@@ -51,9 +56,15 @@ export function AddReviewer({ pr }: { pr: Pr }) {
   const [error, setError] = useState<string>()
   const { pending } = usePendingReviews(pr.url)
   const recipients = dmRecipients(useMentions(pr.url))
+  // table Slack → GitHub des réglages : liens manuels sans recherche, exclusions jamais proposées
+  const map = useSlackGithubMap()
+  const team = useSlack().team?.id
+  const account = splitKey(pr.repo).account
   // noms Slack des destinataires, cherchés parmi les utilisateurs assignables seulement sans recherche tapée
   // (une recherche tapée filtre déjà, pas d'alias GraphQL à chaque frappe). Chaîne : clé stable de l'effet.
-  const dmNames = namesOf(recipients).join("\n")
+  const dmNames = namesOf(
+    lookupRecipients(recipients, map, team, account),
+  ).join("\n")
   const q = query.trim()
 
   useEffect(() => {
@@ -98,7 +109,7 @@ export function AddReviewer({ pr }: { pr: Pr }) {
         ...pr.requested.filter((r) => !r.team).map((r) => r.who),
         ...pending.map((p) => p.login),
       ],
-      matchRecipients(recipients, [
+      dmReviewers(recipients, map, team, account, [
         ...options.dm,
         ...options.suggested,
         ...options.assignable,

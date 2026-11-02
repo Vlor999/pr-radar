@@ -9,13 +9,17 @@ import {
   dmNames,
   dmRecipients,
   ghostReviewers,
-  matchRecipients,
   parseDismissed,
   unresolvedRecipients,
   type PendingReview,
   type Reviewer,
 } from "@/lib/reviewers"
-import { useMentions } from "@/lib/slack"
+import { useMentions, useSlack } from "@/lib/slack"
+import {
+  dmReviewers,
+  lookupRecipients,
+  useSlackGithubMap,
+} from "@/lib/slack-github-map"
 import { onPulled, saveItem } from "@/lib/sync"
 import type { Pr } from "@/lib/types"
 
@@ -63,7 +67,8 @@ export function dismissDmSuggestion(url: string, login: string) {
 
 /**
  * Destinataires de mes DM Slack 1:1 sur une de mes PR, rapprochés d'un utilisateur GitHub et pas encore
- * reviewers. Requête GitHub seulement s'il reste un destinataire sans login connu (en cache 10 min, voir
+ * reviewers. Liens de la table Slack → GitHub des réglages d'abord (sans requête), sinon rapprochement par nom.
+ * Requête GitHub seulement s'il reste un destinataire sans login connu (en cache 10 min, voir
  * `fetchDmReviewers`) ; PR d'un autre ou sans DM : aucune.
  */
 export function useDmSuggestions(pr: Pr, pending: PendingReview[]): Reviewer[] {
@@ -71,6 +76,9 @@ export function useDmSuggestions(pr: Pr, pending: PendingReview[]): Reviewer[] {
   const raw = useSyncExternalStore(subscribe, read)
   const dismissed = useMemo(() => parseDismissed(raw), [raw])
   const [found, setFound] = useState<{ key: string; users: Reviewer[] }>()
+  const map = useSlackGithubMap()
+  const team = useSlack().team?.id
+  const account = splitKey(pr.repo).account
 
   const recipients = pr.involved ? [] : dmRecipients(mentions)
   const known = [
@@ -79,7 +87,12 @@ export function useDmSuggestions(pr: Pr, pending: PendingReview[]): Reviewer[] {
     ...pending.map((p) => p.login),
   ]
   // chaîne : clé stable de l'effet (les tableaux changent d'identité à chaque rendu)
-  const names = dmNames(unresolvedRecipients(recipients, known)).join("\n")
+  const names = dmNames(
+    unresolvedRecipients(
+      lookupRecipients(recipients, map, team, account),
+      known,
+    ),
+  ).join("\n")
 
   useEffect(() => {
     if (!names) return
@@ -95,10 +108,10 @@ export function useDmSuggestions(pr: Pr, pending: PendingReview[]): Reviewer[] {
 
   const users = names && found?.key === names ? found.users : []
   return ghostReviewers(
-    matchRecipients(recipients, users),
+    dmReviewers(recipients, map, team, account, users),
     pr,
     pending,
     dismissed,
-    findAccount(splitKey(pr.repo).account)?.login,
+    findAccount(account)?.login,
   )
 }
