@@ -29,6 +29,8 @@ import { getRepos } from "@/lib/store"
 import type { SlackConversation } from "@/lib/types"
 
 const SEARCH_DEBOUNCE_MS = 250 // une requête GraphQL par frappe sinon
+/** repos lus par compte, comme MAP_REPOS_MAX de src/lib/github.ts (message de liste tronquée) */
+const REPOS_PER_ACCOUNT = 30
 
 const S = strings(
   {
@@ -43,6 +45,11 @@ const S = strings(
     add: (name: string) => `Lier un compte GitHub à ${name}`,
     remove: (login: string) => `Retirer ${login}`,
     confirm: (login: string) => `Confirmer ${login}`,
+    loadError: "Impossible de lire les utilisateurs GitHub des repos suivis.",
+    searchError: "Recherche GitHub impossible.",
+    retry: "Réessayer",
+    truncated: (max: number) =>
+      `Seuls les ${max} premiers repos suivis de chaque compte sont lus.`,
   },
   {
     title: "Contacts' GitHub accounts",
@@ -56,6 +63,11 @@ const S = strings(
     add: (name: string) => `Link a GitHub account to ${name}`,
     remove: (login: string) => `Remove ${login}`,
     confirm: (login: string) => `Confirm ${login}`,
+    loadError: "Could not read the GitHub users of the followed repos.",
+    searchError: "GitHub search failed.",
+    retry: "Retry",
+    truncated: (max: number) =>
+      `Only the first ${max} followed repos of each account are read.`,
   },
 )
 
@@ -75,25 +87,53 @@ export function SlackGithubTable({
 }) {
   const t = useStrings(S)
   const map = useSlackGithubMap()
-  const [users, setUsers] = useState<AssignableUser[] | null>(null)
-  const [error, setError] = useState("")
+  const [found, setFound] = useState<{
+    users: AssignableUser[]
+    truncated: boolean
+  } | null>(null)
+  // échec : `found` reste null, message traduit et « Réessayer » (relance par `attempt`)
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const users = found?.users
   const contacts: Contact[] = convs.flatMap((c) =>
     c.kind === "im" && c.contact ? [{ ...c.contact, name: c.name }] : [],
   )
   const multi = allAccounts().length > 1
 
   useEffect(() => {
-    if (!contacts.length || users) return
-    searchAssignable(getRepos() ?? [], "").then(setUsers, (e: unknown) => {
-      setUsers([]) // liens manuels toujours affichés et modifiables
-      setError(e instanceof Error ? e.message : String(e))
-    })
-  }, [contacts.length, users])
+    if (!contacts.length) return
+    let live = true
+    setFailed(false)
+    searchAssignable(getRepos() ?? [], "").then(
+      (r) => live && setFound(r),
+      () => live && setFailed(true), // détail dans le journal (github.error)
+    )
+    return () => {
+      live = false
+    }
+  }, [contacts.length, attempt])
 
   return (
     <>
       <Row label={t.title} description={t.description} />
-      {error && <p className="pb-3 text-xs text-destructive">{error}</p>}
+      {failed && (
+        <p className="flex items-center gap-2 pb-3 text-xs text-destructive">
+          {t.loadError}
+          <Button
+            variant="outline"
+            size="xs"
+            className="cursor-pointer"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            {t.retry}
+          </Button>
+        </p>
+      )}
+      {found?.truncated && (
+        <p className="pb-3 text-xs text-muted-foreground">
+          {t.truncated(REPOS_PER_ACCOUNT)}
+        </p>
+      )}
       {!contacts.length ? (
         <p className="pb-3 text-sm text-muted-foreground">{t.empty}</p>
       ) : (
@@ -132,7 +172,7 @@ export function SlackGithubTable({
                   ))}
                   {!links.length && (
                     <span className="text-xs text-muted-foreground">
-                      {users ? t.none : t.loading}
+                      {users || failed ? t.none : t.loading}
                     </span>
                   )}
                   <LinkPicker
@@ -258,6 +298,7 @@ function LinkPicker({
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
+  const t = useStrings(S)
   const [users, setUsers] = useState<AssignableUser[] | null>(null)
   const [error, setError] = useState<string>()
   const q = query.trim()
@@ -268,15 +309,15 @@ function LinkPicker({
     const id = setTimeout(
       () =>
         searchAssignable(getRepos() ?? [], q).then(
-          (u) => {
+          (r) => {
             if (!live) return
-            setUsers(u)
+            setUsers(r.users)
             setError(undefined)
           },
-          (e: unknown) => {
+          () => {
             if (!live) return
             setUsers(null)
-            setError(e instanceof Error ? e.message : String(e))
+            setError(t.searchError) // détail dans le journal (github.error)
           },
         ),
       q ? SEARCH_DEBOUNCE_MS : 0,
@@ -285,7 +326,7 @@ function LinkPicker({
       live = false
       clearTimeout(id)
     }
-  }, [open, q])
+  }, [open, q, t.searchError])
 
   // déjà liés, et mes propres comptes : jamais reviewers de mes PR
   const taken = new Set(

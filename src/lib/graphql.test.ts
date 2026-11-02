@@ -5,6 +5,8 @@ import { test } from "node:test"
 import { CHECKS_QUERY } from "./checks.ts"
 
 import {
+  assignableFrom,
+  capPerAccount,
   gqlFailed,
   gqlMessage,
   restRepos,
@@ -203,4 +205,41 @@ test("chaque mutation réelle est envoyée inchangée", () => {
   const { mutations } = sourceOps()
   assert.ok(mutations.length >= 5, `${mutations.length} mutations trouvées`)
   for (const m of mutations) assert.equal(withCost(m), m)
+})
+
+test("lecture partielle : un repo inaccessible (racine null + errors) n'annule pas la réponse", () => {
+  const json = {
+    data: {
+      r0: { assignableUsers: { nodes: [{ login: "alice" }] } },
+      r1: null,
+      r2: { assignableUsers: { nodes: [{ login: "bob" }] } },
+    },
+    errors,
+  }
+  assert.equal(gqlFailed(json), true)
+  assert.equal(gqlFailed(json, true), false)
+  assert.deepEqual(assignableFrom(json.data, 3), [
+    { login: "alice" },
+    { login: "bob" },
+  ])
+})
+
+test("lecture partielle sans data : échec", () => {
+  assert.equal(gqlFailed({ errors }, true), true)
+})
+
+test("repos plafonnés par compte, après regroupement, et signalés", () => {
+  const out = capPerAccount(
+    [
+      ["a", ["x/1", "x/2", "x/3"]],
+      ["b", ["y/1"]],
+    ],
+    2,
+  )
+  assert.deepEqual(out.groups, [
+    ["a", ["x/1", "x/2"]],
+    ["b", ["y/1"]],
+  ])
+  assert.equal(out.truncated, true)
+  assert.equal(capPerAccount([["b", ["y/1"]]], 2).truncated, false)
 })

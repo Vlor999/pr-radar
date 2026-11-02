@@ -578,11 +578,13 @@ export const fetchReviewerOptions = async (
 })
 export const fetchDmReviewers = async (_repo: string, names: string[]) =>
   names.flatMap((n) => search(n, DM_LOOKUP_PAGE))
-export const searchAssignable = async (_repos: string[], query: string) =>
-  search(query, DEMO_USERS.length + 1).map((u) => ({
+export const searchAssignable = async (_repos: string[], query: string) => ({
+  users: search(query, DEMO_USERS.length + 1).map((u) => ({
     ...u,
     account: DEFAULT_ID,
-  }))
+  })),
+  truncated: false,
+})
 export const requestReviewer = async (
   prId: string,
   userId: string,

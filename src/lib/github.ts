@@ -21,6 +21,8 @@ import {
   type RawChecks,
 } from "./checks"
 import {
+  assignableFrom,
+  capPerAccount,
   gqlFailed,
   gqlMessage,
   restRepos,
@@ -65,7 +67,7 @@ const DM_LOOKUPS_MAX = 6
 const DM_USERS_TTL_MS = 10 * 60_000
 // table Slack → GitHub des réglages : utilisateurs assignables des repos suivis, une requête par compte,
 // un alias par repo. Coût GraphQL ~ connexions demandées / 100 : 1 point par compte jusqu'à 100 repos.
-const MAP_REPOS_MAX = 30
+const MAP_REPOS_MAX = 30 // par compte
 /** sans recherche : toute la 1re page de chaque repo, rapprochée par nom en local */
 const MAP_ALL_PAGE = 100
 /** recherche tapée dans le sélecteur : quelques résultats par repo suffisent */
@@ -131,6 +133,8 @@ async function gql<T>(
   c: Conn,
   query: string,
   variables: Record<string, unknown> = {},
+  /** racines null + errors tolérées (voir `gqlFailed`) : l'appelant les ignore */
+  { partial = false } = {},
 ): Promise<T> {
   const res = await fetch(graphqlUrl(c.host), {
     method: "POST",
@@ -151,7 +155,12 @@ async function gql<T>(
   const cost = takeCost(json)
   if (cost !== undefined && c.account && findAccount(c.account))
     addCost(c.account, cost)
-  if (gqlFailed(json)) {
+  if (partial && json.errors?.length)
+    log("warn", "github.partial", {
+      account: c.account,
+      error: gqlMessage(json, ""),
+    })
+  if (gqlFailed(json, partial)) {
     const error = gqlMessage(json, pick(S).http(res.status))
     log("warn", "github.error", {
       account: c.account,
@@ -870,62 +879,67 @@ export function fetchDmReviewers(
 export type AssignableUser = Reviewer & { account: string }
 
 /**
- * Utilisateurs assignables des repos suivis (30 au plus), tous comptes, filtrés par `query` : table
- * Slack → GitHub des réglages (rapprochement par nom sans recherche, sélecteur avec). Assignables plutôt que
- * la recherche d'utilisateurs GitHub : seuls eux peuvent reviewer, et un homonyme inconnu n'est pas proposé.
- * Une requête par compte (un alias par repo), en cache 10 min, gardée à l'actualisation.
+ * Utilisateurs assignables des repos suivis (30 au plus par compte, `truncated` au-delà), tous comptes, filtrés
+ * par `query` : table Slack → GitHub des réglages (rapprochement par nom sans recherche, sélecteur avec).
+ * Assignables plutôt que la recherche d'utilisateurs GitHub : seuls eux peuvent reviewer, et un homonyme inconnu
+ * n'est pas proposé. Une requête par compte (un alias par repo), lue en mode partiel : un repo inaccessible
+ * n'annule pas les autres. En cache 10 min, gardée à l'actualisation.
  */
 export function searchAssignable(
   repos: string[],
   query: string,
-): Promise<AssignableUser[]> {
-  const list = repos.slice(0, MAP_REPOS_MAX)
+): Promise<{ users: AssignableUser[]; truncated: boolean }> {
   const first = query ? MAP_SEARCH_PAGE : MAP_ALL_PAGE
+  const { groups, truncated } = capPerAccount(
+    byAccount(repos, allAccounts()),
+    MAP_REPOS_MAX,
+  )
   return cached(
-    `dmUsers:assignable:${list.join(",")}|${query}`,
+    `dmUsers:assignable:${repos.join(",")}|${query}`,
     DM_USERS_TTL_MS,
     async () => {
-      const { data } = await perFollowed(list, async (a, names) => {
-        const vars = names.map((_, i) => `, $o${i}: String!, $n${i}: String!`)
-        const fields = names.map(
-          (_, i) =>
-            `r${i}: repository(owner: $o${i}, name: $n${i}) { assignableUsers(first: ${first}, query: $q) { nodes { login id name } } }`,
-        )
-        const res = await gql<
-          Record<
-            `r${number}`,
-            { assignableUsers: { nodes: Reviewer[] } } | null
-          >
-        >(
-          conn(a),
-          `query($q: String${vars.join("")}) { ${fields.join("\n")} }`,
-          {
-            q: query || null,
-            ...Object.fromEntries(
-              names.flatMap((n, i) => {
-                const [owner, name] = n.split("/")
-                return [
-                  [`o${i}`, owner],
-                  [`n${i}`, name],
-                ]
-              }),
-            ),
-          },
-        )
-        return names.flatMap((_, i) =>
-          (res[`r${i}`]?.assignableUsers.nodes ?? []).map((u) => ({
+      const { data } = await settle(
+        groups.map(([a]) => a),
+        async (a) => {
+          const names = groups.find(([g]) => g === a)![1]
+          const vars = names.map((_, i) => `, $o${i}: String!, $n${i}: String!`)
+          const fields = names.map(
+            (_, i) =>
+              `r${i}: repository(owner: $o${i}, name: $n${i}) { assignableUsers(first: ${first}, query: $q) { nodes { login id name } } }`,
+          )
+          const res = await gql<
+            Record<string, { assignableUsers: { nodes: Reviewer[] } } | null>
+          >(
+            conn(a),
+            `query($q: String${vars.join("")}) { ${fields.join("\n")} }`,
+            {
+              q: query || null,
+              ...Object.fromEntries(
+                names.flatMap((n, i) => {
+                  const [owner, name] = n.split("/")
+                  return [
+                    [`o${i}`, owner],
+                    [`n${i}`, name],
+                  ]
+                }),
+              ),
+            },
+            { partial: true },
+          )
+          return assignableFrom(res, names.length).map((u) => ({
             ...u,
             account: a.id,
-          })),
-        )
-      })
+          }))
+        },
+      )
       const seen = new Set<string>()
-      return data.filter((u) => {
+      const users = data.filter((u) => {
         const k = `${u.account}|${u.login.toLowerCase()}`
         if (seen.has(k)) return false
         seen.add(k)
         return true
       })
+      return { users, truncated }
     },
   )
 }
