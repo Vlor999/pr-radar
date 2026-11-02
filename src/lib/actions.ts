@@ -107,7 +107,7 @@ export async function refreshPrs({ auto = false } = {}) {
   // réglages et repos suivis changés dans l'autre fenêtre (app ou version web)
   await pull().catch(() => {})
   clearCache()
-  await reload({ measure: true, delta: auto })
+  await reload({ measure: true, delta: auto, track: true })
 }
 
 /** Publie un message sur le nœud GitHub `id`, puis relit GitHub pour l'afficher. */

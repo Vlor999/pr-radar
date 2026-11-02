@@ -52,9 +52,9 @@ export type Data = {
   mergedError?: string
   loading: boolean
   error?: string
-  /** issue du dernier chargement terminé (absent avant le premier) */
+  /** issue de la dernière actualisation demandée (`refreshPrs` : bouton, automatique), absente avant */
   status?: RefreshStatus
-  /** fin de ce chargement, réussi ou non (`fetchedAt` ne bouge pas sur un échec) */
+  /** fin de cette actualisation, réussie ou non (`fetchedAt` ne bouge pas sur un échec) */
   statusAt?: string
   /** erreur de jeton : l'interface propose de se reconnecter */
   authError?: boolean
@@ -97,8 +97,13 @@ export function useData(): Data {
  * (Re)charge tout depuis GitHub. Les réponses d'un chargement dépassé sont ignorées.
  * `measure` : chargement sans cache (actualisation), son coût en quota sert au mode « auto ».
  * `delta` : actualisation automatique, seules les PR changées depuis la lecture précédente sont relues en entier.
+ * `track` : actualisation demandée (bouton, automatique) : son issue alimente `status` ; les autres chargements le laissent.
  */
-export async function reload({ measure = false, delta = false } = {}) {
+export async function reload({
+  measure = false,
+  delta = false,
+  track = false,
+} = {}) {
   const id = ++seq
   const start = performance.now()
   const ms = () => Math.round(performance.now() - start)
@@ -176,12 +181,15 @@ export async function reload({ measure = false, delta = false } = {}) {
       mergedWindow: merged.error ? undefined : mergedWindow,
       mergedError: merged.error,
       loading: false,
-      status: refreshStatus({
-        accounts: queried.map((a) => a.id),
-        failedAccounts: shown.map((e) => e.account.id),
-        mergedError: merged.error,
+      ...(track && {
+        status: refreshStatus({
+          accounts: queried.map((a) => a.id),
+          prErrors: errors.map((e) => e.account.id),
+          reviewErrors: found.errors.map((e) => e.account.id),
+          mergedError: merged.error,
+        }),
+        statusAt: new Date().toISOString(),
       }),
-      statusAt: new Date().toISOString(),
     })
     log(shown.length ? "warn" : "info", "refresh", {
       ms: ms(),
@@ -218,8 +226,10 @@ export async function reload({ measure = false, delta = false } = {}) {
       error: e instanceof Error ? e.message.slice(0, 300) : String(e),
       authError: e instanceof Error && e.name === "AuthError",
       authAccount: (e as { account?: string }).account,
-      status: "failed",
-      statusAt: new Date().toISOString(),
+      ...(track && {
+        status: "failed" as const,
+        statusAt: new Date().toISOString(),
+      }),
     })
   }
 }
