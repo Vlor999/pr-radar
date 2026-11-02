@@ -14,9 +14,9 @@ import { addReviewer } from "@/lib/actions"
 import { fetchReviewerOptions } from "@/lib/github"
 import { strings, useStrings } from "@/lib/i18n"
 import {
+  dmNames as namesOf,
   dmRecipients,
   matchRecipients,
-  normalizeName,
   reviewerCandidates,
   type Reviewer,
 } from "@/lib/reviewers"
@@ -64,11 +64,7 @@ export function AddReviewer({ pr }: { pr: Pr }) {
   const recipients = dmRecipients(useMentions(pr.url))
   // noms Slack des destinataires, cherchés parmi les utilisateurs assignables seulement sans recherche tapée
   // (une recherche tapée filtre déjà, pas d'alias GraphQL à chaque frappe). Chaîne : clé stable de l'effet.
-  const dmNames = [
-    ...new Map(
-      recipients.flatMap((r) => r.names).map((n) => [normalizeName(n), n]),
-    ).values(),
-  ].join("\n")
+  const dmNames = namesOf(recipients).join("\n")
   const q = query.trim()
 
   useEffect(() => {

@@ -98,3 +98,66 @@ export function settledPending(
   }
   return out
 }
+
+/** Noms Slack des destinataires à chercher sur GitHub, sans doublon une fois normalisés. */
+export const dmNames = (recipients: SlackRecipient[]) => [
+  ...new Map(
+    recipients.flatMap((r) => r.names).map((n) => [normalizeName(n), n]),
+  ).values(),
+]
+
+/** Destinataires dont aucun nom ne correspond déjà à un login connu (reviewer, review demandée) : seuls
+ * ceux-là justifient une recherche GitHub. */
+export const unresolvedRecipients = (
+  recipients: SlackRecipient[],
+  logins: string[],
+) => {
+  const known = logins.map((login) => ({ login, id: login }))
+  return recipients.filter((r) => !matchRecipients([r], known).length)
+}
+
+/** Clé d'une suggestion écartée : la PR et le login GitHub (casse ignorée). */
+export const dismissKey = (url: string, login: string) =>
+  `${url}|${login.toLowerCase()}`
+
+/** Suggestions écartées lues du stockage ; valeur absente ou invalide : aucune. */
+export function parseDismissed(raw: string | null): string[] {
+  try {
+    const v: unknown = JSON.parse(raw ?? "[]")
+    return Array.isArray(v)
+      ? v.filter((x): x is string => typeof x === "string")
+      : []
+  } catch {
+    return []
+  }
+}
+
+/** Ajoute une suggestion écartée ; au-delà de `max`, les plus anciennes sont oubliées. */
+export const addDismissed = (list: string[], key: string, max: number) =>
+  [...list.filter((k) => k !== key), key].slice(-max)
+
+/**
+ * Reviewers fantômes de la carte : destinataires de DM rapprochés d'un utilisateur GitHub, sauf moi, ceux
+ * qui ont déjà reviewé, les reviews demandées (sur GitHub ou en cours) et les suggestions écartées.
+ */
+export function ghostReviewers(
+  matched: Reviewer[],
+  pr: Pick<Pr, "url" | "reviews" | "requested">,
+  pending: PendingReview[],
+  dismissed: string[],
+  viewer?: string,
+): Reviewer[] {
+  const taken = new Set(
+    [
+      ...(viewer ? [viewer] : []),
+      ...pr.reviews.map((r) => r.who),
+      ...pr.requested.filter((r) => !r.team).map((r) => r.who),
+      ...pending.map((p) => p.login),
+    ].map((l) => l.toLowerCase()),
+  )
+  return matched.filter(
+    (u) =>
+      !taken.has(u.login.toLowerCase()) &&
+      !dismissed.includes(dismissKey(pr.url, u.login)),
+  )
+}

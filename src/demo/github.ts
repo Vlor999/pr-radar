@@ -574,6 +574,8 @@ export const fetchReviewerOptions = async (
   assignable: search(query, ASSIGNABLE_PAGE),
   dm: dmNames.flatMap((n) => search(n, DM_LOOKUP_PAGE)),
 })
+export const fetchDmReviewers = async (_repo: string, names: string[]) =>
+  names.flatMap((n) => search(n, DM_LOOKUP_PAGE))
 export const requestReviewer = async (
   prId: string,
   userId: string,
@@ -586,7 +588,8 @@ export const requestReviewer = async (
       "me does not have the correct permissions to execute `RequestReviews`",
     )
   // la demande apparaît sur la carte au rechargement qui suit
-  const p = PRS.find((p) => `${p.repo}#${p.number}` === prId)
+  // popover : `repo#numéro` ; reviewer fantôme de la carte : id du nœud de la PR
+  const p = PRS.find((p) => `${p.repo}#${p.number}` === prId || p.id === prId)
   p?.requested.push({ who: userId.slice(2) })
   console.info("[demo] request review", prId, userId, repo)
 }

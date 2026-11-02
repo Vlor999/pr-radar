@@ -60,6 +60,11 @@ const ASSIGNABLE_PAGE = 20 // assez pour un popover ; la recherche affine au-del
 // Coût GraphQL : 1 point par requête tant que les connexions demandées restent sous 100 nœuds.
 const DM_LOOKUP_PAGE = 5
 const DM_LOOKUPS_MAX = 6
+// destinataires de DM de la carte (reviewer fantôme) : les utilisateurs assignables changent rarement ;
+// gardés 10 min et à l'actualisation, soit 1 point par PR concernée toutes les 10 min au plus
+const DM_USERS_TTL_MS = 10 * 60_000
+/** clés de cache gardées par une actualisation (`clearCache` sans `all`) */
+const KEPT_ON_REFRESH = ["repos:", "dmUsers:"]
 // la recherche GitHub renvoie parfois 0 résultat sans erreur (~1 appel sur 3) : un vide est relu avant d'être cru.
 // Reste ~1/27 par recherche (un lot de 5 repos), absorbé par `keepVanished` dans store.reload.
 const EMPTY_SEARCH_RETRIES = 2
@@ -371,7 +376,7 @@ function peek<T>(key: string): { value: T; at: number } | null {
  */
 export function clearCache({ all = false } = {}) {
   for (const k of caches.keys())
-    if (all || !k.startsWith("repos:")) caches.delete(k)
+    if (all || !KEPT_ON_REFRESH.some((p) => k.startsWith(p))) caches.delete(k)
   if (all) {
     viewers.clear()
     snapshots.clear()
@@ -749,6 +754,25 @@ const accountOf = (repo: string) => {
   return a
 }
 
+type DmFields = Record<`dm${number}`, { nodes: Reviewer[] } | null>
+
+/** Recherche de noms Slack parmi les utilisateurs assignables (6 au plus) : une variable et un alias par nom,
+ * `$dm0` → `dm0: assignableUsers(…)`, lus ensuite par `read`. */
+const dmLookup = (names: string[]) => {
+  const lookups = names.slice(0, DM_LOOKUPS_MAX)
+  return {
+    vars: lookups.map((_, i) => `, $dm${i}: String!`).join(""),
+    fields: lookups
+      .map(
+        (_, i) =>
+          `dm${i}: assignableUsers(first: ${DM_LOOKUP_PAGE}, query: $dm${i}) { nodes { login id name } }`,
+      )
+      .join("\n"),
+    values: Object.fromEntries(lookups.map((n, i) => [`dm${i}`, n])),
+    read: (r: DmFields) => lookups.flatMap((_, i) => r[`dm${i}`]?.nodes ?? []),
+  }
+}
+
 /**
  * Reviewers possibles d'une de mes PR : suggestions GitHub, puis utilisateurs assignables filtrés par `query`.
  * `dmNames` : noms Slack des destinataires de DM qui citent la PR ; chacun est cherché parmi les utilisateurs
@@ -767,15 +791,7 @@ export async function fetchReviewerOptions(
   dm: Reviewer[]
 }> {
   const [owner, name] = splitKey(repo).name.split("/")
-  const lookups = dmNames.slice(0, DM_LOOKUPS_MAX)
-  // une variable et un alias par nom : `$dm0` → `dm0: assignableUsers(…)`
-  const dmVars = lookups.map((_, i) => `, $dm${i}: String!`).join("")
-  const dmFields = lookups
-    .map(
-      (_, i) =>
-        `dm${i}: assignableUsers(first: ${DM_LOOKUP_PAGE}, query: $dm${i}) { nodes { login id name } }`,
-    )
-    .join("\n")
+  const dm = dmLookup(dmNames)
   const res = await gql<{
     viewer: { login: string }
     repository:
@@ -785,16 +801,16 @@ export async function fetchReviewerOptions(
             suggestedReviewers: { reviewer: Reviewer }[]
           } | null
           assignableUsers: { nodes: Reviewer[] } | null
-        } & Record<`dm${number}`, { nodes: Reviewer[] } | null>)
+        } & DmFields)
       | null
   }>(
     conn(accountOf(repo)),
-    `query($owner: String!, $name: String!, $number: Int!, $q: String${dmVars}) {
+    `query($owner: String!, $name: String!, $number: Int!, $q: String${dm.vars}) {
       viewer { login }
       repository(owner: $owner, name: $name) {
         pullRequest(number: $number) { id suggestedReviewers { reviewer { login id name } } }
         assignableUsers(first: ${ASSIGNABLE_PAGE}, query: $q) { nodes { login id name } }
-        ${dmFields}
+        ${dm.fields}
       }
     }`,
     {
@@ -802,7 +818,7 @@ export async function fetchReviewerOptions(
       name,
       number,
       q: query || null,
-      ...Object.fromEntries(lookups.map((n, i) => [`dm${i}`, n])),
+      ...dm.values,
     },
   )
   // `repository` null + errors : `gql` lève déjà ; ici, PR absente (champ imbriqué) ou repo null sans erreur
@@ -815,8 +831,32 @@ export async function fetchReviewerOptions(
     viewer: res.viewer.login,
     suggested: pr.suggestedReviewers.map((s) => s.reviewer),
     assignable: users.nodes,
-    dm: lookups.flatMap((_, i) => r[`dm${i}`]?.nodes ?? []),
+    dm: dm.read(r),
   }
+}
+
+/** Utilisateurs assignables trouvés par les noms Slack des destinataires de DM d'une PR (reviewer fantôme
+ * de la carte) : seulement les champs aliasés, sans la PR ni la 1re page ; en cache 10 min. */
+export function fetchDmReviewers(
+  repo: string,
+  names: string[],
+): Promise<Reviewer[]> {
+  return cached(
+    `dmUsers:${repo}|${names.join("\n")}`,
+    DM_USERS_TTL_MS,
+    async () => {
+      const [owner, name] = splitKey(repo).name.split("/")
+      const dm = dmLookup(names)
+      const res = await gql<{ repository: DmFields | null }>(
+        conn(accountOf(repo)),
+        `query($owner: String!, $name: String!${dm.vars}) {
+          repository(owner: $owner, name: $name) { ${dm.fields} }
+        }`,
+        { owner, name, ...dm.values },
+      )
+      return res.repository ? dm.read(res.repository) : []
+    },
+  )
 }
 
 /** Demande une review à un utilisateur ; `union` garde les demandes déjà en cours. */

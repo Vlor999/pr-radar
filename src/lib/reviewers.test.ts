@@ -2,7 +2,13 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import {
+  addDismissed,
+  dismissKey,
+  dmNames,
   dmRecipients,
+  ghostReviewers,
+  parseDismissed,
+  unresolvedRecipients,
   matchRecipients,
   normalizeName,
   reviewerCandidates,
@@ -153,4 +159,71 @@ test("un chargement efface les demandes acceptées avant son départ, pas les au
       ],
     },
   )
+})
+
+const PR_URL = "https://github.com/acme/api/pull/88"
+
+test("noms Slack à chercher sans doublon une fois normalisés", () => {
+  assert.deepEqual(
+    dmNames([
+      { id: "U1", names: ["Erin Laurent", "erin"] },
+      { id: "U2", names: ["erin laurent", "Bob"] },
+    ]),
+    ["erin laurent", "erin", "Bob"],
+  )
+})
+
+test("un destinataire déjà reviewer par son login ne relance pas de recherche", () => {
+  const alice = { id: "U1", names: ["Alice Martin", "alice"] }
+  const erin = { id: "U2", names: ["Erin Laurent"] }
+  assert.deepEqual(unresolvedRecipients([alice, erin], ["Alice", "bob"]), [
+    erin,
+  ])
+})
+
+test("reviewer fantôme : ni moi, ni un reviewer, ni une demande en cours ou sur GitHub", () => {
+  const out = ghostReviewers(
+    [u("me"), u("bob"), u("carol"), u("dave"), u("erin-l")],
+    {
+      url: PR_URL,
+      reviews: [{ who: "Bob", state: "APPROVED" }],
+      requested: [{ who: "carol" }],
+    },
+    [{ login: "dave", sentAt: null }],
+    [],
+    "me",
+  )
+  assert.deepEqual(logins(out), ["erin-l"])
+})
+
+test("reviewer fantôme écarté sur cette PR seulement, casse ignorée", () => {
+  const pr = { reviews: [], requested: [] }
+  const dismissed = [dismissKey(PR_URL, "Erin-L")]
+  assert.deepEqual(
+    ghostReviewers([u("erin-l")], { ...pr, url: PR_URL }, [], dismissed),
+    [],
+  )
+  assert.deepEqual(
+    logins(
+      ghostReviewers(
+        [u("erin-l")],
+        { ...pr, url: "https://github.com/acme/api/pull/91" },
+        [],
+        dismissed,
+      ),
+    ),
+    ["erin-l"],
+  )
+})
+
+test("suggestions écartées : stockage absent ou invalide lu comme vide", () => {
+  assert.deepEqual(parseDismissed(null), [])
+  assert.deepEqual(parseDismissed("{oops"), [])
+  assert.deepEqual(parseDismissed('{"a":1}'), [])
+  assert.deepEqual(parseDismissed('["a", 2, "b"]'), ["a", "b"])
+})
+
+test("suggestion écartée ajoutée sans doublon, les plus anciennes oubliées au-delà du maximum", () => {
+  assert.deepEqual(addDismissed(["a", "b", "c"], "b", 3), ["a", "c", "b"])
+  assert.deepEqual(addDismissed(["a", "b", "c"], "d", 3), ["b", "c", "d"])
 })
