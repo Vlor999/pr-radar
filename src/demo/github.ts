@@ -544,7 +544,9 @@ const DEMO_USERS: Reviewer[] = [
   { login: "carol", id: "U_carol", name: null },
   { login: "dave", id: "U_dave", name: "Dave Moreau" },
   { login: "erin-l", id: "U_erin-l", name: "Erin Laurent" },
-  { login: "frank", id: "U_frank", name: null },
+  // « Frank Petit » a deux comptes GitHub : table Slack → GitHub des réglages, cas 1:N
+  { login: "frank", id: "U_frank", name: "Frank Petit" },
+  { login: "fpetit", id: "U_fpetit", name: "Frank Petit" },
 ]
 const ME: Reviewer = { login: "me", id: "U_me", name: null }
 /** comme ASSIGNABLE_PAGE de src/lib/github.ts, réduit pour que le DM Slack soit hors de la 1re page */
@@ -576,6 +578,11 @@ export const fetchReviewerOptions = async (
 })
 export const fetchDmReviewers = async (_repo: string, names: string[]) =>
   names.flatMap((n) => search(n, DM_LOOKUP_PAGE))
+export const searchAssignable = async (_repos: string[], query: string) =>
+  search(query, DEMO_USERS.length + 1).map((u) => ({
+    ...u,
+    account: DEFAULT_ID,
+  }))
 export const requestReviewer = async (
   prId: string,
   userId: string,

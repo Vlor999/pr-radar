@@ -63,6 +63,13 @@ const DM_LOOKUPS_MAX = 6
 // destinataires de DM de la carte (reviewer fantôme) : les utilisateurs assignables changent rarement ;
 // gardés 10 min et à l'actualisation, soit 1 point par PR concernée toutes les 10 min au plus
 const DM_USERS_TTL_MS = 10 * 60_000
+// table Slack → GitHub des réglages : utilisateurs assignables des repos suivis, une requête par compte,
+// un alias par repo. Coût GraphQL ~ connexions demandées / 100 : 1 point par compte jusqu'à 100 repos.
+const MAP_REPOS_MAX = 30
+/** sans recherche : toute la 1re page de chaque repo, rapprochée par nom en local */
+const MAP_ALL_PAGE = 100
+/** recherche tapée dans le sélecteur : quelques résultats par repo suffisent */
+const MAP_SEARCH_PAGE = 10
 /** clés de cache gardées par une actualisation (`clearCache` sans `all`) */
 const KEPT_ON_REFRESH = ["repos:", "dmUsers:"]
 // la recherche GitHub renvoie parfois 0 résultat sans erreur (~1 appel sur 3) : un vide est relu avant d'être cru.
@@ -855,6 +862,70 @@ export function fetchDmReviewers(
         { owner, name, ...dm.values },
       )
       return res.repository ? dm.read(res.repository) : []
+    },
+  )
+}
+
+/** Utilisateur assignable d'un repo suivi, avec le compte PR Radar qui le voit. */
+export type AssignableUser = Reviewer & { account: string }
+
+/**
+ * Utilisateurs assignables des repos suivis (30 au plus), tous comptes, filtrés par `query` : table
+ * Slack → GitHub des réglages (rapprochement par nom sans recherche, sélecteur avec). Assignables plutôt que
+ * la recherche d'utilisateurs GitHub : seuls eux peuvent reviewer, et un homonyme inconnu n'est pas proposé.
+ * Une requête par compte (un alias par repo), en cache 10 min, gardée à l'actualisation.
+ */
+export function searchAssignable(
+  repos: string[],
+  query: string,
+): Promise<AssignableUser[]> {
+  const list = repos.slice(0, MAP_REPOS_MAX)
+  const first = query ? MAP_SEARCH_PAGE : MAP_ALL_PAGE
+  return cached(
+    `dmUsers:assignable:${list.join(",")}|${query}`,
+    DM_USERS_TTL_MS,
+    async () => {
+      const { data } = await perFollowed(list, async (a, names) => {
+        const vars = names.map((_, i) => `, $o${i}: String!, $n${i}: String!`)
+        const fields = names.map(
+          (_, i) =>
+            `r${i}: repository(owner: $o${i}, name: $n${i}) { assignableUsers(first: ${first}, query: $q) { nodes { login id name } } }`,
+        )
+        const res = await gql<
+          Record<
+            `r${number}`,
+            { assignableUsers: { nodes: Reviewer[] } } | null
+          >
+        >(
+          conn(a),
+          `query($q: String${vars.join("")}) { ${fields.join("\n")} }`,
+          {
+            q: query || null,
+            ...Object.fromEntries(
+              names.flatMap((n, i) => {
+                const [owner, name] = n.split("/")
+                return [
+                  [`o${i}`, owner],
+                  [`n${i}`, name],
+                ]
+              }),
+            ),
+          },
+        )
+        return names.flatMap((_, i) =>
+          (res[`r${i}`]?.assignableUsers.nodes ?? []).map((u) => ({
+            ...u,
+            account: a.id,
+          })),
+        )
+      })
+      const seen = new Set<string>()
+      return data.filter((u) => {
+        const k = `${u.account}|${u.login.toLowerCase()}`
+        if (seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
     },
   )
 }
