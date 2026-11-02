@@ -214,6 +214,35 @@ const CONVS: SlackConversation[] = [
   { id: "C1", name: "dev", kind: "public" },
   { id: "C2", name: "releases", kind: "public" },
   { id: "G1", name: "checkout-squad", kind: "private" },
+  // filtres du choix des conversations : channels publics et privés, DM de groupe
+  ...[
+    "general",
+    "random",
+    "design",
+    "frontend",
+    "backend",
+    "incidents",
+    "deploys",
+    "ci-alerts",
+    "api-guild",
+    "product",
+    "support",
+    "standup",
+  ].map((name, i): SlackConversation => ({
+    id: `C${i + 3}`,
+    name,
+    kind: "public",
+  })),
+  ...["security", "leads", "payments-core"].map(
+    (name, i): SlackConversation => ({
+      id: `G${i + 2}`,
+      name,
+      kind: "private",
+    }),
+  ),
+  { id: "M2", name: "bruno, chloé, david", kind: "mpim" },
+  { id: "M3", name: "emma, farid", kind: "mpim" },
+  { id: "M4", name: "léa, marc, omar", kind: "mpim" },
   ...CONTACTS.map((c): SlackConversation => ({
     id: c.id,
     name: c.names[0],
