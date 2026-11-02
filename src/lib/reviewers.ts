@@ -1,10 +1,14 @@
-import type { SlackMention, SlackRecipient } from "./types.ts"
+import type { Pr, SlackMention, SlackRecipient } from "./types.ts"
 
 /** `name` : nom complet du profil GitHub (absent ou null s'il n'est pas renseigné). */
 export type Reviewer = { login: string; id: string; name?: string | null }
 
 /** Candidat du popover ; `slack` : destinataire d'un DM Slack 1:1 qui cite la PR. */
 export type Candidate = Reviewer & { slack?: boolean }
+
+/** Reviewer demandé depuis l'app, affiché avant que le rechargement ne le confirme ;
+ * `sentAt` : acceptation par GitHub (ms), `null` tant que la demande est en cours. */
+export type PendingReview = { login: string; sentAt: number | null }
 
 /** Nom comparable : casse, accents, espaces et ponctuation ignorés (`Élodie D.` → `elodied`). */
 export const normalizeName = (s: string) =>
@@ -63,4 +67,34 @@ export function reviewerCandidates(
     seen.add(k)
     return true
   })
+}
+
+/** Reviews demandées de la carte : celles de GitHub, puis celles envoyées et pas encore relues (sans doublon). */
+export const withPending = (
+  requested: Pr["requested"],
+  pending: PendingReview[],
+): Pr["requested"] => [
+  ...requested,
+  ...pending
+    .filter(
+      (p) =>
+        !requested.some(
+          (r) => !r.team && r.who.toLowerCase() === p.login.toLowerCase(),
+        ),
+    )
+    .map((p) => ({ who: p.login })),
+]
+
+/** Demandes encore à afficher après un chargement lancé à `startedAt` : celles en cours ou acceptées après
+ * son départ (pas encore lues sur GitHub). Un chargement plus ancien, dépassé, n'efface rien. */
+export function settledPending(
+  pending: Record<string, PendingReview[]>,
+  startedAt: number,
+): Record<string, PendingReview[]> {
+  const out: Record<string, PendingReview[]> = {}
+  for (const [url, list] of Object.entries(pending)) {
+    const left = list.filter((p) => p.sentAt === null || p.sentAt >= startedAt)
+    if (left.length) out[url] = left
+  }
+  return out
 }

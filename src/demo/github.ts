@@ -550,6 +550,8 @@ const ME: Reviewer = { login: "me", id: "U_me", name: null }
 /** comme ASSIGNABLE_PAGE de src/lib/github.ts, réduit pour que le DM Slack soit hors de la 1re page */
 const ASSIGNABLE_PAGE = 4
 const DM_LOOKUP_PAGE = 5
+/** latence simulée de la mutation `requestReviews` : la demande s'affiche avant la réponse */
+const REQUEST_MS = 1_500
 
 const search = (q: string, first: number) =>
   [ME, ...DEMO_USERS]
@@ -577,6 +579,7 @@ export const requestReviewer = async (
   userId: string,
   repo: string,
 ) => {
+  await new Promise((r) => setTimeout(r, REQUEST_MS))
   // « dave » montre le message brut de GitHub pour un jeton sans droit d'écriture
   if (userId === "U_dave")
     throw new Error(

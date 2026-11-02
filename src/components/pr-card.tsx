@@ -35,9 +35,11 @@ import { ready, syncBranch } from "@/lib/actions"
 import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
 import { DONE_ICON, DONE_MS, pause, wait } from "@/lib/motion"
 import { HOUR_MS } from "@/lib/quiet"
+import { withPending } from "@/lib/reviewers"
 import { useSettings } from "@/lib/settings"
 import { useMentions } from "@/lib/slack"
 import { slackParts, spoofedHost } from "@/lib/slack-text"
+import { usePendingReviews } from "@/lib/store"
 import {
   idleDays,
   isStale,
@@ -254,6 +256,9 @@ export function PrCard({
   const stack = nativeStack(pr)
   const { staleDays } = useSettings()
   const mentions = useMentions(pr.url)
+  // reviewers demandés depuis l'app : affichés tout de suite, jusqu'au rechargement qui les lit sur GitHub
+  const pending = usePendingReviews(pr.url)
+  const requested = withPending(pr.requested, pending.pending)
 
   return (
     <Card
@@ -431,7 +436,7 @@ export function PrCard({
                   </Badge>
                 </li>
               ))}
-              {pr.requested.map(({ who, team }) => (
+              {requested.map(({ who, team }) => (
                 <li key={who} className="flex items-center gap-2">
                   {/* équipe : pas d'avatar par login, l'initiale */}
                   <Avatar login={who} url={team ? undefined : pr.url} />
@@ -446,9 +451,14 @@ export function PrCard({
               ))}
               <li className="flex items-center gap-2 text-muted-foreground">
                 <AddReviewer pr={pr} />
-                {pr.reviews.length + pr.requested.length === 0 && t.noReviewer}
+                {pr.reviews.length + requested.length === 0 && t.noReviewer}
               </li>
             </ul>
+            {pending.error && (
+              <p role="alert" className="text-xs text-destructive">
+                {pending.error}
+              </p>
+            )}
             {((pr.draft && !pr.involved) || pr.canUpdateBranch) && (
               <PrActions pr={pr} />
             )}

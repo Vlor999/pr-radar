@@ -1,5 +1,5 @@
 import { Loader2, Plus } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { Avatar } from "@/components/avatar"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { addReviewer } from "@/lib/actions"
 import { fetchReviewerOptions } from "@/lib/github"
 import { strings, useStrings } from "@/lib/i18n"
 import { reviewerCandidates, type Reviewer } from "@/lib/reviewers"
+import { usePendingReviews } from "@/lib/store"
 import type { Pr } from "@/lib/types"
 
 const SEARCH_DEBOUNCE_MS = 250 // une requête GraphQL par frappe sinon
@@ -30,38 +31,34 @@ const S = strings(
   },
 )
 
-/** Bouton « + » des reviewers : suggestions GitHub puis recherche parmi les utilisateurs assignables. */
+type Options = {
+  prId: string
+  viewer: string
+  suggested: Reviewer[]
+  assignable: Reviewer[]
+}
+
+/** Bouton « + » des reviewers : suggestions GitHub puis recherche parmi les utilisateurs assignables.
+ * Un clic demande la review en arrière-plan ; le popover reste utilisable. */
 export function AddReviewer({ pr }: { pr: Pr }) {
   const t = useStrings(S)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
-  const [options, setOptions] = useState<{
-    prId: string
-    users: Reviewer[]
-  } | null>(null)
-  const [busy, setBusy] = useState<string | null>(null)
+  const [options, setOptions] = useState<Options | null>(null)
   const [error, setError] = useState<string>()
-  // clé stable : le tableau change d'identité à chaque rechargement
-  const requested = pr.requested
-    .filter((r) => !r.team)
-    .map((r) => r.who)
-    .join(",")
+  const input = useRef<HTMLInputElement>(null)
+  const { pending } = usePendingReviews(pr.url)
+  const q = query.trim()
 
   useEffect(() => {
     if (!open) return
     let live = true
     const id = setTimeout(
       () =>
-        fetchReviewerOptions(pr.repo, pr.number, query.trim()).then(
+        fetchReviewerOptions(pr.repo, pr.number, q).then(
           (o) => {
             if (!live) return
-            setOptions({
-              prId: o.prId,
-              users: reviewerCandidates(o.suggested, o.assignable, [
-                o.viewer,
-                ...requested.split(","),
-              ]),
-            })
+            setOptions(o)
             setError(undefined)
           },
           (e: unknown) => {
@@ -70,21 +67,23 @@ export function AddReviewer({ pr }: { pr: Pr }) {
             setError(e instanceof Error ? e.message : String(e))
           },
         ),
-      query ? SEARCH_DEBOUNCE_MS : 0,
+      q ? SEARCH_DEBOUNCE_MS : 0,
     )
     return () => {
       live = false
       clearTimeout(id)
     }
-  }, [open, query, pr.repo, pr.number, requested])
+  }, [open, q, pr.repo, pr.number])
 
-  async function pick(u: Reviewer) {
-    if (!options || busy) return
-    setBusy(u.id)
-    const { error } = await addReviewer(options.prId, u.id, pr.repo)
-    setBusy(null)
-    setError(error) // popover gardé ouvert : plusieurs reviewers d'affilée
-  }
+  // calculés au rendu : un reviewer demandé (même pas encore confirmé) quitte la liste aussitôt
+  const users =
+    options &&
+    reviewerCandidates(options.suggested, options.assignable, [
+      options.viewer,
+      ...(pr.involved ? [pr.involved.author] : []),
+      ...pr.requested.filter((r) => !r.team).map((r) => r.who),
+      ...pending.map((p) => p.login),
+    ])
 
   return (
     <Popover
@@ -112,6 +111,7 @@ export function AddReviewer({ pr }: { pr: Pr }) {
       </PopoverTrigger>
       <PopoverContent align="start" aria-label={t.add} className="gap-2 p-2">
         <Input
+          ref={input}
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -123,26 +123,28 @@ export function AddReviewer({ pr }: { pr: Pr }) {
             {error}
           </p>
         )}
-        {!options ? (
+        {!users || !options ? (
           !error && (
-            <Loader2 className="mx-auto my-2 size-4 animate-spin text-muted-foreground" />
+            <Loader2 className="mx-auto my-2 size-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
           )
-        ) : options.users.length ? (
+        ) : users.length ? (
           <ul className="flex max-h-64 flex-col overflow-y-auto">
-            {options.users.map((u) => (
+            {users.map((u) => (
               <li key={u.id}>
                 <button
                   type="button"
-                  // aria-disabled, pas disabled : le focus reste sur le bouton pendant la requête
-                  aria-disabled={!!busy}
-                  onClick={() => pick(u)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none aria-disabled:opacity-50"
+                  onClick={() => {
+                    addReviewer(options.prId, u, {
+                      repo: pr.repo,
+                      url: pr.url,
+                    })
+                    // la ligne choisie quitte la liste : le focus revient à la recherche
+                    input.current?.focus()
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
                 >
                   <Avatar login={u.login} url={pr.url} />
                   <span className="min-w-0 flex-1 truncate">{u.login}</span>
-                  {busy === u.id && (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  )}
                 </button>
               </li>
             ))}

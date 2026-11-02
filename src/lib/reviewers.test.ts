@@ -6,6 +6,8 @@ import {
   matchRecipients,
   normalizeName,
   reviewerCandidates,
+  settledPending,
+  withPending,
   type Reviewer,
 } from "./reviewers.ts"
 import type { SlackMention } from "./types.ts"
@@ -115,5 +117,40 @@ test("un destinataire déjà demandé ou moi-même n'est pas proposé", () => {
   assert.deepEqual(
     logins(reviewerCandidates([], [], ["me", "erin"], [u("Erin"), u("me")])),
     [],
+  )
+})
+
+test("une demande en attente s'ajoute aux reviews demandées, sans doublon une fois relue", () => {
+  assert.deepEqual(
+    withPending(
+      [{ who: "Bob" }, { who: "erin", team: true }],
+      [
+        { login: "bob", sentAt: 1 },
+        { login: "erin", sentAt: null },
+      ],
+    ),
+    [{ who: "Bob" }, { who: "erin", team: true }, { who: "erin" }],
+  )
+})
+
+test("un chargement efface les demandes acceptées avant son départ, pas les autres", () => {
+  assert.deepEqual(
+    settledPending(
+      {
+        a: [
+          { login: "bob", sentAt: 100 },
+          { login: "carol", sentAt: null },
+          { login: "dave", sentAt: 300 },
+        ],
+        b: [{ login: "erin", sentAt: 150 }],
+      },
+      200,
+    ),
+    {
+      a: [
+        { login: "carol", sentAt: null },
+        { login: "dave", sentAt: 300 },
+      ],
+    },
   )
 })

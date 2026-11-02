@@ -14,6 +14,7 @@ import { log } from "./log"
 import { recordCosts, spentBy } from "./quota"
 import { refreshStatus, type RefreshStatus } from "./refresh-status"
 import { mergeReviews, type Reviews } from "./review"
+import { settledPending, type PendingReview } from "./reviewers"
 import { getSettings } from "./settings"
 import { saveItem } from "./sync"
 import { buildTree, keepVanished } from "./tree"
@@ -83,6 +84,77 @@ function set(next: Data) {
 /** État courant hors React (serveur MCP). */
 export const getData = () => data
 
+/* ---------- Reviewers demandés depuis l'app : affichés tout de suite, avant le rechargement ---------- */
+
+export type PendingState = {
+  /** demandes envoyées ou en cours, par URL de PR */
+  pending: Record<string, PendingReview[]>
+  /** dernière demande refusée par GitHub, par URL de PR (effacée à la demande suivante) */
+  errors: Record<string, string>
+}
+
+let pendingState: PendingState = { pending: {}, errors: {} }
+const pendingListeners = new Set<() => void>()
+const NO_PENDING: PendingReview[] = []
+
+function setPending(next: PendingState) {
+  pendingState = next
+  pendingListeners.forEach((l) => l())
+}
+
+const subscribePending = (l: () => void) => {
+  pendingListeners.add(l)
+  return () => pendingListeners.delete(l)
+}
+
+/** Reviewers en attente de confirmation d'une PR et dernière erreur de demande. */
+export const usePendingReviews = (url: string) => ({
+  pending: useSyncExternalStore(
+    subscribePending,
+    () => pendingState.pending[url] ?? NO_PENDING,
+  ),
+  error: useSyncExternalStore(subscribePending, () => pendingState.errors[url]),
+})
+
+/** Demande partie : le reviewer s'affiche sur la carte, l'erreur précédente de la PR s'efface. */
+export function addPending(url: string, login: string) {
+  const { [url]: _, ...errors } = pendingState.errors
+  setPending({
+    pending: {
+      ...pendingState.pending,
+      [url]: [
+        ...(pendingState.pending[url] ?? []).filter((p) => p.login !== login),
+        { login, sentAt: null },
+      ],
+    },
+    errors,
+  })
+}
+
+/** Demande acceptée par GitHub : gardée jusqu'au premier rechargement lancé après (`settledPending`). */
+export function markSent(url: string, login: string) {
+  setPending({
+    ...pendingState,
+    pending: {
+      ...pendingState.pending,
+      [url]: (pendingState.pending[url] ?? []).map((p) =>
+        p.login === login ? { ...p, sentAt: Date.now() } : p,
+      ),
+    },
+  })
+}
+
+/** Demande refusée : le reviewer disparaît de la carte, l'erreur s'affiche dessous. */
+export function dropPending(url: string, login: string, error: string) {
+  setPending({
+    pending: {
+      ...pendingState.pending,
+      [url]: (pendingState.pending[url] ?? []).filter((p) => p.login !== login),
+    },
+    errors: { ...pendingState.errors, [url]: error },
+  })
+}
+
 export function useData(): Data {
   return useSyncExternalStore(
     (l) => {
@@ -105,6 +177,7 @@ export async function reload({
   track = false,
 } = {}) {
   const id = ++seq
+  const startedAt = Date.now()
   const start = performance.now()
   const ms = () => Math.round(performance.now() - start)
   // compteur de points GraphQL de chaque compte avant l'actualisation : base du coût mesuré
@@ -191,6 +264,12 @@ export async function reload({
         statusAt: new Date().toISOString(),
       }),
     })
+    // demandes de review envoyées avant ce chargement : lues sur GitHub, elles quittent l'état local
+    if (Object.keys(pendingState.pending).length)
+      setPending({
+        ...pendingState,
+        pending: settledPending(pendingState.pending, startedAt),
+      })
     log(shown.length ? "warn" : "info", "refresh", {
       ms: ms(),
       measure,
