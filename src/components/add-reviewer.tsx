@@ -1,20 +1,13 @@
-import { Loader2, Plus } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { Plus } from "lucide-react"
+import { useEffect, useState } from "react"
 
-import { Avatar } from "@/components/avatar"
-import { SlackLogo } from "@/components/slack-logo"
 import { Button } from "@/components/ui/button"
-import {
-  Command,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { UserCommand } from "@/components/user-command"
 import { addReviewer } from "@/lib/actions"
 import { fetchReviewerOptions } from "@/lib/github"
 import { strings, useStrings } from "@/lib/i18n"
@@ -34,15 +27,9 @@ const SEARCH_DEBOUNCE_MS = 250 // une requête GraphQL par frappe sinon
 const S = strings(
   {
     add: "Ajouter un reviewer",
-    search: "Rechercher un utilisateur",
-    none: "Aucun utilisateur",
-    slackTitle: "Tu lui as envoyé la PR en DM sur Slack",
   },
   {
     add: "Add a reviewer",
-    search: "Search a user",
-    none: "No user",
-    slackTitle: "You sent them the PR in a Slack DM",
   },
 )
 
@@ -62,9 +49,6 @@ export function AddReviewer({ pr }: { pr: Pr }) {
   const [query, setQuery] = useState("")
   const [options, setOptions] = useState<Options | null>(null)
   const [error, setError] = useState<string>()
-  const input = useRef<HTMLInputElement>(null)
-  /** ligne active (flèches, Entrée) : login, valeur de l'item cmdk */
-  const [active, setActive] = useState("")
   const { pending } = usePendingReviews(pr.url)
   const recipients = dmRecipients(useMentions(pr.url))
   // noms Slack des destinataires, cherchés parmi les utilisateurs assignables seulement sans recherche tapée
@@ -121,10 +105,6 @@ export function AddReviewer({ pr }: { pr: Pr }) {
       ]),
     )
 
-  // résultats changés (recherche, reviewer demandé) : la 1re ligne redevient active
-  const logins = users?.map((u) => u.login).join("\n") ?? ""
-  useEffect(() => setActive(logins.split("\n")[0]), [logins])
-
   return (
     <Popover
       open={open}
@@ -150,66 +130,17 @@ export function AddReviewer({ pr }: { pr: Pr }) {
         <Plus />
       </PopoverTrigger>
       <PopoverContent align="start" aria-label={t.add} className="p-2">
-        {/* cmdk : flèches, Entrée, survol et ARIA de combobox ; recherche faite par GitHub, pas de filtre local */}
-        <Command
-          shouldFilter={false}
-          vimBindings={false}
-          value={active}
-          onValueChange={setActive}
-          className="gap-2 rounded-none bg-transparent p-0 **:data-[slot=command-input-wrapper]:p-0"
-        >
-          <CommandInput
-            ref={input}
-            autoFocus
-            value={query}
-            onValueChange={setQuery}
-            placeholder={t.search}
-            aria-label={t.search}
-          />
-          {error && (
-            <p role="alert" className="px-2 text-xs text-destructive">
-              {error}
-            </p>
-          )}
-          <CommandList className="max-h-64">
-            {!users || !options ? (
-              !error && (
-                <Loader2 className="mx-auto my-2 size-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
-              )
-            ) : users.length ? (
-              users.map((u) => (
-                <CommandItem
-                  key={u.id}
-                  value={u.login}
-                  onSelect={() => {
-                    addReviewer(options.prId, u, {
-                      repo: pr.repo,
-                      url: pr.url,
-                    })
-                    // la ligne choisie quitte la liste : le focus reste à la recherche
-                    input.current?.focus()
-                  }}
-                  className="px-2 py-1.5 font-normal"
-                >
-                  <Avatar login={u.login} url={pr.url} />
-                  <span className="min-w-0 flex-1 truncate">{u.login}</span>
-                  {u.slack && (
-                    <span
-                      role="img"
-                      aria-label={t.slackTitle}
-                      title={t.slackTitle}
-                      className="text-muted-foreground"
-                    >
-                      <SlackLogo mono className="size-3.5" />
-                    </span>
-                  )}
-                </CommandItem>
-              ))
-            ) : (
-              <p className="px-2 py-1 text-muted-foreground">{t.none}</p>
-            )}
-          </CommandList>
-        </Command>
+        <UserCommand
+          query={query}
+          onQueryChange={setQuery}
+          users={users}
+          error={error}
+          url={pr.url}
+          onPick={(u) =>
+            options &&
+            addReviewer(options.prId, u, { repo: pr.repo, url: pr.url })
+          }
+        />
       </PopoverContent>
     </Popover>
   )
