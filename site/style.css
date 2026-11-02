@@ -209,6 +209,8 @@ code{font:13px/1.5 'JetBrains Mono',monospace}
 @keyframes v-wrise{0%,38%{opacity:0;transform:translateY(8px)}46%,100%{opacity:1;transform:none}}
 /* CI vignette: base styles = static state (failed job, re-run button); the loop opens the view and re-runs the job */
 .v-ci{display:flex;flex-direction:column;gap:8px}
+.vig.wide{grid-column:1/-1}
+@media(min-width:820px){.wide .v-ci{flex-direction:row;align-items:flex-start;gap:16px}.wide .v-ci>*{flex:1;min-width:0}.wide .vm{height:auto;min-height:180px}}
 .v-ci .pc{animation:v-rise 8s ease infinite both .4s}
 .v-cib{animation:v-cib 8s infinite both}
 .wf{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:color-mix(in srgb,var(--chip) 50%,var(--card));animation:v-ciopen 8s cubic-bezier(.22,1,.36,1) infinite both}
