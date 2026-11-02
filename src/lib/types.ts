@@ -86,7 +86,12 @@ export type SlackMention = {
   at: string
   text: string
   permalink: string
+  /** DM 1:1 que j'ai envoyé : son destinataire, proposé comme reviewer de la PR (DM de groupe, channel : absent) */
+  recipient?: SlackRecipient
 }
+
+/** Destinataire d'un DM Slack 1:1 : id et noms connus (nom complet, nom d'affichage, identifiant). */
+export type SlackRecipient = { id: string; names: string[] }
 
 /** Conversation Slack proposée dans les réglages. */
 export type SlackConversation = {
