@@ -2,6 +2,7 @@ import { Loader2, Plus } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Avatar } from "@/components/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -12,7 +13,14 @@ import {
 import { addReviewer } from "@/lib/actions"
 import { fetchReviewerOptions } from "@/lib/github"
 import { strings, useStrings } from "@/lib/i18n"
-import { reviewerCandidates, type Reviewer } from "@/lib/reviewers"
+import {
+  dmRecipients,
+  matchRecipients,
+  normalizeName,
+  reviewerCandidates,
+  type Reviewer,
+} from "@/lib/reviewers"
+import { useMentions } from "@/lib/slack"
 import { usePendingReviews } from "@/lib/store"
 import type { Pr } from "@/lib/types"
 
@@ -23,11 +31,15 @@ const S = strings(
     add: "Ajouter un reviewer",
     search: "Rechercher un utilisateur",
     none: "Aucun utilisateur",
+    slack: "DM Slack",
+    slackTitle: "Tu lui as envoyé la PR en DM sur Slack",
   },
   {
     add: "Add a reviewer",
     search: "Search a user",
     none: "No user",
+    slack: "Slack DM",
+    slackTitle: "You sent them the PR in a Slack DM",
   },
 )
 
@@ -36,10 +48,11 @@ type Options = {
   viewer: string
   suggested: Reviewer[]
   assignable: Reviewer[]
+  dm: Reviewer[]
 }
 
-/** Bouton « + » des reviewers : suggestions GitHub puis recherche parmi les utilisateurs assignables.
- * Un clic demande la review en arrière-plan ; le popover reste utilisable. */
+/** Bouton « + » des reviewers : destinataires de mes DM Slack sur la PR, suggestions GitHub, puis recherche
+ * parmi les utilisateurs assignables. Un clic demande la review en arrière-plan ; le popover reste utilisable. */
 export function AddReviewer({ pr }: { pr: Pr }) {
   const t = useStrings(S)
   const [open, setOpen] = useState(false)
@@ -48,6 +61,14 @@ export function AddReviewer({ pr }: { pr: Pr }) {
   const [error, setError] = useState<string>()
   const input = useRef<HTMLInputElement>(null)
   const { pending } = usePendingReviews(pr.url)
+  const recipients = dmRecipients(useMentions(pr.url))
+  // noms Slack des destinataires, cherchés parmi les utilisateurs assignables seulement sans recherche tapée
+  // (une recherche tapée filtre déjà, pas d'alias GraphQL à chaque frappe). Chaîne : clé stable de l'effet.
+  const dmNames = [
+    ...new Map(
+      recipients.flatMap((r) => r.names).map((n) => [normalizeName(n), n]),
+    ).values(),
+  ].join("\n")
   const q = query.trim()
 
   useEffect(() => {
@@ -55,7 +76,12 @@ export function AddReviewer({ pr }: { pr: Pr }) {
     let live = true
     const id = setTimeout(
       () =>
-        fetchReviewerOptions(pr.repo, pr.number, q).then(
+        fetchReviewerOptions(
+          pr.repo,
+          pr.number,
+          q,
+          q || !dmNames ? [] : dmNames.split("\n"),
+        ).then(
           (o) => {
             if (!live) return
             setOptions(o)
@@ -73,17 +99,26 @@ export function AddReviewer({ pr }: { pr: Pr }) {
       live = false
       clearTimeout(id)
     }
-  }, [open, q, pr.repo, pr.number])
+  }, [open, q, pr.repo, pr.number, dmNames])
 
   // calculés au rendu : un reviewer demandé (même pas encore confirmé) quitte la liste aussitôt
   const users =
     options &&
-    reviewerCandidates(options.suggested, options.assignable, [
-      options.viewer,
-      ...(pr.involved ? [pr.involved.author] : []),
-      ...pr.requested.filter((r) => !r.team).map((r) => r.who),
-      ...pending.map((p) => p.login),
-    ])
+    reviewerCandidates(
+      options.suggested,
+      options.assignable,
+      [
+        options.viewer,
+        ...(pr.involved ? [pr.involved.author] : []),
+        ...pr.requested.filter((r) => !r.team).map((r) => r.who),
+        ...pending.map((p) => p.login),
+      ],
+      matchRecipients(recipients, [
+        ...options.dm,
+        ...options.suggested,
+        ...options.assignable,
+      ]),
+    )
 
   return (
     <Popover
@@ -145,6 +180,15 @@ export function AddReviewer({ pr }: { pr: Pr }) {
                 >
                   <Avatar login={u.login} url={pr.url} />
                   <span className="min-w-0 flex-1 truncate">{u.login}</span>
+                  {u.slack && (
+                    <Badge
+                      variant="outline"
+                      className="text-muted-foreground"
+                      title={t.slackTitle}
+                    >
+                      {t.slack}
+                    </Badge>
+                  )}
                 </button>
               </li>
             ))}
