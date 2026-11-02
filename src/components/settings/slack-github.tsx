@@ -1,14 +1,18 @@
 import { cn } from "cn"
-import { Plus, Search, X } from "lucide-react"
+import { Plus, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import { GithubMark } from "@/components/auth-source-icon"
-import { Button } from "@/components/ui/button"
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group"
+  Count,
+  LIST_ROW,
+  ListFooter,
+  ListToolbar,
+  pulse,
+  ScrollList,
+  SlackAvatar,
+} from "@/components/settings/slack-list"
+import { Button } from "@/components/ui/button"
 import {
   Popover,
   PopoverContent,
@@ -17,7 +21,6 @@ import {
 import { UserCommand } from "@/components/user-command"
 import { GITHUB } from "@/lib/accounts"
 import { allAccounts, findAccount } from "@/lib/auth"
-import { SLACK_SKELETON_ROWS } from "@/lib/constants"
 import { searchAssignable, type AssignableUser } from "@/lib/github"
 import { locale, strings, useStrings } from "@/lib/i18n"
 import { matchRecipients } from "@/lib/reviewers"
@@ -70,8 +73,6 @@ const S = strings(
     search: "Rechercher un contact",
     searchPlaceholder: "Nom, @identifiant ou login GitHub",
     noMatch: (q: string) => `Aucun contact ne correspond à « ${q} ».`,
-    noneInFilter: "Aucun contact dans ce filtre.",
-    shown: (x: number, n: number) => `${x} sur ${n} affichés`,
     legend: "Pointillés = trouvé par le nom · plein = confirmé",
     loading: "Recherche des correspondances…",
     none: "Aucun compte",
@@ -98,8 +99,6 @@ const S = strings(
     search: "Search contacts",
     searchPlaceholder: "Name, @handle or GitHub login",
     noMatch: (q: string) => `No contact matches “${q}”.`,
-    noneInFilter: "No contact in this filter.",
-    shown: (x: number, n: number) => `${x} of ${n} shown`,
     legend: "Dashed = found by name · solid = confirmed",
     loading: "Looking for matches…",
     none: "No account",
@@ -119,8 +118,6 @@ const S = strings(
 
 type Contact = NonNullable<SlackConversation["contact"]> & { name: string }
 type Row = ContactRow & { contact: Contact }
-
-const pulse = "animate-pulse bg-muted motion-reduce:animate-none"
 
 /**
  * Table Slack → GitHub (1:N) : un contact par DM 1:1, ses comptes liés en pastilles, avec recherche, filtres
@@ -216,14 +213,7 @@ export function SlackGithubTable({
         {counts && count > 0 && (
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums">
             {STATUSES.map((s) => (
-              <span key={s} className="inline-flex items-center gap-1.5">
-                <span
-                  aria-hidden
-                  className={cn("size-1.5 rounded-full", DOT[s])}
-                />
-                <span className="font-medium text-foreground">{counts[s]}</span>
-                {t.counts[s]}
-              </span>
+              <Count key={s} n={counts[s]} label={t.counts[s]} dot={DOT[s]} />
             ))}
           </div>
         )}
@@ -250,87 +240,52 @@ export function SlackGithubTable({
         <p className="px-4 pb-3 text-sm text-muted-foreground">{t.empty}</p>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
-            <InputGroup className="h-8 min-w-48 flex-1">
-              <InputGroupAddon>
-                <Search />
-              </InputGroupAddon>
-              <InputGroupInput
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t.searchPlaceholder}
-                aria-label={t.search}
-                autoComplete="off"
-              />
-            </InputGroup>
-            <div
-              className="flex flex-wrap gap-1"
-              role="group"
-              aria-label={t.filterBy}
-            >
-              {(["all", ...STATUSES] as const).map((f) => (
-                <Button
-                  key={f}
-                  size="sm"
-                  variant={filter === f ? "default" : "outline"}
-                  aria-pressed={filter === f}
-                  onClick={() => setFilter(f)}
-                >
-                  {t.filters[f]}
-                  {f !== "all" && counts && (
-                    <span className="tabular-nums opacity-70">{counts[f]}</span>
-                  )}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <ul
-            aria-busy={!rows}
-            // 8 lignes de 44 px, puis défilement
-            className="max-h-88 overflow-y-auto border-t"
+          <ListToolbar
+            query={query}
+            onQuery={setQuery}
+            placeholder={t.searchPlaceholder}
+            searchLabel={t.search}
+            filter={filter}
+            onFilter={setFilter}
+            filterLabel={t.filterBy}
+            options={(["all", ...STATUSES] as const).map((f) => ({
+              value: f,
+              label: t.filters[f],
+              ...(f !== "all" && counts && { count: counts[f] }),
+            }))}
+          />
+          <ScrollList
+            query={query}
+            noMatch={t.noMatch}
+            rows={
+              shown?.map((r) => (
+                <ContactItem
+                  key={r.user}
+                  row={r}
+                  team={team}
+                  matching={matching}
+                  multi={multi}
+                />
+              )) ?? null
+            }
+            skeleton={
+              <>
+                <span className={cn("size-6 shrink-0 rounded-full", pulse)} />
+                <span className="flex w-40 shrink-0 flex-col gap-1.5">
+                  <span className={cn("h-3 w-28 rounded-sm", pulse)} />
+                  <span className={cn("h-2.5 w-16 rounded-sm", pulse)} />
+                </span>
+                <span className={cn("h-6 w-24 rounded-sm", pulse)} />
+              </>
+            }
+          />
+          <ListFooter
+            shown={shown?.length}
+            total={count}
+            status={shown && matching ? t.loading : undefined}
           >
-            {!shown
-              ? Array.from({ length: SLACK_SKELETON_ROWS }, (_, i) => (
-                  <li
-                    key={i}
-                    aria-hidden
-                    className="flex min-h-11 items-center gap-3 border-t px-4 py-1 first:border-t-0"
-                  >
-                    <span
-                      className={cn("size-6 shrink-0 rounded-full", pulse)}
-                    />
-                    <span className="flex w-40 shrink-0 flex-col gap-1.5">
-                      <span className={cn("h-3 w-28 rounded-sm", pulse)} />
-                      <span className={cn("h-2.5 w-16 rounded-sm", pulse)} />
-                    </span>
-                    <span className={cn("h-6 w-24 rounded-sm", pulse)} />
-                  </li>
-                ))
-              : shown.map((r) => (
-                  <ContactItem
-                    key={r.user}
-                    row={r}
-                    team={team}
-                    matching={matching}
-                    multi={multi}
-                  />
-                ))}
-            {shown && !shown.length && (
-              <li className="px-4 py-6 text-center text-sm text-muted-foreground">
-                {query.trim() ? t.noMatch(query.trim()) : t.noneInFilter}
-              </li>
-            )}
-          </ul>
-          <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 border-t px-4 py-2 text-xs text-muted-foreground tabular-nums">
-            <span aria-live="polite">
-              {shown &&
-                (matching
-                  ? `${t.shown(shown.length, count)} · ${t.loading}`
-                  : t.shown(shown.length, count))}
-            </span>
             <span>{t.legend}</span>
-          </div>
+          </ListFooter>
         </>
       )}
     </div>
@@ -354,7 +309,7 @@ function ContactItem({
   const { contact: c, links } = row
   const other = c.names.filter((n) => n !== c.name).join(" · ")
   return (
-    <li className="flex min-h-11 items-center gap-3 border-t px-4 py-1 first:border-t-0">
+    <li className={LIST_ROW}>
       <SlackAvatar contact={c} />
       <div className="w-40 min-w-0 shrink-0">
         <p className="truncate text-sm" title={other || undefined}>
@@ -393,30 +348,6 @@ function ContactItem({
         />
       </div>
     </li>
-  )
-}
-
-/** Avatar Slack du contact (48 px, affiché en 24 px), sinon son initiale. */
-function SlackAvatar({ contact }: { contact: Contact }) {
-  const [failed, setFailed] = useState(false)
-  const base = "size-6 shrink-0 rounded-full bg-muted"
-  return contact.image && !failed ? (
-    <img
-      src={contact.image}
-      alt=""
-      onError={() => setFailed(true)}
-      className={base}
-    />
-  ) : (
-    <span
-      aria-hidden
-      className={cn(
-        base,
-        "grid place-items-center text-xs font-medium uppercase",
-      )}
-    >
-      {contact.name[0]}
-    </span>
   )
 }
 
