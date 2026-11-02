@@ -30,6 +30,7 @@ export const dmRecipients = (mentions: SlackMention[]): SlackRecipient[] => [
 /**
  * Utilisateurs GitHub dont le login ou le nom correspond exactement (après `normalizeName`) à un nom
  * Slack d'un destinataire. Pas de correspondance partielle : un prénom seul ne propose personne.
+ * Sans doublon de login, par compte PR Radar quand `account` est présent.
  */
 export function matchRecipients<T extends Reviewer>(
   recipients: SlackRecipient[],
@@ -40,7 +41,10 @@ export function matchRecipients<T extends Reviewer>(
     const names = new Set(r.names.map(normalizeName).filter(Boolean))
     for (const u of users) {
       const keys = [u.login, u.name ?? ""].map(normalizeName)
-      if (keys.some((k) => names.has(k))) out.set(u.login.toLowerCase(), u)
+      // même login vu par deux comptes PR Radar (github.com et GHES) : deux utilisateurs distincts
+      const account = "account" in u ? String(u.account) : ""
+      if (keys.some((k) => names.has(k)))
+        out.set(`${account}|${u.login.toLowerCase()}`, u)
     }
   }
   return [...out.values()]

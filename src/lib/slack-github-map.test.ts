@@ -156,3 +156,31 @@ test("confirmer une correspondance automatique la rend manuelle", () => {
     [["erin-l", "manual"]],
   )
 })
+
+test("plusieurs comptes PR Radar : un lien manuel ne masque que les correspondances automatiques de son compte", () => {
+  const entry = links({ manual: [gh("erin-ghe", { account: "ghe" })] })
+  const out = resolveLinks(entry, [
+    gh("erin-l", { account: "github" }),
+    gh("erin-l2", { account: "ghe" }),
+  ])
+  assert.deepEqual(
+    out.map((l) => [l.login, l.origin]),
+    [
+      ["erin-ghe", "manual"],
+      ["erin-l", "auto"],
+    ],
+  )
+  const users = [user("erin-l", "Erin Laurent")]
+  const map: SlackGithubMap = { [KEY]: entry }
+  assert.deepEqual(logins(dmReviewers([ERIN], map, TEAM, "github", users)), [
+    "erin-l",
+  ])
+})
+
+test("un lien manuel sans compte précisé masque les correspondances automatiques de tous les comptes", () => {
+  const out = resolveLinks(links({ manual: [gh("erin-work")] }), [
+    gh("erin-l", { account: "github" }),
+    gh("erin-l2", { account: "ghe" }),
+  ])
+  assert.deepEqual(logins(out), ["erin-work"])
+})

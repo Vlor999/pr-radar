@@ -227,3 +227,18 @@ test("suggestion écartée ajoutée sans doublon, les plus anciennes oubliées a
   assert.deepEqual(addDismissed(["a", "b", "c"], "b", 3), ["a", "c", "b"])
   assert.deepEqual(addDismissed(["a", "b", "c"], "d", 3), ["b", "c", "d"])
 })
+
+test("même login vu par deux comptes PR Radar : deux correspondances", () => {
+  const out = matchRecipients(
+    [{ id: "U2", names: ["Erin Laurent"] }],
+    [
+      { ...u("erin-l", { name: "Erin Laurent" }), account: "github" },
+      { ...u("erin-l", { name: "Erin Laurent" }), account: "ghe" },
+      { ...u("Erin-L", { name: "Erin Laurent" }), account: "ghe" },
+    ],
+  )
+  assert.deepEqual(
+    out.map((r) => r.account),
+    ["github", "ghe"],
+  )
+})

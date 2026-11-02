@@ -68,16 +68,26 @@ export function parseMap(raw: string | null): SlackGithubMap {
   }
 }
 
-/** Liens affichés d'un contact : les manuels s'il y en a, sinon les automatiques non exclus. */
+/**
+ * Liens affichés d'un contact : les manuels, puis les automatiques non exclus des comptes PR Radar sans lien
+ * manuel (un lien manuel sans compte précisé vaut pour tous). Même règle que `dmReviewers` : un compte
+ * confirmé ou ajouté à la main masque les autres correspondances automatiques de ce contact sur ce compte.
+ */
 export function resolveLinks(
   entry: ContactLinks | undefined,
   auto: LinkedAccount[],
 ): ResolvedLink[] {
-  if (entry?.manual.length)
-    return entry.manual.map((l) => ({ ...l, origin: "manual" }))
-  return auto
-    .filter((a) => !entry?.excluded.some((x) => sameAccount(x, a)))
-    .map((l) => ({ ...l, origin: "auto" }))
+  const manual = entry?.manual ?? []
+  return [
+    ...manual.map((l): ResolvedLink => ({ ...l, origin: "manual" })),
+    ...auto
+      .filter(
+        (a) =>
+          !manual.some((m) => appliesTo(m, a.account)) &&
+          !entry?.excluded.some((x) => sameAccount(x, a)),
+      )
+      .map((l): ResolvedLink => ({ ...l, origin: "auto" })),
+  ]
 }
 
 /** Lien ajouté à la main : sans doublon, et retiré des exclusions. */
