@@ -26,6 +26,7 @@ import { openExternal } from "@/lib/open"
 import { isWeb } from "@/lib/platform"
 import { updateSettings, useSettings } from "@/lib/settings"
 import {
+  cachedConversations,
   connectSlack,
   disconnectSlack,
   forceRefreshMentions,
@@ -338,25 +339,39 @@ function SlackSection() {
   const progress = useSlackProgress()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const [convs, setConvs] = useState<SlackConversation[] | null>(null)
+  // dernière liste lue (cache local) affichée tout de suite, relue en arrière-plan
+  const [convs, setConvs] = useState<SlackConversation[] | null>(() =>
+    team ? cachedConversations() : null,
+  )
+  const [fresh, setFresh] = useState(false)
   const [query, setQuery] = useState("")
   const live = !!team && !expired
   useEffect(() => {
     // lue même avec « toutes les conversations » : la table Slack → GitHub liste les DM 1:1
-    if (!live || convs) return
+    if (!live || fresh) return
+    let alive = true
     setError("")
-    // DM d'abord affichés avec l'id du destinataire, puis avec son nom
-    listConversations(setConvs).then(setConvs, (e: unknown) =>
-      setError(message(e)),
+    // DM sans nom connu d'abord affichés avec l'id du destinataire, puis avec son nom
+    listConversations((l) => alive && setConvs(l)).then(
+      (l) => {
+        if (!alive) return
+        setConvs(l)
+        setFresh(true)
+      },
+      (e: unknown) => alive && setError(message(e)),
     )
-  }, [live, convs])
+    return () => {
+      alive = false
+    }
+  }, [live, fresh])
 
   const connect = async () => {
     setBusy(true)
     setError("")
     try {
       await connectSlack()
-      setConvs(null)
+      setConvs(cachedConversations())
+      setFresh(false)
     } catch (e) {
       setError(e === "timeout" ? t.slack.timeout : message(e))
     } finally {
@@ -418,7 +433,12 @@ function SlackSection() {
               variant="outline"
               size="sm"
               className="text-destructive hover:text-destructive"
-              onClick={() => void disconnectSlack().then(() => setConvs(null))}
+              onClick={() =>
+                void disconnectSlack().then(() => {
+                  setConvs(null)
+                  setFresh(false)
+                })
+              }
             >
               <LogOut data-icon="inline-start" />
               {t.slack.disconnect}
@@ -508,7 +528,8 @@ function SlackSection() {
             )}
           </div>
         )}
-        {live && team && convs && (
+        {/* tout de suite, lignes fantômes tant que la liste n'est pas lue (sauf échec sans cache) */}
+        {live && team && (convs || !error) && (
           <SlackGithubTable convs={convs} team={team.id} />
         )}
       </>
