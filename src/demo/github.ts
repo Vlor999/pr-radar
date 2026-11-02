@@ -29,6 +29,15 @@ const MUTATION_MS = 800
 const CHECKS_MS = 600
 /** points GraphQL d'une actualisation (`rateLimit { cost }`) : avec le quota de `fetchReviews`, le mode auto affiche ~3 min */
 const REFRESH_POINTS = 120
+/** latence d'une actualisation (pas du premier chargement) : laisse voir la pastille grise et l'icône qui tourne */
+const REFRESH_MS = 800
+/**
+ * issue des actualisations après le premier chargement : `?refresh=partial` (PR mergées en échec,
+ * pastille orange), `?refresh=failed` (lecture des PR en échec, pastille rouge) ; sans paramètre, réussies
+ */
+const refreshMode = new URLSearchParams(location.search).get("refresh")
+let prReads = 0
+let mergedReads = 0
 
 export const REPO_NAME = /^[\w.-]+\/[\w.-]+$/
 
@@ -355,6 +364,10 @@ export const fetchPrs = async (
   repos: string[],
   { delta = false }: { delta?: boolean } = {},
 ) => {
+  if (prReads++) {
+    await new Promise((r) => setTimeout(r, REFRESH_MS))
+    if (refreshMode === "failed") throw new Error("HTTP 502 (démo)")
+  }
   // quota bas pour montrer la notification et la ligne des réglages
   trackQuota(
     new Headers({
@@ -379,13 +392,20 @@ export const reposWithMyOpenPrs = async () => [
     ...otherRepos(),
   ]),
 ]
-export const fetchMerged = async (repos: string[], from: string, to: string) =>
-  MERGED.filter(
+export const fetchMerged = async (
+  repos: string[],
+  from: string,
+  to: string,
+) => {
+  if (mergedReads++ && refreshMode === "partial")
+    throw new Error("HTTP 502 (démo)")
+  return MERGED.filter(
     (m) =>
       has(repos)(m.repo) &&
       m.mergedAt.slice(0, 10) >= from &&
       m.mergedAt.slice(0, 10) <= to,
   )
+}
 export const listRepos = async () => [...REPOS, ...otherRepos()]
 export async function resolveRepo(repo: string) {
   if (!REPO_NAME.test(repo))
