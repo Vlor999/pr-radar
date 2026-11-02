@@ -17,6 +17,7 @@ import { searchAssignable, type AssignableUser } from "@/lib/github"
 import { strings, useStrings } from "@/lib/i18n"
 import { matchRecipients } from "@/lib/reviewers"
 import {
+  confirmLink,
   contactKey,
   linkAccount,
   resolveLinks,
@@ -41,6 +42,7 @@ const S = strings(
     manual: "ajouté à la main",
     add: (name: string) => `Lier un compte GitHub à ${name}`,
     remove: (login: string) => `Retirer ${login}`,
+    confirm: (login: string) => `Confirmer ${login}`,
   },
   {
     title: "Contacts' GitHub accounts",
@@ -53,6 +55,7 @@ const S = strings(
     manual: "added by hand",
     add: (name: string) => `Link a GitHub account to ${name}`,
     remove: (login: string) => `Remove ${login}`,
+    confirm: (login: string) => `Confirm ${login}`,
   },
 )
 
@@ -123,6 +126,7 @@ export function SlackGithubTable({
                     <LinkChip
                       key={`${l.account ?? ""}|${l.login}`}
                       link={l}
+                      onConfirm={() => confirmLink(team, c.user, l)}
                       onRemove={() => unlinkAccount(team, c.user, l)}
                     />
                   ))}
@@ -177,42 +181,64 @@ function SlackAvatar({ contact }: { contact: Contact }) {
   )
 }
 
-/** Compte lié : automatique en pointillés grisés (comme le reviewer fantôme d'une carte), manuel plein. */
+/** Compte lié : automatique en pointillés grisés (comme le reviewer fantôme d'une carte), un clic le confirme
+ * (il devient manuel, plein) ; manuel plein, seule la croix agit. */
 function LinkChip({
   link,
+  onConfirm,
   onRemove,
 }: {
   link: ResolvedLink
+  onConfirm: () => void
   onRemove: () => void
 }) {
   const t = useStrings(S)
   const auto = link.origin === "auto"
   const account = link.account && findAccount(link.account)
   const origin = auto ? t.auto : t.manual
-  return (
-    <span
-      title={[
-        link.login,
-        origin,
-        account && `${account.login} · ${account.host}`,
-      ]
-        .filter(Boolean)
-        .join(" · ")}
-      className={cn(
-        "inline-flex h-6 items-center gap-1 rounded-sm border pl-1.5 text-xs",
-        auto ? "border-dashed text-muted-foreground" : "bg-muted/50",
-      )}
-    >
+  const where = account ? ` · ${account.login} · ${account.host}` : ""
+  const body = (
+    <>
       <GithubMark className="size-3 shrink-0" />
       <span className="font-mono">{link.login}</span>
-      <span className="sr-only">({origin})</span>
+    </>
+  )
+  return (
+    <span
+      className={cn(
+        "inline-flex h-6 items-center rounded-sm border text-xs",
+        auto
+          ? "border-dashed text-muted-foreground transition-colors duration-150 ease-out hover:bg-muted/50"
+          : "bg-muted/50",
+      )}
+    >
+      {auto ? (
+        <button
+          type="button"
+          onClick={onConfirm}
+          aria-label={t.confirm(link.login)}
+          title={`${t.confirm(link.login)} (${origin}${where})`}
+          className="inline-flex h-full cursor-pointer items-center gap-1 rounded-sm pr-1 pl-1.5 transition-colors duration-150 ease-out hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          {body}
+        </button>
+      ) : (
+        <span
+          title={`${link.login} (${origin}${where})`}
+          className="inline-flex items-center gap-1 pr-1 pl-1.5"
+        >
+          {body}
+          <span className="sr-only">({origin})</span>
+        </span>
+      )}
       <Button
         variant="ghost"
         size="icon-xs"
         // dans la pastille de 24 px bordure comprise : 20 px
-        className="size-5"
+        className="size-5 cursor-pointer"
         onClick={onRemove}
         aria-label={t.remove(link.login)}
+        title={t.remove(link.login)}
       >
         <X />
       </Button>
@@ -284,6 +310,7 @@ function LinkPicker({
           <Button
             variant="ghost"
             size="icon-xs"
+            className="cursor-pointer"
             aria-label={label}
             title={label}
           />

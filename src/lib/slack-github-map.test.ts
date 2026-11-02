@@ -8,6 +8,7 @@ import {
   lookupRecipients,
   parseMap,
   resolveLinks,
+  withConfirmed,
   withLink,
   withoutLink,
   type ContactLinks,
@@ -144,5 +145,14 @@ test("sans équipe Slack connue, seul le rapprochement par nom s'applique", () =
       ]),
     ),
     ["erin-l"],
+  )
+})
+
+test("confirmer une correspondance automatique la rend manuelle", () => {
+  const map = withConfirmed({}, KEY, { ...gh("erin-l"), origin: "auto" })
+  assert.deepEqual(map[KEY], { manual: [gh("erin-l")], excluded: [] })
+  assert.deepEqual(
+    resolveLinks(map[KEY], [gh("erin-l")]).map((l) => [l.login, l.origin]),
+    [["erin-l", "manual"]],
   )
 })

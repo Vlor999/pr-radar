@@ -96,6 +96,16 @@ export function withLink(
   }
 }
 
+/** Correspondance automatique confirmée : elle devient un lien manuel (et l'emporte, voir `resolveLinks`). */
+export const withConfirmed = (
+  map: SlackGithubMap,
+  key: string,
+  link: ResolvedLink,
+): SlackGithubMap => {
+  const { origin: _, ...plain } = link
+  return withLink(map, key, plain)
+}
+
 /** Lien retiré : manuel, il quitte la liste ; automatique, il devient une exclusion (ne revient pas). */
 export function withoutLink(
   map: SlackGithubMap,
@@ -202,6 +212,10 @@ export function useSlackGithubMap(): SlackGithubMap {
 /** Lie à la main un compte GitHub au contact Slack `user` de l'équipe `team`. */
 export const linkAccount = (team: string, user: string, link: LinkedAccount) =>
   write(withLink(parseMap(read()), contactKey(team, user), link))
+
+/** Confirme une correspondance automatique affichée : lien manuel. */
+export const confirmLink = (team: string, user: string, link: ResolvedLink) =>
+  write(withConfirmed(parseMap(read()), contactKey(team, user), link))
 
 /** Retire un lien affiché (manuel : supprimé ; automatique : exclu). */
 export const unlinkAccount = (team: string, user: string, link: ResolvedLink) =>
