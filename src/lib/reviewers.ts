@@ -31,11 +31,11 @@ export const dmRecipients = (mentions: SlackMention[]): SlackRecipient[] => [
  * Utilisateurs GitHub dont le login ou le nom correspond exactement (après `normalizeName`) à un nom
  * Slack d'un destinataire. Pas de correspondance partielle : un prénom seul ne propose personne.
  */
-export function matchRecipients(
+export function matchRecipients<T extends Reviewer>(
   recipients: SlackRecipient[],
-  users: Reviewer[],
-): Reviewer[] {
-  const out = new Map<string, Reviewer>()
+  users: T[],
+): T[] {
+  const out = new Map<string, T>()
   for (const r of recipients) {
     const names = new Set(r.names.map(normalizeName).filter(Boolean))
     for (const u of users) {
