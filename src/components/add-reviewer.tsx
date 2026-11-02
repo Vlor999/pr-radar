@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react"
 import { Avatar } from "@/components/avatar"
 import { SlackLogo } from "@/components/slack-logo"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import {
+  Command,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 import {
   Popover,
   PopoverContent,
@@ -58,6 +63,8 @@ export function AddReviewer({ pr }: { pr: Pr }) {
   const [options, setOptions] = useState<Options | null>(null)
   const [error, setError] = useState<string>()
   const input = useRef<HTMLInputElement>(null)
+  /** ligne active (flèches, Entrée) : login, valeur de l'item cmdk */
+  const [active, setActive] = useState("")
   const { pending } = usePendingReviews(pr.url)
   const recipients = dmRecipients(useMentions(pr.url))
   // noms Slack des destinataires, cherchés parmi les utilisateurs assignables seulement sans recherche tapée
@@ -114,6 +121,10 @@ export function AddReviewer({ pr }: { pr: Pr }) {
       ]),
     )
 
+  // résultats changés (recherche, reviewer demandé) : la 1re ligne redevient active
+  const logins = users?.map((u) => u.login).join("\n") ?? ""
+  useEffect(() => setActive(logins.split("\n")[0]), [logins])
+
   return (
     <Popover
       open={open}
@@ -138,39 +149,47 @@ export function AddReviewer({ pr }: { pr: Pr }) {
       >
         <Plus />
       </PopoverTrigger>
-      <PopoverContent align="start" aria-label={t.add} className="gap-2 p-2">
-        <Input
-          ref={input}
-          autoFocus
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t.search}
-          aria-label={t.search}
-        />
-        {error && (
-          <p role="alert" className="px-2 text-xs text-destructive">
-            {error}
-          </p>
-        )}
-        {!users || !options ? (
-          !error && (
-            <Loader2 className="mx-auto my-2 size-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
-          )
-        ) : users.length ? (
-          <ul className="flex max-h-64 flex-col overflow-y-auto">
-            {users.map((u) => (
-              <li key={u.id}>
-                <button
-                  type="button"
-                  onClick={() => {
+      <PopoverContent align="start" aria-label={t.add} className="p-2">
+        {/* cmdk : flèches, Entrée, survol et ARIA de combobox ; recherche faite par GitHub, pas de filtre local */}
+        <Command
+          shouldFilter={false}
+          vimBindings={false}
+          value={active}
+          onValueChange={setActive}
+          className="gap-2 rounded-none bg-transparent p-0 **:data-[slot=command-input-wrapper]:p-0"
+        >
+          <CommandInput
+            ref={input}
+            autoFocus
+            value={query}
+            onValueChange={setQuery}
+            placeholder={t.search}
+            aria-label={t.search}
+          />
+          {error && (
+            <p role="alert" className="px-2 text-xs text-destructive">
+              {error}
+            </p>
+          )}
+          <CommandList className="max-h-64">
+            {!users || !options ? (
+              !error && (
+                <Loader2 className="mx-auto my-2 size-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
+              )
+            ) : users.length ? (
+              users.map((u) => (
+                <CommandItem
+                  key={u.id}
+                  value={u.login}
+                  onSelect={() => {
                     addReviewer(options.prId, u, {
                       repo: pr.repo,
                       url: pr.url,
                     })
-                    // la ligne choisie quitte la liste : le focus revient à la recherche
+                    // la ligne choisie quitte la liste : le focus reste à la recherche
                     input.current?.focus()
                   }}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  className="px-2 py-1.5 font-normal"
                 >
                   <Avatar login={u.login} url={pr.url} />
                   <span className="min-w-0 flex-1 truncate">{u.login}</span>
@@ -184,13 +203,13 @@ export function AddReviewer({ pr }: { pr: Pr }) {
                       <SlackLogo mono className="size-3.5" />
                     </span>
                   )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="px-2 py-1 text-muted-foreground">{t.none}</p>
-        )}
+                </CommandItem>
+              ))
+            ) : (
+              <p className="px-2 py-1 text-muted-foreground">{t.none}</p>
+            )}
+          </CommandList>
+        </Command>
       </PopoverContent>
     </Popover>
   )
