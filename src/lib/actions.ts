@@ -21,7 +21,15 @@ import {
 import { log } from "./log"
 import { prNumberOf } from "./log-data"
 import { forgetQuota } from "./quota"
-import { getData, getRepos, reload, setRepos } from "./store"
+import {
+  addPending,
+  dropPending,
+  getData,
+  getRepos,
+  markSent,
+  reload,
+  setRepos,
+} from "./store"
 import { pull } from "./sync"
 import type { MergedPr } from "./types"
 
@@ -240,20 +248,28 @@ export async function mergedBetween(
   }
 }
 
-/** Demande une review sur une de mes PR, puis relit GitHub pour afficher la demande. */
-export async function addReviewer(
+/**
+ * Demande une review sur une de mes PR, sans attendre GitHub : le reviewer s'affiche tout de suite sur la
+ * carte (`addPending`), la mutation et la relecture suivent en arrière-plan. Refus : il disparaît, l'erreur
+ * s'affiche sur la carte.
+ */
+export function addReviewer(
   prId: string,
-  userId: string,
-  repo: string,
-): Promise<{ error?: string }> {
-  try {
-    await requestReviewer(prId, userId, repo)
-  } catch (e) {
-    logAction("addReviewer", repo, message(e), prOf(prId))
-    return { error: message(e) }
-  }
-  logAction("addReviewer", repo, undefined, prOf(prId))
-  clearCache()
-  await reload()
-  return {}
+  user: { id: string; login: string },
+  pr: { repo: string; url: string },
+) {
+  addPending(pr.url, user.login)
+  void (async () => {
+    try {
+      await requestReviewer(prId, user.id, pr.repo)
+    } catch (e) {
+      logAction("addReviewer", pr.repo, message(e), prOf(prId))
+      dropPending(pr.url, user.login, message(e))
+      return
+    }
+    logAction("addReviewer", pr.repo, undefined, prOf(prId))
+    markSent(pr.url, user.login)
+    clearCache()
+    await reload()
+  })()
 }

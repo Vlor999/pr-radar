@@ -13,6 +13,7 @@ import { useEffect, useState } from "react"
 import { AuthSourceIcon } from "@/components/auth-source-icon"
 import { Login } from "@/components/login"
 import { words, type SettingsEntry } from "@/components/settings/category"
+import { SlackGithubTable } from "@/components/settings/slack-github"
 import { Row, Section, settingDomId, Toggle } from "@/components/settings/ui"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -341,13 +342,14 @@ function SlackSection() {
   const [query, setQuery] = useState("")
   const live = !!team && !expired
   useEffect(() => {
-    if (!live || slackAll || convs) return
+    // lue même avec « toutes les conversations » : la table Slack → GitHub liste les DM 1:1
+    if (!live || convs) return
     setError("")
     // DM d'abord affichés avec l'id du destinataire, puis avec son nom
     listConversations(setConvs).then(setConvs, (e: unknown) =>
       setError(message(e)),
     )
-  }, [live, slackAll, convs])
+  }, [live, convs])
 
   const connect = async () => {
     setBusy(true)
@@ -505,6 +507,9 @@ function SlackSection() {
               </>
             )}
           </div>
+        )}
+        {live && team && convs && (
+          <SlackGithubTable convs={convs} team={team.id} />
         )}
       </>
     </Section>

@@ -44,12 +44,29 @@ const CONVS: SlackConversation[] = [
   { id: "C2", name: "releases", kind: "public" },
   { id: "G1", name: "checkout-squad", kind: "private" },
   { id: "D1", name: "Alice Martin", kind: "im" },
+  { id: "D2", name: "Erin Laurent", kind: "im" },
+  // table Slack → GitHub des réglages : deux comptes GitHub (frank, fpetit), aucun (Nina)
+  { id: "D3", name: "Frank Petit", kind: "im" },
+  { id: "D4", name: "Nina Roux", kind: "im" },
   { id: "M1", name: "alice, bob", kind: "mpim" },
 ]
 
 export const listConversations = async (
   _onNamed: (list: SlackConversation[]) => void,
-) => CONVS
+): Promise<SlackConversation[]> =>
+  CONVS.map((c) =>
+    c.kind === "im"
+      ? { ...c, contact: { user: `U_${c.id}`, names: DM_NAMES[c.id] ?? [] } }
+      : c,
+  )
+
+/** noms Slack des destinataires de DM 1:1 (users.info : nom complet, nom d'affichage, identifiant) */
+const DM_NAMES: Record<string, string[]> = {
+  D1: ["Alice Martin", "Alice", "alice.martin"],
+  D2: ["Erin Laurent", "Erin", "erin"],
+  D3: ["Frank Petit", "Frank P.", "frank.petit"],
+  D4: ["Nina Roux", "Nina", "nina"],
+}
 
 const ago = (h: number) => new Date(Date.now() - h * HOUR_MS).toISOString()
 const at = (
@@ -67,6 +84,11 @@ const at = (
     at: ago(h),
     text,
     permalink: `https://acme.slack.com/archives/${channelId}/p${h}`,
+    // DM 1:1 que j'ai envoyé : son destinataire est proposé en reviewer
+    ...(c.kind === "im" &&
+      author === "me" && {
+        recipient: { id: `U_${channelId}`, names: DM_NAMES[channelId] ?? [] },
+      }),
   }
 }
 
@@ -119,6 +141,13 @@ const MENTIONS: Record<string, SlackMention[]> = {
       "me",
       "Corrigé, <https://github.com/acme/api/pull/88> prête pour une 2e passe",
       20,
+    ),
+    // DM à Erin : « erin-l » sur GitHub, proposée en tête du popover « Ajouter un reviewer »
+    at(
+      "D2",
+      "me",
+      "Salut Erin, tu aurais un moment pour relire <https://github.com/acme/api/pull/88|acme/api#88> ?",
+      18,
     ),
     at(
       "M1",

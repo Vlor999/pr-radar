@@ -14,6 +14,7 @@ import {
   rateLimitWait,
   sameState,
   SlackError,
+  slackNames,
   toMentions,
   toTokens,
   userIds,
@@ -233,4 +234,49 @@ test("prochaine relecture : plus ancienne lecture des PR affichées + 10 min", (
 
 test("aucune PR affichée encore lue : pas de prochaine relecture", () => {
   assert.equal(nextReadAt([PR14], new Map([[URL, { at: 1_000 }]])), null)
+})
+
+test("DM 1:1 envoyé : destinataire avec ses noms ; DM reçu, de groupe, channel : aucun", () => {
+  const base = {
+    username: "me",
+    user: "U0",
+    ts: "1761040800",
+    text: URL,
+    permalink: "https://acme.slack.com/archives/D1/p1",
+  }
+  const aliases = new Map([["U1", ["Alice Martin", "alice"]]])
+  const out = toMentions(
+    [
+      { ...base, channel: { id: "D1", name: "U1", is_im: true } },
+      { ...base, user: "U1", channel: { id: "D1", name: "U1", is_im: true } },
+      {
+        ...base,
+        channel: { id: "G1", name: "mpdm-me--alice-1", is_mpim: true },
+      },
+      { ...base, channel: { id: "C1", name: "dev" } },
+    ],
+    URL,
+    new Map(),
+    aliases,
+  )
+  assert.deepEqual(
+    out.map((m) => m.recipient),
+    [
+      { id: "U1", names: ["Alice Martin", "alice"] },
+      undefined,
+      undefined,
+      undefined,
+    ],
+  )
+})
+
+test("noms Slack : nom complet, nom d'affichage puis identifiant, sans vide ni doublon", () => {
+  assert.deepEqual(
+    slackNames({
+      name: "alice.m",
+      real_name: "Alice Martin",
+      profile: { real_name: "Alice Martin", display_name: " " },
+    }),
+    ["Alice Martin", "alice.m"],
+  )
 })

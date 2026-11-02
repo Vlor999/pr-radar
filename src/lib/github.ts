@@ -21,6 +21,8 @@ import {
   type RawChecks,
 } from "./checks"
 import {
+  assignableFrom,
+  capPerAccount,
   gqlFailed,
   gqlMessage,
   restRepos,
@@ -56,6 +58,22 @@ const REPO_LIST_TTL_MS = 10 * 60_000
 const REPOS_PER_QUERY = 5 // une requête de recherche GitHub est limitée en longueur et en opérateurs
 const HUNK_LINES = 8 // GitHub montre aussi la fin du hunk, qui se termine sur la ligne commentée
 const ASSIGNABLE_PAGE = 20 // assez pour un popover ; la recherche affine au-delà
+// destinataires de DM Slack absents de la 1re page : une recherche par nom, en alias dans la même requête.
+// Coût GraphQL : 1 point par requête tant que les connexions demandées restent sous 100 nœuds.
+const DM_LOOKUP_PAGE = 5
+const DM_LOOKUPS_MAX = 6
+// destinataires de DM de la carte (reviewer fantôme) : les utilisateurs assignables changent rarement ;
+// gardés 10 min et à l'actualisation, soit 1 point par PR concernée toutes les 10 min au plus
+const DM_USERS_TTL_MS = 10 * 60_000
+// table Slack → GitHub des réglages : utilisateurs assignables des repos suivis, une requête par compte,
+// un alias par repo. Coût GraphQL ~ connexions demandées / 100 : 1 point par compte jusqu'à 100 repos.
+const MAP_REPOS_MAX = 30 // par compte
+/** sans recherche : toute la 1re page de chaque repo, rapprochée par nom en local */
+const MAP_ALL_PAGE = 100
+/** recherche tapée dans le sélecteur : quelques résultats par repo suffisent */
+const MAP_SEARCH_PAGE = 10
+/** clés de cache gardées par une actualisation (`clearCache` sans `all`) */
+const KEPT_ON_REFRESH = ["repos:", "dmUsers:"]
 // la recherche GitHub renvoie parfois 0 résultat sans erreur (~1 appel sur 3) : un vide est relu avant d'être cru.
 // Reste ~1/27 par recherche (un lot de 5 repos), absorbé par `keepVanished` dans store.reload.
 const EMPTY_SEARCH_RETRIES = 2
@@ -115,6 +133,8 @@ async function gql<T>(
   c: Conn,
   query: string,
   variables: Record<string, unknown> = {},
+  /** racines null + errors tolérées (voir `gqlFailed`) : l'appelant les ignore */
+  { partial = false } = {},
 ): Promise<T> {
   const res = await fetch(graphqlUrl(c.host), {
     method: "POST",
@@ -135,7 +155,12 @@ async function gql<T>(
   const cost = takeCost(json)
   if (cost !== undefined && c.account && findAccount(c.account))
     addCost(c.account, cost)
-  if (gqlFailed(json)) {
+  if (partial && json.errors?.length)
+    log("warn", "github.partial", {
+      account: c.account,
+      error: gqlMessage(json, ""),
+    })
+  if (gqlFailed(json, partial)) {
     const error = gqlMessage(json, pick(S).http(res.status))
     log("warn", "github.error", {
       account: c.account,
@@ -367,7 +392,7 @@ function peek<T>(key: string): { value: T; at: number } | null {
  */
 export function clearCache({ all = false } = {}) {
   for (const k of caches.keys())
-    if (all || !k.startsWith("repos:")) caches.delete(k)
+    if (all || !KEPT_ON_REFRESH.some((p) => k.startsWith(p))) caches.delete(k)
   if (all) {
     viewers.clear()
     snapshots.clear()
@@ -745,48 +770,178 @@ const accountOf = (repo: string) => {
   return a
 }
 
-/** Reviewers possibles d'une de mes PR : suggestions GitHub, puis utilisateurs assignables filtrés par `query`. */
+type DmFields = Record<`dm${number}`, { nodes: Reviewer[] } | null>
+
+/** Recherche de noms Slack parmi les utilisateurs assignables (6 au plus) : une variable et un alias par nom,
+ * `$dm0` → `dm0: assignableUsers(…)`, lus ensuite par `read`. */
+const dmLookup = (names: string[]) => {
+  const lookups = names.slice(0, DM_LOOKUPS_MAX)
+  return {
+    vars: lookups.map((_, i) => `, $dm${i}: String!`).join(""),
+    fields: lookups
+      .map(
+        (_, i) =>
+          `dm${i}: assignableUsers(first: ${DM_LOOKUP_PAGE}, query: $dm${i}) { nodes { login id name } }`,
+      )
+      .join("\n"),
+    values: Object.fromEntries(lookups.map((n, i) => [`dm${i}`, n])),
+    read: (r: DmFields) => lookups.flatMap((_, i) => r[`dm${i}`]?.nodes ?? []),
+  }
+}
+
+/**
+ * Reviewers possibles d'une de mes PR : suggestions GitHub, puis utilisateurs assignables filtrés par `query`.
+ * `dmNames` : noms Slack des destinataires de DM qui citent la PR ; chacun est cherché parmi les utilisateurs
+ * assignables (`dm`), la 1re page pouvant ne pas les contenir.
+ */
 export async function fetchReviewerOptions(
   repo: string,
   number: number,
   query: string,
+  dmNames: string[] = [],
 ): Promise<{
   prId: string
   viewer: string
   suggested: Reviewer[]
   assignable: Reviewer[]
+  dm: Reviewer[]
 }> {
   const [owner, name] = splitKey(repo).name.split("/")
+  const dm = dmLookup(dmNames)
   const res = await gql<{
     viewer: { login: string }
-    repository: {
-      pullRequest: {
-        id: string
-        suggestedReviewers: { reviewer: Reviewer }[]
-      } | null
-      assignableUsers: { nodes: Reviewer[] } | null
-    } | null
+    repository:
+      | ({
+          pullRequest: {
+            id: string
+            suggestedReviewers: { reviewer: Reviewer }[]
+          } | null
+          assignableUsers: { nodes: Reviewer[] } | null
+        } & DmFields)
+      | null
   }>(
     conn(accountOf(repo)),
-    `query($owner: String!, $name: String!, $number: Int!, $q: String) {
+    `query($owner: String!, $name: String!, $number: Int!, $q: String${dm.vars}) {
       viewer { login }
       repository(owner: $owner, name: $name) {
-        pullRequest(number: $number) { id suggestedReviewers { reviewer { login id } } }
-        assignableUsers(first: ${ASSIGNABLE_PAGE}, query: $q) { nodes { login id } }
+        pullRequest(number: $number) { id suggestedReviewers { reviewer { login id name } } }
+        assignableUsers(first: ${ASSIGNABLE_PAGE}, query: $q) { nodes { login id name } }
+        ${dm.fields}
       }
     }`,
-    { owner, name, number, q: query || null },
+    {
+      owner,
+      name,
+      number,
+      q: query || null,
+      ...dm.values,
+    },
   )
   // `repository` null + errors : `gql` lève déjà ; ici, PR absente (champ imbriqué) ou repo null sans erreur
-  const pr = res.repository?.pullRequest
-  const users = res.repository?.assignableUsers
-  if (!pr || !users) throw new Error(pick(S).notFound(repo))
+  const r = res.repository
+  const pr = r?.pullRequest
+  const users = r?.assignableUsers
+  if (!r || !pr || !users) throw new Error(pick(S).notFound(repo))
   return {
     prId: pr.id,
     viewer: res.viewer.login,
     suggested: pr.suggestedReviewers.map((s) => s.reviewer),
     assignable: users.nodes,
+    dm: dm.read(r),
   }
+}
+
+/** Utilisateurs assignables trouvés par les noms Slack des destinataires de DM d'une PR (reviewer fantôme
+ * de la carte) : seulement les champs aliasés, sans la PR ni la 1re page ; en cache 10 min. */
+export function fetchDmReviewers(
+  repo: string,
+  names: string[],
+): Promise<Reviewer[]> {
+  return cached(
+    `dmUsers:${repo}|${names.join("\n")}`,
+    DM_USERS_TTL_MS,
+    async () => {
+      const [owner, name] = splitKey(repo).name.split("/")
+      const dm = dmLookup(names)
+      const res = await gql<{ repository: DmFields | null }>(
+        conn(accountOf(repo)),
+        `query($owner: String!, $name: String!${dm.vars}) {
+          repository(owner: $owner, name: $name) { ${dm.fields} }
+        }`,
+        { owner, name, ...dm.values },
+      )
+      return res.repository ? dm.read(res.repository) : []
+    },
+  )
+}
+
+/** Utilisateur assignable d'un repo suivi, avec le compte PR Radar qui le voit. */
+export type AssignableUser = Reviewer & { account: string }
+
+/**
+ * Utilisateurs assignables des repos suivis (30 au plus par compte, `truncated` au-delà), tous comptes, filtrés
+ * par `query` : table Slack → GitHub des réglages (rapprochement par nom sans recherche, sélecteur avec).
+ * Assignables plutôt que la recherche d'utilisateurs GitHub : seuls eux peuvent reviewer, et un homonyme inconnu
+ * n'est pas proposé. Une requête par compte (un alias par repo), lue en mode partiel : un repo inaccessible
+ * n'annule pas les autres. En cache 10 min, gardée à l'actualisation.
+ */
+export function searchAssignable(
+  repos: string[],
+  query: string,
+): Promise<{ users: AssignableUser[]; truncated: boolean }> {
+  const first = query ? MAP_SEARCH_PAGE : MAP_ALL_PAGE
+  const { groups, truncated } = capPerAccount(
+    byAccount(repos, allAccounts()),
+    MAP_REPOS_MAX,
+  )
+  return cached(
+    `dmUsers:assignable:${repos.join(",")}|${query}`,
+    DM_USERS_TTL_MS,
+    async () => {
+      const { data } = await settle(
+        groups.map(([a]) => a),
+        async (a) => {
+          const names = groups.find(([g]) => g === a)![1]
+          const vars = names.map((_, i) => `, $o${i}: String!, $n${i}: String!`)
+          const fields = names.map(
+            (_, i) =>
+              `r${i}: repository(owner: $o${i}, name: $n${i}) { assignableUsers(first: ${first}, query: $q) { nodes { login id name } } }`,
+          )
+          const res = await gql<
+            Record<string, { assignableUsers: { nodes: Reviewer[] } } | null>
+          >(
+            conn(a),
+            `query($q: String${vars.join("")}) { ${fields.join("\n")} }`,
+            {
+              q: query || null,
+              ...Object.fromEntries(
+                names.flatMap((n, i) => {
+                  const [owner, name] = n.split("/")
+                  return [
+                    [`o${i}`, owner],
+                    [`n${i}`, name],
+                  ]
+                }),
+              ),
+            },
+            { partial: true },
+          )
+          return assignableFrom(res, names.length).map((u) => ({
+            ...u,
+            account: a.id,
+          }))
+        },
+      )
+      const seen = new Set<string>()
+      const users = data.filter((u) => {
+        const k = `${u.account}|${u.login.toLowerCase()}`
+        if (seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
+      return { users, truncated }
+    },
+  )
 }
 
 /** Demande une review à un utilisateur ; `union` garde les demandes déjà en cours. */

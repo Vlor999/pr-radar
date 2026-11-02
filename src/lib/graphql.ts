@@ -7,11 +7,32 @@ export type GqlResponse = {
 /**
  * Échec si `data` manque, ou si `errors` accompagne un champ racine null (mutation refusée).
  * Un champ racine nullable (`repository(...)`) null + errors échoue aussi, avec le message de GitHub.
- * Tous les champs racines comptent : avec plusieurs racines, une seule null + errors fait échouer toute la réponse.
+ * Tous les champs racines comptent : avec plusieurs racines, une seule null + errors fait échouer toute la réponse
+ * (sauf `partial` : la réponse est gardée tant que `data` existe, l'appelant lit les racines null).
  * GitHub renvoie des données partielles quand un repo d'org est inaccessible (SSO, restriction) : on les garde.
  */
-export const gqlFailed = ({ data, errors }: GqlResponse) =>
-  !data || (!!errors?.length && Object.values(data).some((v) => v === null))
+export const gqlFailed = ({ data, errors }: GqlResponse, partial = false) =>
+  !data ||
+  (!partial && !!errors?.length && Object.values(data).some((v) => v === null))
+
+/**
+ * Utilisateurs assignables d'une requête à une racine `r<i>: repository(…)` par repo (`count` racines),
+ * lue en mode `partial` : un repo supprimé, renommé ou bloqué par SSO (racine null) est ignoré, les autres
+ * gardés.
+ */
+export const assignableFrom = <U>(
+  data: Record<string, { assignableUsers: { nodes: U[] } } | null>,
+  count: number,
+) =>
+  Array.from({ length: count }, (_, i) => data[`r${i}`]).flatMap(
+    (r) => r?.assignableUsers.nodes ?? [],
+  )
+
+/** Repos par compte, `max` au plus pour chacun ; `truncated` : au moins un compte en avait plus. */
+export const capPerAccount = <A>(groups: [A, string[]][], max: number) => ({
+  groups: groups.map(([a, names]): [A, string[]] => [a, names.slice(0, max)]),
+  truncated: groups.some(([, names]) => names.length > max),
+})
 
 /**
  * Ajoute `rateLimit { cost }` à une opération query (`query …` ou forme abrégée `{ … }`), au premier `{`

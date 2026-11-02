@@ -11,7 +11,12 @@ import {
   type Settings,
 } from "./settings.ts"
 import { onPulled, saveItem } from "./sync.ts"
-import type { Pr, SlackConversation, SlackMention } from "./types.ts"
+import type {
+  Pr,
+  SlackConversation,
+  SlackMention,
+  SlackRecipient,
+} from "./types.ts"
 
 /**
  * Mentions Slack des PR, sans serveur : app Slack publique en PKCE (pas de secret), retour par
@@ -126,6 +131,8 @@ export const filterMentions = (
   s.slackAll ? list : list.filter((m) => s.slackChannels.includes(m.channelId))
 
 type Match = {
+  /** id Slack de l'auteur */
+  user?: string
   username?: string
   ts: string
   text: string
@@ -133,17 +140,46 @@ type Match = {
   channel: { id: string; name?: string; is_im?: boolean; is_mpim?: boolean }
 }
 
-/** Résultats de `search.messages` qui contiennent vraiment le lien de la PR. */
+/** Profil lu par `users.info` (scope `users:read`). */
+type SlackUser = {
+  name: string
+  real_name?: string
+  profile?: { real_name?: string; display_name?: string; image_48?: string }
+}
+
+/** Noms d'un utilisateur Slack, sans doublon ni vide : nom complet, nom d'affichage, identifiant. */
+export const slackNames = (u: SlackUser) => [
+  ...new Set(
+    [u.real_name, u.profile?.real_name, u.profile?.display_name, u.name]
+      .map((n) => n?.trim() ?? "")
+      .filter(Boolean),
+  ),
+]
+
+/** Destinataire d'un DM 1:1 que j'ai envoyé (auteur ≠ destinataire) ; DM reçu, de groupe, channel : aucun. */
+const recipientOf = (
+  m: Match,
+  aliases: Map<string, string[]>,
+): SlackRecipient | undefined => {
+  const to = m.channel.name
+  if (!m.channel.is_im || !to || !m.user || m.user === to) return undefined
+  return { id: to, names: aliases.get(to) ?? [] }
+}
+
+/** Résultats de `search.messages` qui contiennent vraiment le lien de la PR.
+ * `aliases` : noms des destinataires de DM (`slackNames`), pour les proposer en reviewers. */
 export const toMentions = (
   matches: Match[],
   url: string,
   names: Map<string, string> = new Map(),
+  aliases: Map<string, string[]> = new Map(),
 ): SlackMention[] =>
   matches
     .filter((m) => mentionsUrl(m.text, url))
     .map((m) => {
       const c = m.channel
       const name = c.name ?? ""
+      const recipient = recipientOf(m, aliases)
       return {
         author: m.username ?? "?",
         channelId: c.id,
@@ -158,6 +194,7 @@ export const toMentions = (
           names.has(id) ? `<@${id}|${names.get(id)}>` : x,
         ),
         permalink: m.permalink,
+        ...(recipient && { recipient }),
       }
     })
 
@@ -476,6 +513,8 @@ export async function disconnectSlack() {
   mentions.clear()
   setProgress()
   userNames.clear()
+  userAliases.clear()
+  userImages.clear()
   updateSettings({ slackAll: false, slackChannels: [] })
   setState({ team: null, expired: false })
 }
@@ -483,13 +522,17 @@ export async function disconnectSlack() {
 /* ---------- Conversations (réglages) ---------- */
 
 const userNames = new Map<string, string>()
+/** tous les noms connus d'un utilisateur (`slackNames`) : rapprochement avec un login GitHub */
+const userAliases = new Map<string, string[]>()
+/** avatar Slack (48 px) d'un utilisateur, affiché dans la table Slack → GitHub des réglages */
+const userImages = new Map<string, string>()
 
 async function userName(id: string, t: string) {
   if (!userNames.has(id)) {
-    const r = await call<{
-      user: { name: string; real_name?: string }
-    }>("users.info", { user: id }, t)
+    const r = await call<{ user: SlackUser }>("users.info", { user: id }, t)
     userNames.set(id, r.user.real_name || r.user.name)
+    userAliases.set(id, slackNames(r.user))
+    if (r.user.profile?.image_48) userImages.set(id, r.user.profile.image_48)
   }
   return userNames.get(id) ?? id
 }
@@ -547,7 +590,12 @@ export async function listConversations(
         : c.is_mpim
           ? mpdmName(c.name ?? "")
           : (c.name ?? c.id)
-      out.push({ id: c.id, name, kind })
+      out.push({
+        id: c.id,
+        name,
+        kind,
+        ...(c.is_im && c.user && { contact: contactOf(c.user) }),
+      })
     }
     cursor = r.response_metadata?.next_cursor ?? ""
   } while (cursor)
@@ -557,12 +605,21 @@ export async function listConversations(
       onNamed(
         out.map((c) => {
           const u = dmUser.get(c.id)
-          return u && userNames.has(u) ? { ...c, name: userNames.get(u)! } : c
+          return u && userNames.has(u)
+            ? { ...c, name: userNames.get(u)!, contact: contactOf(u) }
+            : c
         }),
       ),
     )
   return out
 }
+
+/** Contact d'un DM 1:1 : noms et avatar déjà lus (`users.info`), sinon vides. */
+const contactOf = (user: string) => ({
+  user,
+  names: userAliases.get(user) ?? [],
+  image: userImages.get(user),
+})
 
 /** Lit les noms manquants, NAME_CONCURRENCY à la fois ; arrêt au premier échec, affiché comme erreur Slack. */
 async function nameUsers(ids: string[], t: string) {
@@ -673,7 +730,7 @@ async function drain() {
       }
       mentions.set(url, {
         at: Date.now(),
-        list: toMentions(matches, url, userNames),
+        list: toMentions(matches, url, userNames, userAliases),
       })
       setState({ ...state, error: undefined })
     } catch (e) {
