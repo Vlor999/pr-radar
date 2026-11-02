@@ -29,6 +29,10 @@ const COLOR = {
   failed: "bg-destructive",
 }
 
+/** temps restant avant l'effacement de la pastille verte d'une actualisation finie à `at` */
+const okLeft = (at: string) =>
+  REFRESH_OK_VISIBLE_MS - (Date.now() - Date.parse(at))
+
 /**
  * Pastille à gauche du bouton « Rafraîchir » : grise pendant une actualisation automatique,
  * puis l'issue de la dernière (verte qui s'efface, orange ou rouge jusqu'à la suivante).
@@ -43,11 +47,14 @@ export function RefreshDot({
 }) {
   const t = useStrings(S)
   const { status, statusAt, error, mergedError } = useData()
-  // fin de l'actualisation réussie dont la pastille s'est effacée
-  const [faded, setFaded] = useState<string>()
+  // fin de l'actualisation réussie dont la pastille s'est effacée ; au remontage, une réussite
+  // plus ancienne que le délai est déjà effacée (pas de pastille verte rejouée)
+  const [faded, setFaded] = useState(() =>
+    statusAt && okLeft(statusAt) <= 0 ? statusAt : undefined,
+  )
   useEffect(() => {
-    if (status !== "ok") return
-    const id = setTimeout(() => setFaded(statusAt), REFRESH_OK_VISIBLE_MS)
+    if (status !== "ok" || !statusAt) return
+    const id = setTimeout(() => setFaded(statusAt), okLeft(statusAt))
     return () => clearTimeout(id)
   }, [status, statusAt])
 
@@ -59,7 +66,10 @@ export function RefreshDot({
         minute: "2-digit",
       })
     : ""
-  const detail = [error, mergedError].filter(Boolean).join(" ; ")
+  // échec global : `mergedError` est celui du chargement précédent, seule `error` vaut
+  const detail = (state === "failed" ? [error] : [error, mergedError])
+    .filter(Boolean)
+    .join(" ; ")
   const label =
     state === "loading"
       ? t.loading
