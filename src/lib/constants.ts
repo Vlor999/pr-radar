@@ -55,6 +55,11 @@ export const PROBE_PAGE_SIZE = 30
 /** ids par lecture complète `nodes(ids:)` (GitHub : 100 au plus) ; 20 = taille d'une page de l'ancienne recherche complète */
 export const NODES_PER_QUERY = 20
 
+/* ---------- Pastille d'actualisation (refresh-dot.tsx) ---------- */
+
+/** pastille verte d'une actualisation réussie : visible ce temps, puis s'efface */
+export const REFRESH_OK_VISIBLE_MS = 4_000
+
 /* ---------- Réglages ---------- */
 
 /** durée du surlignage d'un réglage ouvert depuis la recherche */
