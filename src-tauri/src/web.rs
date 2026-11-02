@@ -33,7 +33,7 @@ const TICKET_TTL: Duration = Duration::from_secs(60);
 /// Erreur traduite par l'interface.
 const PORT_BUSY: &str = "port-busy";
 /// CSP de tauri.conf.json, `connect-src` ramené à la même origine (plus d'IPC : tout passe par ce serveur).
-const CSP: &str = "default-src 'self'; connect-src 'self'; img-src 'self' https://avatars.githubusercontent.com; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+const CSP: &str = "default-src 'self'; connect-src 'self'; img-src 'self' https://avatars.githubusercontent.com https://avatars.slack-edge.com; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 /// Méthodes Slack de la capacité `http:default` (src-tauri/capabilities/default.json).
 const SLACK_METHODS: [&str; 5] = [
     "oauth.v2.access",
