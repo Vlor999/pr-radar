@@ -10,7 +10,9 @@
 
 - PR tree per repo, with "depends on / blocks" stacks
 - Review, CI and conflict status; click the CI badge for jobs per workflow, with re-run of failed jobs
-- Unresolved review threads shown with the code, reply in place
+- Unresolved review threads shown with the code, reply or resolve in place
+- From the card: request reviewers, mark a draft ready for review, update a branch behind its base
+- Other people's PRs where you are assigned, mentioned or involved, placed in the tree with the reason
 - Filters and search
 - Ready-to-merge and stale PRs
 - New since your last visit
@@ -18,9 +20,13 @@
 - Repo picker per organization
 - Local web version: the same interface in a browser tab, served by the app on 127.0.0.1 (opt-in)
 - Local MCP server: Claude Code, Claude Desktop, Antigravity, Codex, Cursor, Devin Desktop, Gemini CLI, VS Code, Windsurf or Zed read your PRs and their Slack mentions, read-only (opt-in; macOS and Linux)
-- System notifications
+- System notifications, with Do not disturb (1 h or until tomorrow, also from the tray) and launch at login
+- Runs in the menu bar or tray: closing the window (and ⌘Q on macOS) keeps it running, Quit from the tray menu exits
+- Refresh adapted to the API quota; automatic refreshes reread only the PRs that changed, with a status dot next to Refresh
+- Settings by category, with a typo-tolerant search
+- Local activity log (Diagnostics settings, redacted, with retention) and a crash report you review before opening a GitHub issue
 - Light / dark / auto theme
-- Keyboard shortcuts: `j` `k` `o` `e` `d`
+- Command palette `⌘K` / `Ctrl+K`, keyboard shortcuts: `/` `j` `k` `o` `e` `d`
 - English and French UI
 
 ## Download
@@ -78,7 +84,7 @@ Local web version, off by default: listens on 127.0.0.1 only, not reachable from
 
 Local MCP server, off by default: no network port. The agent starts `pr-radar --mcp` (a stdio shim), which talks to the running app through a Unix socket (mode `0600`, created only when you turn the server on). Read-only: no tool writes to GitHub or Slack, and replies are the state the app already holds, with no extra request.
 
-Settings, followed repos and "seen" marks stay in the app's local storage. The [website](https://vlor999.github.io/pr-radar/) is hosted by GitHub Pages (which logs IP addresses), fetches the latest release from api.github.com in your browser, sets no cookies and only keeps your language choice in `localStorage`.
+Settings, followed repos and "seen" marks stay in the app's local storage. The activity log (Settings › Diagnostics, on by default) is written on your machine only, without PR titles, comments, Slack messages or tokens. A crash report is never sent by the app: it opens a prefilled GitHub issue in your browser that you review and submit yourself. The [website](https://vlor999.github.io/pr-radar/) is hosted by GitHub Pages (which logs IP addresses), fetches the latest release from api.github.com in your browser, sets no cookies and only keeps your language choice in `localStorage`.
 
 ## How it compares
 

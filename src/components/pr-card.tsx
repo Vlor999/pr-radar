@@ -23,6 +23,8 @@ import { useEffect, useState, useTransition } from "react"
 import { AddReviewer } from "@/components/add-reviewer"
 import { Avatar } from "@/components/avatar"
 import { CiGraph } from "@/components/ci-graph"
+import { DmSuggestion } from "@/components/dm-suggestion"
+import { SlackLogo } from "@/components/slack-logo"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -31,13 +33,16 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { useDmSuggestions } from "@/hooks/use-dm-suggestions"
 import { ready, syncBranch } from "@/lib/actions"
 import { currentLang, locale, strings, useStrings } from "@/lib/i18n"
 import { DONE_ICON, DONE_MS, pause, wait } from "@/lib/motion"
 import { HOUR_MS } from "@/lib/quiet"
+import { withPending } from "@/lib/reviewers"
 import { useSettings } from "@/lib/settings"
 import { useMentions } from "@/lib/slack"
 import { slackParts, spoofedHost } from "@/lib/slack-text"
+import { usePendingReviews } from "@/lib/store"
 import {
   idleDays,
   isStale,
@@ -198,28 +203,6 @@ const CI: Record<string, { icon: typeof Check; bad?: boolean }> = {
   EXPECTED: { icon: CircleDashed },
 }
 
-/** Logo Slack officiel (4 couleurs), en ligne : pas de dépendance. */
-const SlackLogo = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 122.8 122.8" aria-hidden className={className}>
-    <path
-      fill="#e01e5a"
-      d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z"
-    />
-    <path
-      fill="#36c5f0"
-      d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z"
-    />
-    <path
-      fill="#2eb67d"
-      d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z"
-    />
-    <path
-      fill="#ecb22e"
-      d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z"
-    />
-  </svg>
-)
-
 /** « 0 PR » en français, « 0 PRs » en anglais. */
 export const plural = (n: number, word: string) =>
   `${n} ${word}${n > 1 || (n === 0 && currentLang() === "en") ? "s" : ""}`
@@ -254,6 +237,11 @@ export function PrCard({
   const stack = nativeStack(pr)
   const { staleDays } = useSettings()
   const mentions = useMentions(pr.url)
+  // reviewers demandés depuis l'app : affichés tout de suite, jusqu'au rechargement qui les lit sur GitHub
+  const pending = usePendingReviews(pr.url)
+  const requested = withPending(pr.requested, pending.pending)
+  // destinataires de mes DM Slack sur la PR, proposés en reviewers fantômes
+  const suggestions = useDmSuggestions(pr, pending.pending)
 
   return (
     <Card
@@ -431,7 +419,7 @@ export function PrCard({
                   </Badge>
                 </li>
               ))}
-              {pr.requested.map(({ who, team }) => (
+              {requested.map(({ who, team }) => (
                 <li key={who} className="flex items-center gap-2">
                   {/* équipe : pas d'avatar par login, l'initiale */}
                   <Avatar login={who} url={team ? undefined : pr.url} />
@@ -444,11 +432,19 @@ export function PrCard({
                   </Badge>
                 </li>
               ))}
+              {suggestions.map((u) => (
+                <DmSuggestion key={u.id} pr={pr} user={u} />
+              ))}
               <li className="flex items-center gap-2 text-muted-foreground">
                 <AddReviewer pr={pr} />
-                {pr.reviews.length + pr.requested.length === 0 && t.noReviewer}
+                {pr.reviews.length + requested.length === 0 && t.noReviewer}
               </li>
             </ul>
+            {pending.error && (
+              <p role="alert" className="text-xs text-destructive">
+                {pending.error}
+              </p>
+            )}
             {((pr.draft && !pr.involved) || pr.canUpdateBranch) && (
               <PrActions pr={pr} />
             )}

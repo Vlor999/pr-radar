@@ -1,18 +1,30 @@
-import { Loader2, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 import { useEffect, useState } from "react"
 
-import { Avatar } from "@/components/avatar"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { UserCommand } from "@/components/user-command"
+import { splitKey } from "@/lib/accounts"
 import { addReviewer } from "@/lib/actions"
 import { fetchReviewerOptions } from "@/lib/github"
 import { strings, useStrings } from "@/lib/i18n"
-import { reviewerCandidates, type Reviewer } from "@/lib/reviewers"
+import {
+  dmNames as namesOf,
+  dmRecipients,
+  reviewerCandidates,
+  type Reviewer,
+} from "@/lib/reviewers"
+import { useMentions, useSlack } from "@/lib/slack"
+import {
+  dmReviewers,
+  lookupRecipients,
+  useSlackGithubMap,
+} from "@/lib/slack-github-map"
+import { usePendingReviews } from "@/lib/store"
 import type { Pr } from "@/lib/types"
 
 const SEARCH_DEBOUNCE_MS = 250 // une requête GraphQL par frappe sinon
@@ -20,48 +32,55 @@ const SEARCH_DEBOUNCE_MS = 250 // une requête GraphQL par frappe sinon
 const S = strings(
   {
     add: "Ajouter un reviewer",
-    search: "Rechercher un utilisateur",
-    none: "Aucun utilisateur",
   },
   {
     add: "Add a reviewer",
-    search: "Search a user",
-    none: "No user",
   },
 )
 
-/** Bouton « + » des reviewers : suggestions GitHub puis recherche parmi les utilisateurs assignables. */
+type Options = {
+  prId: string
+  viewer: string
+  suggested: Reviewer[]
+  assignable: Reviewer[]
+  dm: Reviewer[]
+}
+
+/** Bouton « + » des reviewers : destinataires de mes DM Slack sur la PR, suggestions GitHub, puis recherche
+ * parmi les utilisateurs assignables. Un clic demande la review en arrière-plan ; le popover reste utilisable. */
 export function AddReviewer({ pr }: { pr: Pr }) {
   const t = useStrings(S)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
-  const [options, setOptions] = useState<{
-    prId: string
-    users: Reviewer[]
-  } | null>(null)
-  const [busy, setBusy] = useState<string | null>(null)
+  const [options, setOptions] = useState<Options | null>(null)
   const [error, setError] = useState<string>()
-  // clé stable : le tableau change d'identité à chaque rechargement
-  const requested = pr.requested
-    .filter((r) => !r.team)
-    .map((r) => r.who)
-    .join(",")
+  const { pending } = usePendingReviews(pr.url)
+  const recipients = dmRecipients(useMentions(pr.url))
+  // table Slack → GitHub des réglages : liens manuels sans recherche, exclusions jamais proposées
+  const map = useSlackGithubMap()
+  const team = useSlack().team?.id
+  const account = splitKey(pr.repo).account
+  // noms Slack des destinataires, cherchés parmi les utilisateurs assignables seulement sans recherche tapée
+  // (une recherche tapée filtre déjà, pas d'alias GraphQL à chaque frappe). Chaîne : clé stable de l'effet.
+  const dmNames = namesOf(
+    lookupRecipients(recipients, map, team, account),
+  ).join("\n")
+  const q = query.trim()
 
   useEffect(() => {
     if (!open) return
     let live = true
     const id = setTimeout(
       () =>
-        fetchReviewerOptions(pr.repo, pr.number, query.trim()).then(
+        fetchReviewerOptions(
+          pr.repo,
+          pr.number,
+          q,
+          q || !dmNames ? [] : dmNames.split("\n"),
+        ).then(
           (o) => {
             if (!live) return
-            setOptions({
-              prId: o.prId,
-              users: reviewerCandidates(o.suggested, o.assignable, [
-                o.viewer,
-                ...requested.split(","),
-              ]),
-            })
+            setOptions(o)
             setError(undefined)
           },
           (e: unknown) => {
@@ -70,21 +89,32 @@ export function AddReviewer({ pr }: { pr: Pr }) {
             setError(e instanceof Error ? e.message : String(e))
           },
         ),
-      query ? SEARCH_DEBOUNCE_MS : 0,
+      q ? SEARCH_DEBOUNCE_MS : 0,
     )
     return () => {
       live = false
       clearTimeout(id)
     }
-  }, [open, query, pr.repo, pr.number, requested])
+  }, [open, q, pr.repo, pr.number, dmNames])
 
-  async function pick(u: Reviewer) {
-    if (!options || busy) return
-    setBusy(u.id)
-    const { error } = await addReviewer(options.prId, u.id, pr.repo)
-    setBusy(null)
-    setError(error) // popover gardé ouvert : plusieurs reviewers d'affilée
-  }
+  // calculés au rendu : un reviewer demandé (même pas encore confirmé) quitte la liste aussitôt
+  const users =
+    options &&
+    reviewerCandidates(
+      options.suggested,
+      options.assignable,
+      [
+        options.viewer,
+        ...(pr.involved ? [pr.involved.author] : []),
+        ...pr.requested.filter((r) => !r.team).map((r) => r.who),
+        ...pending.map((p) => p.login),
+      ],
+      dmReviewers(recipients, map, team, account, [
+        ...options.dm,
+        ...options.suggested,
+        ...options.assignable,
+      ]),
+    )
 
   return (
     <Popover
@@ -110,46 +140,18 @@ export function AddReviewer({ pr }: { pr: Pr }) {
       >
         <Plus />
       </PopoverTrigger>
-      <PopoverContent align="start" aria-label={t.add} className="gap-2 p-2">
-        <Input
-          autoFocus
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t.search}
-          aria-label={t.search}
+      <PopoverContent align="start" aria-label={t.add} className="p-2">
+        <UserCommand
+          query={query}
+          onQueryChange={setQuery}
+          users={users}
+          error={error}
+          url={pr.url}
+          onPick={(u) =>
+            options &&
+            addReviewer(options.prId, u, { repo: pr.repo, url: pr.url })
+          }
         />
-        {error && (
-          <p role="alert" className="px-2 text-xs text-destructive">
-            {error}
-          </p>
-        )}
-        {!options ? (
-          !error && (
-            <Loader2 className="mx-auto my-2 size-4 animate-spin text-muted-foreground" />
-          )
-        ) : options.users.length ? (
-          <ul className="flex max-h-64 flex-col overflow-y-auto">
-            {options.users.map((u) => (
-              <li key={u.id}>
-                <button
-                  type="button"
-                  // aria-disabled, pas disabled : le focus reste sur le bouton pendant la requête
-                  aria-disabled={!!busy}
-                  onClick={() => pick(u)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none aria-disabled:opacity-50"
-                >
-                  <Avatar login={u.login} url={pr.url} />
-                  <span className="min-w-0 flex-1 truncate">{u.login}</span>
-                  {busy === u.id && (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="px-2 py-1 text-muted-foreground">{t.none}</p>
-        )}
       </PopoverContent>
     </Popover>
   )

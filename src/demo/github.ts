@@ -537,32 +537,68 @@ export const fetchReviews = async () => {
   return { data: REVIEWS, errors: [] as AccountError[] }
 }
 
-const DEMO_USERS = ["alice", "bob", "carol", "dave", "erin", "frank"]
-const user = (login: string): Reviewer => ({ login, id: `U_${login}` })
+// « erin-l » (Erin Laurent) : destinataire d'un DM Slack sur acme/api#88 (src/demo/slack.ts), rapproché par son nom
+const DEMO_USERS: Reviewer[] = [
+  { login: "alice", id: "U_alice", name: "Alice Martin" },
+  { login: "bob", id: "U_bob", name: "Bob Durand" },
+  { login: "carol", id: "U_carol", name: null },
+  { login: "dave", id: "U_dave", name: "Dave Moreau" },
+  { login: "erin-l", id: "U_erin-l", name: "Erin Laurent" },
+  // « Frank Petit » a deux comptes GitHub : table Slack → GitHub des réglages, cas 1:N
+  { login: "frank", id: "U_frank", name: "Frank Petit" },
+  { login: "fpetit", id: "U_fpetit", name: "Frank Petit" },
+]
+const ME: Reviewer = { login: "me", id: "U_me", name: null }
+/** comme ASSIGNABLE_PAGE de src/lib/github.ts, réduit pour que le DM Slack soit hors de la 1re page */
+const ASSIGNABLE_PAGE = 4
+const DM_LOOKUP_PAGE = 5
+/** latence simulée de la mutation `requestReviews` : la demande s'affiche avant la réponse */
+const REQUEST_MS = 1_500
+
+const search = (q: string, first: number) =>
+  [ME, ...DEMO_USERS]
+    .filter((u) =>
+      [u.login, u.name ?? ""].some((s) =>
+        s.toLowerCase().includes(q.toLowerCase()),
+      ),
+    )
+    .slice(0, first)
+
 export const fetchReviewerOptions = async (
   repo: string,
   number: number,
   query: string,
+  dmNames: string[] = [],
 ) => ({
   prId: `${repo}#${number}`,
   viewer: "me",
-  suggested: ["bob", "carol"].map(user),
-  assignable: ["me", ...DEMO_USERS]
-    .filter((l) => l.includes(query.toLowerCase()))
-    .map(user),
+  suggested: DEMO_USERS.filter((u) => ["bob", "carol"].includes(u.login)),
+  assignable: search(query, ASSIGNABLE_PAGE),
+  dm: dmNames.flatMap((n) => search(n, DM_LOOKUP_PAGE)),
+})
+export const fetchDmReviewers = async (_repo: string, names: string[]) =>
+  names.flatMap((n) => search(n, DM_LOOKUP_PAGE))
+export const searchAssignable = async (_repos: string[], query: string) => ({
+  users: search(query, DEMO_USERS.length + 1).map((u) => ({
+    ...u,
+    account: DEFAULT_ID,
+  })),
+  truncated: false,
 })
 export const requestReviewer = async (
   prId: string,
   userId: string,
   repo: string,
 ) => {
+  await new Promise((r) => setTimeout(r, REQUEST_MS))
   // « dave » montre le message brut de GitHub pour un jeton sans droit d'écriture
   if (userId === "U_dave")
     throw new Error(
       "me does not have the correct permissions to execute `RequestReviews`",
     )
   // la demande apparaît sur la carte au rechargement qui suit
-  const p = PRS.find((p) => `${p.repo}#${p.number}` === prId)
+  // popover : `repo#numéro` ; reviewer fantôme de la carte : id du nœud de la PR
+  const p = PRS.find((p) => `${p.repo}#${p.number}` === prId || p.id === prId)
   p?.requested.push({ who: userId.slice(2) })
   console.info("[demo] request review", prId, userId, repo)
 }

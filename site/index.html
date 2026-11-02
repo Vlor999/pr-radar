@@ -126,16 +126,16 @@
             </div>
           </div>
         </div>
-        <figcaption data-i18n-html="cap8"><strong>In your browser</strong>Your PR list and its GitHub and Slack actions in a browser tab, served by the app on your machine. Close the window: the app keeps running in the menu bar or tray, when your system shows one, and still sends notifications.<span class="sr"> Animation: a click on the globe in the PR Radar header, a green dot and the status bubble On · 127.0.0.1:14200 appear, then a browser tab at 127.0.0.1:14200 opens on the PR tree of globex/app.</span></figcaption>
+        <figcaption data-i18n-html="cap8"><strong>In your browser</strong>Your PR list and its GitHub and Slack actions in a browser tab, served by the app on your machine. Close the window, or press ⌘Q on macOS: the app keeps running in the menu bar or tray, when your system shows one, and still sends notifications. Quit from that menu to really quit.<span class="sr"> Animation: a click on the globe in the PR Radar header, a green dot and the status bubble On · 127.0.0.1:14200 appear, then a browser tab at 127.0.0.1:14200 opens on the PR tree of globex/app.</span></figcaption>
       </figure>
       <figure class="vig">
         <div class="vm v-thr" aria-hidden="true">
-          <div class="msg"><i class="av" style="background:#2b8fd9">y</i><span data-i18n-html="mcpq"><b>you</b> Which of my PRs can I merge?</span></div>
-          <div class="file">pr-radar · get_prs</div>
-          <div class="hunk"><span>{ "repo": "acme/web", "number": 12,</span><span>  "ci": "SUCCESS", "decision": "APPROVED",</span><span class="ha">  "slack": [{ "where": "#reviews" }] }</span></div>
-          <div class="msg v-sent"><i class="av" style="background:#d9822b">C</i><span data-i18n-html="mcpa"><b>Claude</b> acme/web#12: approved, CI green, already posted in #reviews.</span></div>
+          <div class="msg"><i class="av" style="background:#2b8fd9">y</i><span data-i18n-html="mcpq"><b>you</b> What needs me today?</span></div>
+          <div class="file">pr-radar · get_attention</div>
+          <div class="hunk"><span>{ "repo": "acme/api", "number": 51,</span><span class="ha">  "reasons": ["reviewRequested"], "age": "2d" },</span><span>{ "repo": "acme/web", "number": 64,</span><span class="ha">  "reasons": ["ciFailing"], "age": "5h" }</span></div>
+          <div class="msg v-sent"><i class="av" style="background:#d9822b">C</i><span data-i18n-html="mcpa"><b>Claude</b> First acme/api#51, your review has been waiting 2 days. Then the failing CI of acme/web#64.</span></div>
         </div>
-        <figcaption data-i18n-html="cap7"><strong>Local MCP server</strong>Claude Code, Claude Desktop, Codex, Cursor or any other MCP client reads your PRs and their Slack mentions straight from the app, without a single extra request. Opt-in, read-only.<span class="sr"> Animation: a question to Claude, the get_prs reply from PR Radar for acme/web#12, then Claude's answer.</span></figcaption>
+        <figcaption data-i18n-html="cap7"><strong>Local MCP server</strong>Your agent reads what the app already holds: open PRs with filters and Slack mentions, what needs you, failing CI jobs, merged PRs. Prompts like triage or fix-ci, and a ready-to-paste setup for each client: Claude Code, Codex, Cursor, Gemini CLI, VS Code, Zed and more. Opt-in, read-only.<span class="sr"> Animation: a question to Claude, the get_attention reply from PR Radar with acme/api#51 and acme/web#64, then Claude's answer.</span></figcaption>
       </figure>
       <figure class="vig">
         <div class="vm v-stack" aria-hidden="true">
@@ -160,7 +160,25 @@
           <div class="msg v-sent"><i class="av" style="background:#d9822b">a</i><span data-i18n-html="alice2"><b>alice</b> Matches session expiry</span></div>
           <div class="reply"><div class="ta"><span class="vtype" data-i18n="vtype">Matches session expiry</span></div><span class="rbtn" data-i18n="reply">Reply</span></div>
         </div>
-        <figcaption data-i18n-html="cap2"><strong>Discussions</strong>Unresolved threads open with the code in question, and you reply without leaving the app.<span class="sr"> Animation: a diff excerpt, a question from chloe, then a reply typed and sent.</span></figcaption>
+        <figcaption data-i18n-html="cap2"><strong>Discussions</strong>Unresolved threads open with the code in question: reply, or resolve the thread, without leaving the app.<span class="sr"> Animation: a diff excerpt, a question from chloe, then a reply typed and sent.</span></figcaption>
+      </figure>
+      <figure class="vig wide">
+        <div class="vm v-ci" aria-hidden="true">
+          <div class="pc">
+            <div class="r1"><span class="num">#64</span><span class="ti" data-i18n="pr64">feat(orders): export to CSV</span></div>
+            <div class="r3" style="padding:0"><span class="b ok" data-i18n="approved">Approved</span><span class="sw v-cib"><span class="b bad jx" data-i18n="cifail">CI failed</span><span class="b warn jr" data-i18n="cirun">CI running</span></span></div>
+          </div>
+          <div class="wf">
+            <div class="wfh"><span>CI <span class="mut">· ci.yml</span></span><span class="mut mono">on: pull_request</span></div>
+            <ul>
+              <li><svg class="ji ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg><span>lint</span><span class="jd">18s</span></li>
+              <li><span class="sw"><span class="jx"><svg class="ji bad" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg></span><span class="jr"><svg class="ji run" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg></span></span><span>test (node 22)</span><span class="jd sw"><span class="jx">1m 42s</span><span class="jr">3s</span></span></li>
+              <li><svg class="ji ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg><span>build</span><span class="jd">54s</span></li>
+            </ul>
+            <span class="rr sw"><span class="jx"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span data-i18n="rerun">Re-run failed jobs</span></span><span class="jr"><svg class="ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg><span data-i18n="rerunDone">Jobs re-run</span></span></span>
+          </div>
+        </div>
+        <figcaption data-i18n-html="cap9"><strong>CI, job by job</strong>Click a card's CI badge: each workflow lists its jobs with their state and duration, and failed jobs re-run from there.<span class="sr"> Animation: PR #64 shows a CI failed badge, a click opens the CI workflow with three jobs, test failed, then Re-run failed jobs is pressed: the test job starts again and the badge turns to CI running.</span></figcaption>
       </figure>
       <figure class="vig">
         <div class="vm v-cal" aria-hidden="true">
@@ -210,22 +228,24 @@
       </figure>
     </div>
     <h3 class="more" data-i18n="more">And also</h3>
-    <ul class="chips">
-      <li data-i18n="c1">Filters and search</li>
-      <li data-i18n="c2">Ready-to-merge PRs</li>
-      <li data-i18n="c3">Stale PRs</li>
-      <li data-i18n="c4">New since last visit</li>
-      <li data-i18n="c5">Repos by organization</li>
-      <li data-i18n="c6">Light and dark theme</li>
-      <li data-i18n="c7">Native GitHub stacks</li>
-      <li data-i18n="c8">Several accounts, GitHub Enterprise Server included</li>
-      <li data-i18n="c9">Tray icon with the count of PRs needing action</li>
-      <li data-i18n="c10">Refresh adapted to your API quota</li>
-      <li data-i18n="c11">Reply to the PR conversation</li>
-      <li data-i18n="c12">Comments formatted like on GitHub</li>
-      <li data-i18n="c13">Drafts muted in notifications</li>
-    </ul>
-    <p class="kb"><span><kbd>j</kbd> <kbd>k</kbd> <kbd>e</kbd> <kbd>o</kbd> <kbd>/</kbd> <kbd>⌘</kbd><kbd>↵</kbd></span> <span data-i18n="kbl">Everything works from the keyboard (Ctrl instead of ⌘ on Windows and Linux).</span></p>
+    <div class="also">
+      <div><h4 data-i18n="g1">Triage</h4><ul><li data-i18n="c1">Filters and search</li><li data-i18n="c2">Ready-to-merge and stale PRs</li><li data-i18n="c4">New since last visit</li><li data-i18n="c7">Native GitHub stacks</li><li data-i18n="c14">PRs that involve you</li></ul></div>
+      <div><h4 data-i18n="g2">Act on a PR</h4><ul><li data-i18n="c11">Replies to the conversation</li><li data-i18n="c15">Draft to ready for review</li><li data-i18n="c16">Branch update from base</li><li data-i18n="c12">GitHub-formatted comments</li></ul></div>
+      <div><h4 data-i18n="g3">Accounts and system</h4><ul><li data-i18n="c8">Several accounts, Enterprise Server</li><li data-i18n="c9">Tray count of PRs to act on</li><li data-i18n="c18">Launch at login</li><li data-i18n="c10">Quota-aware refresh</li></ul></div>
+      <div><h4 data-i18n="g4">Quiet and diagnostics</h4><ul><li data-i18n="c17">Do not disturb</li><li data-i18n="c13">Muted draft notifications</li><li data-i18n="c21">Local activity log</li><li data-i18n="c22">Crash report preview</li></ul></div>
+    </div>
+    <h3 class="more" data-i18n="kbh">Keyboard</h3>
+    <dl class="keys">
+      <div><dt><kbd>⌘K</kbd></dt><dd data-i18n="k1">Command palette</dd></div>
+      <div><dt><kbd>/</kbd></dt><dd data-i18n="k2">Search</dd></div>
+      <div><dt><kbd>j</kbd><kbd>k</kbd></dt><dd data-i18n="k3">Next / previous card</dd></div>
+      <div><dt><kbd>e</kbd></dt><dd data-i18n="k4">Expand / collapse</dd></div>
+      <div><dt><kbd>o</kbd></dt><dd data-i18n="k5">Open on GitHub</dd></div>
+      <div><dt><kbd>⌘↵</kbd></dt><dd data-i18n="k6">Send a reply</dd></div>
+      <div><dt><kbd>d</kbd></dt><dd data-i18n="k7">Light / dark</dd></div>
+      <div><dt><kbd>⌘,</kbd></dt><dd data-i18n="k8">Settings</dd></div>
+    </dl>
+    <p class="kbn" data-i18n="kbl">Ctrl instead of ⌘ on Windows and Linux.</p>
   </div>
 </section>
 
@@ -261,7 +281,7 @@
   <div class="wrap">
     <h2 data-i18n="privacy">Privacy</h2>
     <p class="lead" data-i18n="pv">PR Radar only talks to GitHub, to your GitHub Enterprise server if you add one, and to Slack if you connect it. No server: tokens live in your OS keychain, Slack tokens are read-only and rotate automatically (they expire every 12 hours), and you can revoke them at any time. Your messages never leave your machine.</p>
-    <p data-i18n="pv2">The app also contacts github.com to check for updates (your IP address and app version) and loads avatars from GitHub. Slack messages are searched and read on your machine only; nothing is sent to us or anyone else.</p>
+    <p data-i18n="pv2">The app also contacts github.com to check for updates (your IP address and app version) and loads avatars from GitHub. Slack messages are searched and read on your machine only; nothing is sent to us or anyone else. The activity log (Settings › Diagnostics) stays on your machine and holds no PR titles, comments, Slack messages or tokens. A crash report goes to GitHub only if you review it and submit the issue yourself.</p>
     <p data-i18n="pv4">The local MCP server is off by default. Once turned on, it answers only on your machine, through a socket that only your user account can open, and in read-only mode: agents read what the app already shows, no tool writes to GitHub or Slack, and nothing leaves your machine.</p>
     <p data-i18n="pv5">The local web version is off by default. Once turned on, it listens on 127.0.0.1 only, out of reach of other devices on your network. The link opened by the app carries a single-use ticket valid for 60 seconds, exchanged for a session cookie set by the local app, not by this website (HttpOnly, SameSite=Strict), and “Sign out browsers” closes every session. Other websites can't call it (Host and Origin checks, no CORS). GitHub and Slack requests go through the app, to the same allowed hosts: nothing leaves your machine beyond the usual GitHub and Slack API calls.</p>
     <p data-i18n="pv3">This website is hosted by GitHub Pages, which logs visitors' IP addresses. Your browser asks api.github.com for the latest release. This website sets no cookies and has no analytics: only your language choice is kept in your browser (localStorage). During Slack sign-in, the one-time code briefly passes through a page of this site, which stores nothing; it is unusable without the key kept in the app.</p>
@@ -291,7 +311,7 @@
       </details>
       <details>
         <summary data-i18n="q7">How often does the app poll GitHub?</summary>
-        <p data-i18n="a7">Auto by default: the interval adapts to your remaining GitHub quota (between 1 and 15 minutes, keeping 20% of the hourly quota in reserve). Or a fixed interval from 1 to 30 minutes, or manual. Requests count against your usual GitHub API quota.</p>
+        <p data-i18n="a7">Auto by default: the interval adapts to your remaining GitHub quota (between 1 and 15 minutes, keeping 20% of the hourly quota in reserve). Or a fixed interval from 1 to 30 minutes, or manual. Automatic refreshes first ask GitHub which PRs changed and reread only those, and reread everything when the last full read is more than 10 minutes old. Requests count against your usual GitHub API quota.</p>
       </details>
       <details>
         <summary data-i18n="q8">Does my Slack admin need to approve it?</summary>
@@ -303,7 +323,7 @@
       </details>
       <details>
         <summary data-i18n="q10">How do I open PR Radar in my browser?</summary>
-        <p data-i18n-html="a10">Click the globe in the header: it starts the local server if needed and opens the web version in your browser, on <code>http://127.0.0.1:14200/</code> by default (port changeable in Web settings). The chevron next to it shows the status and leads to Web settings (port, start and stop, sign out browsers). While the web version is running, the menu bar or tray icon also offers “Open in browser”. PR Radar must keep running: closing the window keeps it in the menu bar or tray, when your system shows one. A bookmark works only while the app and the web server keep running: restarting the app, stopping the server, changing the port or “Sign out browsers” ends the session; reopen it from the globe. Account sign-in, Slack connection, updates and uninstall stay in the desktop app.</p>
+        <p data-i18n-html="a10">Click the globe in the header: it starts the local server if needed and opens the web version in your browser, on <code>http://127.0.0.1:14200/</code> by default (port changeable in Web settings). The chevron next to it shows the status and leads to Web settings (port, start and stop, sign out browsers). While the web version is running, the menu bar or tray icon also offers “Open in browser”. PR Radar must keep running: closing the window, or ⌘Q on macOS, keeps it in the menu bar or tray, when your system shows one. A bookmark works only while the app and the web server keep running: restarting the app, stopping the server, changing the port or “Sign out browsers” ends the session; reopen it from the globe. Account sign-in, Slack connection, updates and uninstall stay in the desktop app.</p>
       </details>
     </div>
   </div>
