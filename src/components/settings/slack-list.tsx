@@ -107,7 +107,12 @@ export function ScrollList(props: {
   const t = useStrings(S)
   const q = props.query.trim()
   return (
-    <ul aria-busy={!props.rows} className="max-h-88 overflow-y-auto border-t">
+    <ul
+      aria-busy={!props.rows}
+      // relative : bloc conteneur des descendants positionnés (`sr-only` des pastilles), sinon ils
+      // échappent au défilement et allongent la page jusqu'à leur position dans la liste
+      className="relative max-h-88 overflow-y-auto border-t"
+    >
       {!props.rows
         ? Array.from({ length: SLACK_SKELETON_ROWS }, (_, i) => (
             <li key={i} aria-hidden className={LIST_ROW}>
