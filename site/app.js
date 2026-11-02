@@ -34,6 +34,8 @@
     chloe: '<b>chloe</b> Pourquoi un TTL d\'un jour ?', alice2: '<b>alice</b> Aligné sur la session.',
     vtype: 'Aligné sur la session.',
     cap2: '<strong>Discussions</strong>Les fils non résolus s\'ouvrent avec le code concerné, et vous répondez sans quitter l\'app.<span class="sr"> Animation : un extrait de diff, une question de chloe, puis une réponse tapée et envoyée.</span>',
+    pr64: 'feat(orders): export CSV', cifail: 'CI en échec', cirun: 'CI en cours', rerun: 'Relancer les jobs en échec', rerunDone: 'Jobs relancés',
+    cap9: '<strong>La CI, job par job</strong>Cliquez sur la pastille CI d\'une carte : chaque workflow liste ses jobs avec leur état et leur durée, et les jobs en échec se relancent de là.<span class="sr"> Animation : la PR #64 affiche une pastille CI en échec, un clic ouvre le workflow CI avec trois jobs dont test en échec, puis Relancer les jobs en échec est pressé : le job test repart et la pastille passe à CI en cours.</span>',
     month: 'Octobre 2026', m: 'Mois', w: 'Semaine', d: 'Jour', mo: 'L', tu: 'M', we: 'M', th: 'J', fr: 'V', su: 'D',
     cap3: '<strong>Calendrier des merges</strong>Mois, semaine ou jour : le rythme de livraison de chaque repo d\'un coup d\'œil.<span class="sr"> Animation : des pastilles de PR mergées tombent dans les jours d\'octobre.</span>',
     clock: 'mar. 20 oct. 09:41', t1: 'acme/web#42 : approuvée',
