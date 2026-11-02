@@ -537,19 +537,40 @@ export const fetchReviews = async () => {
   return { data: REVIEWS, errors: [] as AccountError[] }
 }
 
-const DEMO_USERS = ["alice", "bob", "carol", "dave", "erin", "frank"]
-const user = (login: string): Reviewer => ({ login, id: `U_${login}` })
+// « erin-l » (Erin Laurent) : destinataire d'un DM Slack sur acme/api#88 (src/demo/slack.ts), rapproché par son nom
+const DEMO_USERS: Reviewer[] = [
+  { login: "alice", id: "U_alice", name: "Alice Martin" },
+  { login: "bob", id: "U_bob", name: "Bob Durand" },
+  { login: "carol", id: "U_carol", name: null },
+  { login: "dave", id: "U_dave", name: "Dave Moreau" },
+  { login: "erin-l", id: "U_erin-l", name: "Erin Laurent" },
+  { login: "frank", id: "U_frank", name: null },
+]
+const ME: Reviewer = { login: "me", id: "U_me", name: null }
+/** comme ASSIGNABLE_PAGE de src/lib/github.ts, réduit pour que le DM Slack soit hors de la 1re page */
+const ASSIGNABLE_PAGE = 4
+const DM_LOOKUP_PAGE = 5
+
+const search = (q: string, first: number) =>
+  [ME, ...DEMO_USERS]
+    .filter((u) =>
+      [u.login, u.name ?? ""].some((s) =>
+        s.toLowerCase().includes(q.toLowerCase()),
+      ),
+    )
+    .slice(0, first)
+
 export const fetchReviewerOptions = async (
   repo: string,
   number: number,
   query: string,
+  dmNames: string[] = [],
 ) => ({
   prId: `${repo}#${number}`,
   viewer: "me",
-  suggested: ["bob", "carol"].map(user),
-  assignable: ["me", ...DEMO_USERS]
-    .filter((l) => l.includes(query.toLowerCase()))
-    .map(user),
+  suggested: DEMO_USERS.filter((u) => ["bob", "carol"].includes(u.login)),
+  assignable: search(query, ASSIGNABLE_PAGE),
+  dm: dmNames.flatMap((n) => search(n, DM_LOOKUP_PAGE)),
 })
 export const requestReviewer = async (
   prId: string,

@@ -56,6 +56,10 @@ const REPO_LIST_TTL_MS = 10 * 60_000
 const REPOS_PER_QUERY = 5 // une requête de recherche GitHub est limitée en longueur et en opérateurs
 const HUNK_LINES = 8 // GitHub montre aussi la fin du hunk, qui se termine sur la ligne commentée
 const ASSIGNABLE_PAGE = 20 // assez pour un popover ; la recherche affine au-delà
+// destinataires de DM Slack absents de la 1re page : une recherche par nom, en alias dans la même requête.
+// Coût GraphQL : 1 point par requête tant que les connexions demandées restent sous 100 nœuds.
+const DM_LOOKUP_PAGE = 5
+const DM_LOOKUPS_MAX = 6
 // la recherche GitHub renvoie parfois 0 résultat sans erreur (~1 appel sur 3) : un vide est relu avant d'être cru.
 // Reste ~1/27 par recherche (un lot de 5 repos), absorbé par `keepVanished` dans store.reload.
 const EMPTY_SEARCH_RETRIES = 2
@@ -745,47 +749,73 @@ const accountOf = (repo: string) => {
   return a
 }
 
-/** Reviewers possibles d'une de mes PR : suggestions GitHub, puis utilisateurs assignables filtrés par `query`. */
+/**
+ * Reviewers possibles d'une de mes PR : suggestions GitHub, puis utilisateurs assignables filtrés par `query`.
+ * `dmNames` : noms Slack des destinataires de DM qui citent la PR ; chacun est cherché parmi les utilisateurs
+ * assignables (`dm`), la 1re page pouvant ne pas les contenir.
+ */
 export async function fetchReviewerOptions(
   repo: string,
   number: number,
   query: string,
+  dmNames: string[] = [],
 ): Promise<{
   prId: string
   viewer: string
   suggested: Reviewer[]
   assignable: Reviewer[]
+  dm: Reviewer[]
 }> {
   const [owner, name] = splitKey(repo).name.split("/")
+  const lookups = dmNames.slice(0, DM_LOOKUPS_MAX)
+  // une variable et un alias par nom : `$dm0` → `dm0: assignableUsers(…)`
+  const dmVars = lookups.map((_, i) => `, $dm${i}: String!`).join("")
+  const dmFields = lookups
+    .map(
+      (_, i) =>
+        `dm${i}: assignableUsers(first: ${DM_LOOKUP_PAGE}, query: $dm${i}) { nodes { login id name } }`,
+    )
+    .join("\n")
   const res = await gql<{
     viewer: { login: string }
-    repository: {
-      pullRequest: {
-        id: string
-        suggestedReviewers: { reviewer: Reviewer }[]
-      } | null
-      assignableUsers: { nodes: Reviewer[] } | null
-    } | null
+    repository:
+      | ({
+          pullRequest: {
+            id: string
+            suggestedReviewers: { reviewer: Reviewer }[]
+          } | null
+          assignableUsers: { nodes: Reviewer[] } | null
+        } & Record<`dm${number}`, { nodes: Reviewer[] } | null>)
+      | null
   }>(
     conn(accountOf(repo)),
-    `query($owner: String!, $name: String!, $number: Int!, $q: String) {
+    `query($owner: String!, $name: String!, $number: Int!, $q: String${dmVars}) {
       viewer { login }
       repository(owner: $owner, name: $name) {
-        pullRequest(number: $number) { id suggestedReviewers { reviewer { login id } } }
-        assignableUsers(first: ${ASSIGNABLE_PAGE}, query: $q) { nodes { login id } }
+        pullRequest(number: $number) { id suggestedReviewers { reviewer { login id name } } }
+        assignableUsers(first: ${ASSIGNABLE_PAGE}, query: $q) { nodes { login id name } }
+        ${dmFields}
       }
     }`,
-    { owner, name, number, q: query || null },
+    {
+      owner,
+      name,
+      number,
+      q: query || null,
+      ...Object.fromEntries(lookups.map((n, i) => [`dm${i}`, n])),
+    },
   )
   // `repository` null + errors : `gql` lève déjà ; ici, PR absente (champ imbriqué) ou repo null sans erreur
-  const pr = res.repository?.pullRequest
-  const users = res.repository?.assignableUsers
-  if (!pr || !users) throw new Error(pick(S).notFound(repo))
+  const r = res.repository
+  const pr = r?.pullRequest
+  const users = r?.assignableUsers
+  if (!r || !pr || !users) throw new Error(pick(S).notFound(repo))
   return {
     prId: pr.id,
     viewer: res.viewer.login,
     suggested: pr.suggestedReviewers.map((s) => s.reviewer),
     assignable: users.nodes,
+    dm: lookups.flatMap((_, i) => r[`dm${i}`]?.nodes ?? []),
   }
 }
 
