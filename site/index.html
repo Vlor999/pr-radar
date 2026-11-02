@@ -135,7 +135,7 @@
           <div class="hunk"><span>{ "repo": "acme/api", "number": 51,</span><span class="ha">  "reasons": ["reviewRequested"], "age": "2d" },</span><span>{ "repo": "acme/web", "number": 64,</span><span class="ha">  "reasons": ["ciFailing"], "age": "5h" }</span></div>
           <div class="msg v-sent"><i class="av" style="background:#d9822b">C</i><span data-i18n-html="mcpa"><b>Claude</b> First acme/api#51, your review has been waiting 2 days. Then the failing CI of acme/web#64.</span></div>
         </div>
-        <figcaption data-i18n-html="cap7"><strong>Local MCP server</strong>Your agent reads what the app already holds: open PRs with filters and Slack mentions, what needs you, failing CI jobs, merged PRs. Prompts like triage or fix-ci, and a one-line setup for Claude Code, Codex, Cursor, Gemini CLI, VS Code, Zed and more. Opt-in, read-only.<span class="sr"> Animation: a question to Claude, the get_attention reply from PR Radar with acme/api#51 and acme/web#64, then Claude's answer.</span></figcaption>
+        <figcaption data-i18n-html="cap7"><strong>Local MCP server</strong>Your agent reads what the app already holds: open PRs with filters and Slack mentions, what needs you, failing CI jobs, merged PRs. Prompts like triage or fix-ci, and a ready-to-paste setup for each client: Claude Code, Codex, Cursor, Gemini CLI, VS Code, Zed and more. Opt-in, read-only.<span class="sr"> Animation: a question to Claude, the get_attention reply from PR Radar with acme/api#51 and acme/web#64, then Claude's answer.</span></figcaption>
       </figure>
       <figure class="vig">
         <div class="vm v-stack" aria-hidden="true">
@@ -318,7 +318,7 @@
       </details>
       <details>
         <summary data-i18n="q7">How often does the app poll GitHub?</summary>
-        <p data-i18n="a7">Auto by default: the interval adapts to your remaining GitHub quota (between 1 and 15 minutes, keeping 20% of the hourly quota in reserve). Or a fixed interval from 1 to 30 minutes, or manual. Automatic refreshes first ask GitHub which PRs changed and reread only those, everything at least every 10 minutes. Requests count against your usual GitHub API quota.</p>
+        <p data-i18n="a7">Auto by default: the interval adapts to your remaining GitHub quota (between 1 and 15 minutes, keeping 20% of the hourly quota in reserve). Or a fixed interval from 1 to 30 minutes, or manual. Automatic refreshes first ask GitHub which PRs changed and reread only those, and reread everything when the last full read is more than 10 minutes old. Requests count against your usual GitHub API quota.</p>
       </details>
       <details>
         <summary data-i18n="q8">Does my Slack admin need to approve it?</summary>
