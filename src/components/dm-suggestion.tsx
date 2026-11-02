@@ -45,14 +45,20 @@ export function DmSuggestion({ pr, user }: { pr: Pr; user: Reviewer }) {
   }
 
   return (
-    <li className="relative -mx-1.5 flex items-center gap-1 overflow-hidden rounded-lg border border-dashed py-0.5 pr-0.5 pl-1.5 text-muted-foreground">
+    // même boîte qu'une ligne de reviewer (`flex items-center gap-2`, 20 px de haut) : le pointillé et le
+    // remplissage débordent en absolu dans l'espace entre les lignes, rien ne bouge quand elle passe « En attente »
+    <li className="relative flex items-center gap-2 text-muted-foreground before:pointer-events-none before:absolute before:-inset-x-1.5 before:-inset-y-1 before:rounded-lg before:border before:border-dashed">
       <span
         aria-hidden
-        className={cn(
-          "pointer-events-none absolute inset-0 origin-left bg-primary/15 transition-transform duration-300 ease-out motion-reduce:transition-none",
-          filling ? "scale-x-100" : "scale-x-0",
-        )}
-      />
+        className="pointer-events-none absolute -inset-x-1.5 -inset-y-1 overflow-hidden rounded-lg"
+      >
+        <span
+          className={cn(
+            "absolute inset-0 origin-left bg-primary/15 transition-transform duration-300 ease-out motion-reduce:transition-none",
+            filling ? "scale-x-100" : "scale-x-0",
+          )}
+        />
+      </span>
       <button
         type="button"
         onClick={request}
@@ -72,7 +78,8 @@ export function DmSuggestion({ pr, user }: { pr: Pr; user: Reviewer }) {
       <Button
         variant="ghost"
         size="icon-xs"
-        className="relative"
+        // 24 px dans une ligne de 20 px : marges négatives, la hauteur de la ligne ne change pas
+        className="relative -my-0.5"
         onClick={() => dismissDmSuggestion(pr.url, user.login)}
         aria-label={t.dismiss(user.login)}
         title={t.dismiss(user.login)}
