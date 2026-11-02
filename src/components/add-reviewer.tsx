@@ -2,7 +2,7 @@ import { Loader2, Plus } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Avatar } from "@/components/avatar"
-import { Badge } from "@/components/ui/badge"
+import { SlackLogo } from "@/components/slack-logo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -31,14 +31,12 @@ const S = strings(
     add: "Ajouter un reviewer",
     search: "Rechercher un utilisateur",
     none: "Aucun utilisateur",
-    slack: "DM Slack",
     slackTitle: "Tu lui as envoyé la PR en DM sur Slack",
   },
   {
     add: "Add a reviewer",
     search: "Search a user",
     none: "No user",
-    slack: "Slack DM",
     slackTitle: "You sent them the PR in a Slack DM",
   },
 )
@@ -177,13 +175,14 @@ export function AddReviewer({ pr }: { pr: Pr }) {
                   <Avatar login={u.login} url={pr.url} />
                   <span className="min-w-0 flex-1 truncate">{u.login}</span>
                   {u.slack && (
-                    <Badge
-                      variant="outline"
-                      className="text-muted-foreground"
+                    <span
+                      role="img"
+                      aria-label={t.slackTitle}
                       title={t.slackTitle}
+                      className="text-muted-foreground"
                     >
-                      {t.slack}
-                    </Badge>
+                      <SlackLogo mono className="size-3.5" />
+                    </span>
                   )}
                 </button>
               </li>
