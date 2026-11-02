@@ -161,3 +161,12 @@ export const LOG_CUSTOM_DAYS_MIN = 1
 export const LOG_CUSTOM_DAYS_MAX = 365
 export const LOG_CUSTOM_DAYS_DEFAULT = 30
 export const DAY_MS = 86_400_000
+
+/* ---------- Contacts Slack des réglages (slack.ts, settings/slack-github.tsx) ---------- */
+
+/** nom et avatar d'un contact Slack relus (users.info) passé ce délai ; l'ancien reste affiché en attendant */
+export const SLACK_USER_TTL_MS = 7 * DAY_MS
+/** utilisateur Slack pas relu depuis ce délai : retiré du cache local */
+export const SLACK_USER_MAX_AGE_MS = 30 * DAY_MS
+/** lignes fantômes de la table Slack → GitHub tant que la liste des contacts n'est pas lue */
+export const SLACK_SKELETON_ROWS = 6

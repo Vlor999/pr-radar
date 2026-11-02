@@ -14,6 +14,8 @@ const LOCAL_ONLY = [
   "pr-radar:mcp-history",
   // réglages du journal local (log-settings.ts) : dossier de la machine, jamais lu ni changé par le navigateur
   "pr-radar:log-settings",
+  // contacts et noms Slack lus par cette fenêtre (slack.ts) : un cache, relu en arrière-plan
+  "pr-radar:slack-cache",
 ]
 
 export const isSynced = (key: string) =>

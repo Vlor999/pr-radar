@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 // extensions : chargé aussi par node --test
+import { SLACK_USER_MAX_AGE_MS, SLACK_USER_TTL_MS } from "./constants.ts"
 import { log } from "./log.ts"
 import { openExternal } from "./open.ts"
 import { fetch, invoke, listen } from "./platform.ts"
@@ -44,12 +45,20 @@ const THROTTLE_MS = 3_000
 /** jeton renouvelé quand il expire dans moins de 5 min (rotation : durée de vie 12 h) */
 const REFRESH_MARGIN_MS = 5 * 60_000
 const TEAM_KEY = "pr-radar:slack"
+/** contacts et noms Slack lus pour les réglages : propre à la fenêtre (`LOCAL_ONLY` de sync.ts) */
+const CACHE_KEY = "pr-radar:slack-cache"
 /** tentatives d'un appel limité par Slack avant d'abandonner */
 const MAX_TRIES = 3
 const DEFAULT_RETRY_S = 30
 /** attente maximale demandée par Slack (ou un proxy) avant de réessayer */
 const MAX_RETRY_S = 60
-/** noms des DM lus en parallèle dans les réglages (users.info : palier 4, ~100 appels / min) */
+/**
+ * noms des DM lus en parallèle dans les réglages (users.info : palier 4, 100+ appels / min). Gardés en cache
+ * local (SLACK_USER_TTL_MS) : seuls les contacts inconnus ou périmés sont relus, souvent aucun. Pas
+ * `users.list` : palier 2 (20+ appels / min), pages lues l'une après l'autre (200 utilisateurs conseillés,
+ * comptes désactivés compris), et tout l'annuaire du workspace à chaque fois, même pour un seul contact
+ * nouveau. Moins d'appels seulement à la toute première lecture d'un petit workspace (< 200 × N membres).
+ */
 const NAME_CONCURRENCY = 4
 /** conversations.list : maximum de Slack, moins de pages (palier 2, ~20 appels / min) */
 const CONVERSATIONS_PAGE_SIZE = 1_000
@@ -156,6 +165,106 @@ export const slackNames = (u: SlackUser) => [
   ),
 ]
 
+/** Utilisateur Slack lu : nom affiché, tous ses noms (`slackNames`), identifiant, avatar, date de lecture (ms). */
+export type KnownUser = {
+  name: string
+  names: string[]
+  handle: string
+  image?: string
+  at: number
+}
+
+export const toKnownUser = (u: SlackUser, at: number): KnownUser => ({
+  name: u.real_name || u.name,
+  names: slackNames(u),
+  handle: u.name,
+  ...(u.profile?.image_48 && { image: u.profile.image_48 }),
+  at,
+})
+
+/** Conversation gardée en cache : un DM porte l'id de son destinataire, son nom vient de `KnownUser`. */
+export type CachedConv = {
+  id: string
+  name: string
+  kind: SlackConversation["kind"]
+  user?: string
+}
+
+/** Cache local des réglages : dernière liste de conversations (`null` : jamais lue) et utilisateurs lus. */
+export type SlackCache = {
+  team: string
+  convs: CachedConv[] | null
+  users: Record<string, KnownUser>
+}
+
+const KINDS: string[] = ["public", "private", "im", "mpim"]
+
+const isConv = (v: unknown): v is CachedConv => {
+  const c = v as Partial<CachedConv> | null
+  return (
+    typeof c?.id === "string" &&
+    typeof c.name === "string" &&
+    KINDS.includes(c.kind ?? "") &&
+    (c.user === undefined || typeof c.user === "string")
+  )
+}
+
+const isUser = (v: unknown): v is KnownUser => {
+  const u = v as Partial<KnownUser> | null
+  return (
+    typeof u?.name === "string" &&
+    typeof u.handle === "string" &&
+    typeof u.at === "number" &&
+    Array.isArray(u.names) &&
+    u.names.every((n) => typeof n === "string") &&
+    (u.image === undefined || typeof u.image === "string")
+  )
+}
+
+/**
+ * Cache lu du stockage pour l'équipe `team` : absent, invalide ou d'une autre équipe → vide ; entrées
+ * invalides ignorées, utilisateurs pas relus depuis SLACK_USER_MAX_AGE_MS retirés.
+ */
+export function parseSlackCache(
+  raw: string | null,
+  team: string,
+  now: number,
+): SlackCache {
+  const empty: SlackCache = { team, convs: null, users: {} }
+  try {
+    const v = JSON.parse(raw ?? "null") as Partial<
+      Record<keyof SlackCache, unknown>
+    > | null
+    if (!v || v.team !== team) return empty
+    const users =
+      v.users && typeof v.users === "object" && !Array.isArray(v.users)
+        ? Object.fromEntries(
+            Object.entries(v.users).filter(
+              (e): e is [string, KnownUser] =>
+                isUser(e[1]) && e[1].at >= now - SLACK_USER_MAX_AGE_MS,
+            ),
+          )
+        : {}
+    return {
+      team,
+      convs: Array.isArray(v.convs) ? v.convs.filter(isConv) : null,
+      users,
+    }
+  } catch {
+    return empty
+  }
+}
+
+/** Utilisateurs à (re)lire par `users.info` : jamais lus, ou lus il y a plus de SLACK_USER_TTL_MS. Sans doublon. */
+export const usersToName = (
+  ids: string[],
+  users: ReadonlyMap<string, KnownUser>,
+  now: number,
+) =>
+  [...new Set(ids)].filter(
+    (id) => (users.get(id)?.at ?? -Infinity) < now - SLACK_USER_TTL_MS,
+  )
+
 /** Destinataire d'un DM 1:1 que j'ai envoyé (auteur ≠ destinataire) ; DM reçu, de groupe, channel : aucun. */
 const recipientOf = (
   m: Match,
@@ -244,7 +353,10 @@ export const useSlack = () => useSyncExternalStore(subscribe, () => state)
 onPulled((keys) => {
   if (!keys.includes(TEAM_KEY)) return
   const team = readTeam()
-  if (team?.id !== state.team?.id) tokens = null
+  if (team?.id !== state.team?.id) {
+    tokens = null
+    loadCache(team)
+  }
   state = { ...state, team, expired: false }
   emit()
 })
@@ -485,6 +597,8 @@ export async function connectSlack() {
   tokens = t
   mentions.clear()
   setProgress()
+  // même équipe reconnectée : son cache reste valable
+  if (team.id !== state.team?.id) loadCache(team)
   setState({ team, expired: false })
 }
 
@@ -512,29 +626,67 @@ export async function disconnectSlack() {
   unsaved = false
   mentions.clear()
   setProgress()
-  userNames.clear()
-  userAliases.clear()
-  userImages.clear()
+  loadCache(null)
+  try {
+    localStorage.removeItem(CACHE_KEY)
+  } catch {}
   updateSettings({ slackAll: false, slackChannels: [] })
   setState({ team: null, expired: false })
 }
 
 /* ---------- Conversations (réglages) ---------- */
 
-const userNames = new Map<string, string>()
-/** tous les noms connus d'un utilisateur (`slackNames`) : rapprochement avec un login GitHub */
-const userAliases = new Map<string, string[]>()
-/** avatar Slack (48 px) d'un utilisateur, affiché dans la table Slack → GitHub des réglages */
-const userImages = new Map<string, string>()
+/** utilisateurs Slack lus (`users.info`) : noms des DM, rapprochement avec un login GitHub, avatars */
+const users = new Map<string, KnownUser>()
+/** dernière liste de conversations lue (`null` : jamais lue pour cette équipe) */
+let convCache: CachedConv[] | null = null
 
-async function userName(id: string, t: string) {
-  if (!userNames.has(id)) {
-    const r = await call<{ user: SlackUser }>("users.info", { user: id }, t)
-    userNames.set(id, r.user.real_name || r.user.name)
-    userAliases.set(id, slackNames(r.user))
-    if (r.user.profile?.image_48) userImages.set(id, r.user.profile.image_48)
+/** Recharge le cache local de l'équipe (aucune : vide). */
+function loadCache(team: Team | null) {
+  users.clear()
+  convCache = null
+  if (!team) return
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(CACHE_KEY)
+  } catch {}
+  const c = parseSlackCache(raw, team.id, Date.now())
+  for (const [id, u] of Object.entries(c.users)) users.set(id, u)
+  convCache = c.convs
+}
+loadCache(state.team)
+
+/** Écrit le cache local (au mieux : stockage plein ou indisponible, il reste en mémoire). */
+function persist() {
+  if (!state.team) return
+  const cache: SlackCache = {
+    team: state.team.id,
+    convs: convCache,
+    users: Object.fromEntries(users),
   }
-  return userNames.get(id) ?? id
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
+  } catch {}
+}
+
+const nameMaps = () => ({
+  names: new Map([...users].map(([id, u]) => [id, u.name])),
+  aliases: new Map([...users].map(([id, u]) => [id, u.names])),
+})
+
+/** Nom d'un utilisateur, lu par `users.info` s'il est inconnu. */
+async function userName(id: string, t: string) {
+  if (!users.has(id)) {
+    const r = await call<{ user: SlackUser }>("users.info", { user: id }, t)
+    users.set(id, toKnownUser(r.user, Date.now()))
+  }
+  return users.get(id)?.name ?? id
+}
+
+/** Relit un utilisateur par `users.info` (nom ou avatar périmé). */
+async function readUser(id: string, t: string) {
+  const r = await call<{ user: SlackUser }>("users.info", { user: id }, t)
+  users.set(id, toKnownUser(r.user, Date.now()))
 }
 
 const KIND = {
@@ -553,18 +705,45 @@ type Conv = {
   is_mpim?: boolean
 }
 
+/** Contact d'un DM 1:1 : noms, identifiant et avatar déjà lus (`users.info`), sinon vides. */
+const contactOf = (user: string) => {
+  const u = users.get(user)
+  return {
+    user,
+    names: u?.names ?? [],
+    ...(u && { handle: u.handle }),
+    ...(u?.image && { image: u.image }),
+  }
+}
+
+/** Conversation affichée : un DM prend le nom de son destinataire s'il est connu. */
+const toConversation = (c: CachedConv): SlackConversation =>
+  c.kind === "im" && c.user
+    ? {
+        id: c.id,
+        name: users.get(c.user)?.name ?? c.name,
+        kind: c.kind,
+        contact: contactOf(c.user),
+      }
+    : { id: c.id, name: c.name, kind: c.kind }
+
+/** Dernière liste lue (cache local), noms connus compris ; jamais lue pour cette équipe : `null`. */
+export const cachedConversations = (): SlackConversation[] | null =>
+  convCache?.map(toConversation) ?? null
+
 /**
- * Channels publics et privés, DM et DM de groupe (`conversations.list`, paginé). Un DM porte d'abord
- * l'id de son destinataire (ou son nom déjà connu) ; les noms manquants sont lus ensuite, 4 à la fois,
- * et `onNamed` reçoit la liste complétée. Un échec (limite Slack comprise) arrête la lecture des noms
- * et s'affiche comme erreur Slack ; les DM restants gardent leur id.
+ * Channels publics et privés, DM et DM de groupe (`conversations.list`, paginé), gardés en cache local.
+ * Un DM porte le nom déjà connu de son destinataire, sinon son id ; les noms inconnus ou périmés
+ * (`usersToName`) sont lus ensuite, NAME_CONCURRENCY à la fois, et `onNamed` reçoit la liste complétée
+ * au fil de la lecture. Un échec (limite Slack comprise) arrête la lecture des noms et s'affiche comme
+ * erreur Slack ; les DM restants gardent leur id (ou leur ancien nom).
  */
 export async function listConversations(
   onNamed: (list: SlackConversation[]) => void,
 ): Promise<SlackConversation[]> {
   const t = await token()
-  const out: SlackConversation[] = []
-  const dmUser = new Map<string, string>() // id de conversation → id du destinataire
+  const gen = generation
+  const list: CachedConv[] = []
   let cursor = ""
   do {
     const r = await call<{
@@ -584,60 +763,72 @@ export async function listConversations(
       const kind = (Object.keys(KIND) as (keyof typeof KIND)[]).find((k) =>
         KIND[k](c),
       )!
-      if (c.is_im && c.user) dmUser.set(c.id, c.user)
-      const name = c.is_im
-        ? (userNames.get(c.user ?? "") ?? c.user ?? c.id)
-        : c.is_mpim
-          ? mpdmName(c.name ?? "")
-          : (c.name ?? c.id)
-      out.push({
+      list.push({
         id: c.id,
-        name,
+        name: c.is_im
+          ? (c.user ?? c.id)
+          : c.is_mpim
+            ? mpdmName(c.name ?? "")
+            : (c.name ?? c.id),
         kind,
-        ...(c.is_im && c.user && { contact: contactOf(c.user) }),
+        ...(c.is_im && c.user && { user: c.user }),
       })
     }
     cursor = r.response_metadata?.next_cursor ?? ""
   } while (cursor)
-  const missing = [...new Set(dmUser.values())].filter((u) => !userNames.has(u))
-  if (missing.length)
-    void nameUsers(missing, t).then(() =>
-      onNamed(
-        out.map((c) => {
-          const u = dmUser.get(c.id)
-          return u && userNames.has(u)
-            ? { ...c, name: userNames.get(u)!, contact: contactOf(u) }
-            : c
-        }),
-      ),
+  // déconnecté ou reconnecté pendant la lecture : rien n'est gardé
+  if (gen !== generation) return list.map(toConversation)
+  convCache = list
+  persist()
+  const todo = usersToName(
+    list.flatMap((c) => c.user ?? []),
+    users,
+    Date.now(),
+  )
+  if (todo.length)
+    void nameUsers(todo, t, gen, () =>
+      onNamed(convCache?.map(toConversation) ?? []),
     )
-  return out
+  return list.map(toConversation)
 }
 
-/** Contact d'un DM 1:1 : noms et avatar déjà lus (`users.info`), sinon vides. */
-const contactOf = (user: string) => ({
-  user,
-  names: userAliases.get(user) ?? [],
-  image: userImages.get(user),
-})
-
-/** Lit les noms manquants, NAME_CONCURRENCY à la fois ; arrêt au premier échec, affiché comme erreur Slack. */
-async function nameUsers(ids: string[], t: string) {
+/**
+ * Lit les utilisateurs `ids`, NAME_CONCURRENCY à la fois ; `onBatch` après chaque lot de NAME_CONCURRENCY
+ * noms et à la fin (cache écrit). Arrêt au premier échec, affiché comme erreur Slack, ou à la déconnexion.
+ */
+async function nameUsers(
+  ids: string[],
+  t: string,
+  gen: number,
+  onBatch: () => void,
+) {
   const todo = [...ids]
   let failed = false
+  let done = 0
+  const flush = () => {
+    if (gen !== generation) return
+    persist()
+    onBatch()
+  }
   const worker = async () => {
-    while (todo.length && !failed) {
+    while (todo.length && !failed && gen === generation) {
       const id = todo.shift()!
-      await userName(id, t).catch((e: unknown) => {
-        failed = true
-        setState({
-          ...state,
-          error: e instanceof Error ? e.message : String(e),
-        })
-      })
+      await readUser(id, t).then(
+        () => {
+          if (++done % NAME_CONCURRENCY === 0) flush()
+        },
+        (e: unknown) => {
+          failed = true
+          setState({
+            ...state,
+            error: e instanceof Error ? e.message : String(e),
+          })
+        },
+      )
     }
   }
   await Promise.all(Array.from({ length: NAME_CONCURRENCY }, worker))
+  if (done % NAME_CONCURRENCY) flush()
 }
 
 /* ---------- Mentions des PR : cache 10 min, file d'attente à ~1 requête / 3 s ---------- */
@@ -723,14 +914,17 @@ async function drain() {
         t,
       )
       const matches = r.messages.matches.filter((m) => mentionsUrl(m.text, url))
+      const before = users.size
       for (const id of userIds(matches)) await userName(id, t).catch(() => {})
       if (gen !== generation) {
         stopped = true
         break
       }
+      if (users.size > before) persist()
+      const { names, aliases } = nameMaps()
       mentions.set(url, {
         at: Date.now(),
-        list: toMentions(matches, url, userNames, userAliases),
+        list: toMentions(matches, url, names, aliases),
       })
       setState({ ...state, error: undefined })
     } catch (e) {

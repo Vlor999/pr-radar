@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
+import { DAY_MS } from "./constants.ts"
 import {
   dueUrls,
   filterMentions,
@@ -10,14 +11,18 @@ import {
   mergeQueue,
   needsRefresh,
   nextReadAt,
+  parseSlackCache,
   pkceChallenge,
   rateLimitWait,
   sameState,
   SlackError,
   slackNames,
+  toKnownUser,
   toMentions,
   toTokens,
   userIds,
+  usersToName,
+  type KnownUser,
 } from "./slack.ts"
 import type { SlackMention } from "./types.ts"
 
@@ -279,4 +284,74 @@ test("noms Slack : nom complet, nom d'affichage puis identifiant, sans vide ni d
     }),
     ["Alice Martin", "alice.m"],
   )
+})
+
+const NOW = 100 * DAY_MS
+
+const known = (extra: Partial<KnownUser> = {}): KnownUser => ({
+  name: "Alice Martin",
+  names: ["Alice Martin", "alice.m"],
+  handle: "alice.m",
+  at: NOW,
+  ...extra,
+})
+
+test("utilisateur lu : nom complet, noms, identifiant et avatar", () => {
+  assert.deepEqual(
+    toKnownUser(
+      {
+        name: "alice.m",
+        real_name: "Alice Martin",
+        profile: { image_48: "https://a/48.png" },
+      },
+      NOW,
+    ),
+    known({ image: "https://a/48.png" }),
+  )
+})
+
+test("cache absent, invalide ou d'une autre équipe : vide", () => {
+  const empty = { team: "T1", convs: null, users: {} }
+  assert.deepEqual(parseSlackCache(null, "T1", NOW), empty)
+  assert.deepEqual(parseSlackCache("{", "T1", NOW), empty)
+  assert.deepEqual(
+    parseSlackCache(
+      JSON.stringify({ team: "T2", convs: [], users: {} }),
+      "T1",
+      NOW,
+    ),
+    empty,
+  )
+})
+
+test("cache : entrées invalides et utilisateurs trop anciens ignorés", () => {
+  const raw = JSON.stringify({
+    team: "T1",
+    convs: [
+      { id: "D1", name: "U1", kind: "im", user: "U1" },
+      { id: "C1", name: "dev", kind: "forum" },
+      { id: 2, name: "x", kind: "public" },
+    ],
+    users: {
+      U1: known(),
+      U2: known({ at: NOW - 31 * DAY_MS }),
+      U3: { name: "Bob" },
+    },
+  })
+  assert.deepEqual(parseSlackCache(raw, "T1", NOW), {
+    team: "T1",
+    convs: [{ id: "D1", name: "U1", kind: "im", user: "U1" }],
+    users: { U1: known() },
+  })
+})
+
+test("noms à lire : inconnus ou périmés, sans doublon", () => {
+  const users = new Map([
+    ["U1", known()],
+    ["U2", known({ at: NOW - 8 * DAY_MS })],
+  ])
+  assert.deepEqual(usersToName(["U1", "U2", "U3", "U3"], users, NOW), [
+    "U2",
+    "U3",
+  ])
 })
