@@ -144,7 +144,7 @@ type Match = {
 type SlackUser = {
   name: string
   real_name?: string
-  profile?: { real_name?: string; display_name?: string }
+  profile?: { real_name?: string; display_name?: string; image_48?: string }
 }
 
 /** Noms d'un utilisateur Slack, sans doublon ni vide : nom complet, nom d'affichage, identifiant. */
@@ -514,6 +514,7 @@ export async function disconnectSlack() {
   setProgress()
   userNames.clear()
   userAliases.clear()
+  userImages.clear()
   updateSettings({ slackAll: false, slackChannels: [] })
   setState({ team: null, expired: false })
 }
@@ -523,12 +524,15 @@ export async function disconnectSlack() {
 const userNames = new Map<string, string>()
 /** tous les noms connus d'un utilisateur (`slackNames`) : rapprochement avec un login GitHub */
 const userAliases = new Map<string, string[]>()
+/** avatar Slack (48 px) d'un utilisateur, affiché dans la table Slack → GitHub des réglages */
+const userImages = new Map<string, string>()
 
 async function userName(id: string, t: string) {
   if (!userNames.has(id)) {
     const r = await call<{ user: SlackUser }>("users.info", { user: id }, t)
     userNames.set(id, r.user.real_name || r.user.name)
     userAliases.set(id, slackNames(r.user))
+    if (r.user.profile?.image_48) userImages.set(id, r.user.profile.image_48)
   }
   return userNames.get(id) ?? id
 }
@@ -586,7 +590,12 @@ export async function listConversations(
         : c.is_mpim
           ? mpdmName(c.name ?? "")
           : (c.name ?? c.id)
-      out.push({ id: c.id, name, kind })
+      out.push({
+        id: c.id,
+        name,
+        kind,
+        ...(c.is_im && c.user && { contact: contactOf(c.user) }),
+      })
     }
     cursor = r.response_metadata?.next_cursor ?? ""
   } while (cursor)
@@ -596,12 +605,21 @@ export async function listConversations(
       onNamed(
         out.map((c) => {
           const u = dmUser.get(c.id)
-          return u && userNames.has(u) ? { ...c, name: userNames.get(u)! } : c
+          return u && userNames.has(u)
+            ? { ...c, name: userNames.get(u)!, contact: contactOf(u) }
+            : c
         }),
       ),
     )
   return out
 }
+
+/** Contact d'un DM 1:1 : noms et avatar déjà lus (`users.info`), sinon vides. */
+const contactOf = (user: string) => ({
+  user,
+  names: userAliases.get(user) ?? [],
+  image: userImages.get(user),
+})
 
 /** Lit les noms manquants, NAME_CONCURRENCY à la fois ; arrêt au premier échec, affiché comme erreur Slack. */
 async function nameUsers(ids: string[], t: string) {

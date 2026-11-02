@@ -45,17 +45,27 @@ const CONVS: SlackConversation[] = [
   { id: "G1", name: "checkout-squad", kind: "private" },
   { id: "D1", name: "Alice Martin", kind: "im" },
   { id: "D2", name: "Erin Laurent", kind: "im" },
+  // table Slack → GitHub des réglages : deux comptes GitHub (frank, fpetit), aucun (Nina)
+  { id: "D3", name: "Frank Petit", kind: "im" },
+  { id: "D4", name: "Nina Roux", kind: "im" },
   { id: "M1", name: "alice, bob", kind: "mpim" },
 ]
 
 export const listConversations = async (
   _onNamed: (list: SlackConversation[]) => void,
-) => CONVS
+): Promise<SlackConversation[]> =>
+  CONVS.map((c) =>
+    c.kind === "im"
+      ? { ...c, contact: { user: `U_${c.id}`, names: DM_NAMES[c.id] ?? [] } }
+      : c,
+  )
 
 /** noms Slack des destinataires de DM 1:1 (users.info : nom complet, nom d'affichage, identifiant) */
 const DM_NAMES: Record<string, string[]> = {
   D1: ["Alice Martin", "Alice", "alice.martin"],
   D2: ["Erin Laurent", "Erin", "erin"],
+  D3: ["Frank Petit", "Frank P.", "frank.petit"],
+  D4: ["Nina Roux", "Nina", "nina"],
 }
 
 const ago = (h: number) => new Date(Date.now() - h * HOUR_MS).toISOString()
