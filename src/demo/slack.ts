@@ -17,6 +17,8 @@ const THROTTLE_MS = 3_000
 const CACHE_TTL_MS = 10 * 60_000
 /** latence simulée de `conversations.list` : lignes fantômes de la table Slack → GitHub à la 1re ouverture */
 const LIST_MS = 900
+/** noms des DM lus après la liste (users.info) : ils s'affichent sans rouvrir les réglages */
+const NAMES_MS = 1_500
 /** table Slack → GitHub stockée (comme KEY de src/lib/slack-github-map.ts) */
 const MAP_KEY = "pr-radar:slack-github"
 
@@ -225,11 +227,26 @@ let listed: SlackConversation[] | null = null
 
 export const cachedConversations = () => listed
 
+/** DM d'abord avec l'id du destinataire, puis nommés (`onNamed`) après NAMES_MS, comme users.info */
 export const listConversations = async (
-  _onNamed: (list: SlackConversation[]) => void,
+  onNamed: (list: SlackConversation[]) => void,
 ): Promise<SlackConversation[]> => {
   await new Promise((r) => setTimeout(r, LIST_MS))
-  listed = CONVS.map((c) =>
+  if (listed) return listed
+  setTimeout(() => onNamed((listed = named())), NAMES_MS)
+  return CONVS.map((c) =>
+    c.kind === "im"
+      ? {
+          ...c,
+          name: `U_${c.id}`,
+          contact: { user: `U_${c.id}`, names: [] },
+        }
+      : c,
+  )
+}
+
+const named = () =>
+  CONVS.map((c) =>
     c.kind === "im"
       ? {
           ...c,
@@ -241,8 +258,6 @@ export const listConversations = async (
         }
       : c,
   )
-  return listed
-}
 
 const ago = (h: number) => new Date(Date.now() - h * HOUR_MS).toISOString()
 const at = (

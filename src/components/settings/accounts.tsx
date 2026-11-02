@@ -343,27 +343,24 @@ function SlackSection() {
   const [convs, setConvs] = useState<SlackConversation[] | null>(() =>
     team ? cachedConversations() : null,
   )
-  const [fresh, setFresh] = useState(false)
   const [query, setQuery] = useState("")
   const live = !!team && !expired
+  // relue à chaque session Slack active (connexion, reconnexion) ; seuls le démontage ou la fin de la
+  // session coupent les mises à jour : les noms lus après la liste (`onNamed`) arrivent jusqu'au bout
   useEffect(() => {
     // lue même avec « toutes les conversations » : la table Slack → GitHub liste les DM 1:1
-    if (!live || fresh) return
+    if (!live) return
     let alive = true
     setError("")
     // DM sans nom connu d'abord affichés avec l'id du destinataire, puis avec son nom
     listConversations((l) => alive && setConvs(l)).then(
-      (l) => {
-        if (!alive) return
-        setConvs(l)
-        setFresh(true)
-      },
+      (l) => alive && setConvs(l),
       (e: unknown) => alive && setError(message(e)),
     )
     return () => {
       alive = false
     }
-  }, [live, fresh])
+  }, [live])
 
   const connect = async () => {
     setBusy(true)
@@ -371,7 +368,6 @@ function SlackSection() {
     try {
       await connectSlack()
       setConvs(cachedConversations())
-      setFresh(false)
     } catch (e) {
       setError(e === "timeout" ? t.slack.timeout : message(e))
     } finally {
@@ -433,12 +429,7 @@ function SlackSection() {
               variant="outline"
               size="sm"
               className="text-destructive hover:text-destructive"
-              onClick={() =>
-                void disconnectSlack().then(() => {
-                  setConvs(null)
-                  setFresh(false)
-                })
-              }
+              onClick={() => void disconnectSlack().then(() => setConvs(null))}
             >
               <LogOut data-icon="inline-start" />
               {t.slack.disconnect}
