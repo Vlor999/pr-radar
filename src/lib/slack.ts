@@ -1,7 +1,12 @@
 import { useSyncExternalStore } from "react"
 
 // extensions : chargé aussi par node --test
-import { SLACK_USER_MAX_AGE_MS, SLACK_USER_TTL_MS } from "./constants.ts"
+import {
+  SLACK_CACHE_KEY,
+  SLACK_CACHE_MAX_CHARS,
+  SLACK_USER_MAX_AGE_MS,
+  SLACK_USER_TTL_MS,
+} from "./constants.ts"
 import { log } from "./log.ts"
 import { openExternal } from "./open.ts"
 import { fetch, invoke, listen } from "./platform.ts"
@@ -45,8 +50,6 @@ const THROTTLE_MS = 3_000
 /** jeton renouvelé quand il expire dans moins de 5 min (rotation : durée de vie 12 h) */
 const REFRESH_MARGIN_MS = 5 * 60_000
 const TEAM_KEY = "pr-radar:slack"
-/** contacts et noms Slack lus pour les réglages : propre à la fenêtre (`LOCAL_ONLY` de sync.ts) */
-const CACHE_KEY = "pr-radar:slack-cache"
 /** tentatives d'un appel limité par Slack avant d'abandonner */
 const MAX_TRIES = 3
 const DEFAULT_RETRY_S = 30
@@ -255,6 +258,29 @@ export function parseSlackCache(
   }
 }
 
+/**
+ * Cache à écrire : seuls les utilisateurs destinataires d'un DM de la liste sont gardés (les auteurs de
+ * mentions restent en mémoire) ; au-delà de `maxChars`, seuls les DM de la liste (table Slack → GitHub),
+ * les channels revenant à la relecture suivante.
+ */
+export function serializeSlackCache(
+  team: string,
+  convs: CachedConv[] | null,
+  users: ReadonlyMap<string, KnownUser>,
+  maxChars: number,
+): string {
+  const dm = new Set(convs?.flatMap((c) => c.user ?? []))
+  const kept = Object.fromEntries([...users].filter(([id]) => dm.has(id)))
+  const full = JSON.stringify({ team, convs, users: kept })
+  return full.length <= maxChars
+    ? full
+    : JSON.stringify({
+        team,
+        convs: convs?.filter((c) => c.kind === "im") ?? null,
+        users: kept,
+      })
+}
+
 /** Utilisateurs à (re)lire par `users.info` : jamais lus, ou lus il y a plus de SLACK_USER_TTL_MS. Sans doublon. */
 export const usersToName = (
   ids: string[],
@@ -355,6 +381,7 @@ onPulled((keys) => {
   const team = readTeam()
   if (team?.id !== state.team?.id) {
     tokens = null
+    generation++ // une lecture lancée pour l'ancienne équipe n'écrit plus rien
     loadCache(team)
   }
   state = { ...state, team, expired: false }
@@ -628,7 +655,7 @@ export async function disconnectSlack() {
   setProgress()
   loadCache(null)
   try {
-    localStorage.removeItem(CACHE_KEY)
+    localStorage.removeItem(SLACK_CACHE_KEY)
   } catch {}
   updateSettings({ slackAll: false, slackChannels: [] })
   setState({ team: null, expired: false })
@@ -648,7 +675,7 @@ function loadCache(team: Team | null) {
   if (!team) return
   let raw: string | null = null
   try {
-    raw = localStorage.getItem(CACHE_KEY)
+    raw = localStorage.getItem(SLACK_CACHE_KEY)
   } catch {}
   const c = parseSlackCache(raw, team.id, Date.now())
   for (const [id, u] of Object.entries(c.users)) users.set(id, u)
@@ -659,13 +686,16 @@ loadCache(state.team)
 /** Écrit le cache local (au mieux : stockage plein ou indisponible, il reste en mémoire). */
 function persist() {
   if (!state.team) return
-  const cache: SlackCache = {
-    team: state.team.id,
-    convs: convCache,
-    users: Object.fromEntries(users),
-  }
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
+    localStorage.setItem(
+      SLACK_CACHE_KEY,
+      serializeSlackCache(
+        state.team.id,
+        convCache,
+        users,
+        SLACK_CACHE_MAX_CHARS,
+      ),
+    )
   } catch {}
 }
 

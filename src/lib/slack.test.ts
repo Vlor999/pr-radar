@@ -15,6 +15,7 @@ import {
   pkceChallenge,
   rateLimitWait,
   sameState,
+  serializeSlackCache,
   SlackError,
   slackNames,
   toKnownUser,
@@ -354,4 +355,30 @@ test("noms à lire : inconnus ou périmés, sans doublon", () => {
     "U2",
     "U3",
   ])
+})
+
+test("cache écrit : seuls les destinataires de DM de la liste sont gardés", () => {
+  const convs = [
+    { id: "D1", name: "U1", kind: "im" as const, user: "U1" },
+    { id: "C1", name: "dev", kind: "public" as const },
+  ]
+  const users = new Map([
+    ["U1", known()],
+    ["U9", known({ name: "Auteur d'une mention" })],
+  ])
+  assert.deepEqual(
+    JSON.parse(serializeSlackCache("T1", convs, users, 10_000)),
+    { team: "T1", convs, users: { U1: known() } },
+  )
+})
+
+test("cache trop gros : seuls les DM de la liste sont écrits", () => {
+  const dm = { id: "D1", name: "U1", kind: "im" as const, user: "U1" }
+  const channels = Array.from({ length: 50 }, (_, i) => ({
+    id: `C${i}`,
+    name: `channel-${i}`,
+    kind: "public" as const,
+  }))
+  const raw = serializeSlackCache("T1", [dm, ...channels], new Map(), 1_000)
+  assert.deepEqual(JSON.parse(raw).convs, [dm])
 })
