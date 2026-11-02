@@ -1190,4 +1190,13 @@ mod tests {
         .unwrap();
         assert_eq!(kv.snapshot().unwrap(), seed(&[]));
     }
+
+    #[test]
+    fn slack_cache_never_reaches_the_browser() {
+        assert!(!kv_key_ok("pr-radar:slack-cache"));
+        let mut kv = Kv::default();
+        kv.seed(seed(&[("pr-radar:slack-cache", "{\"team\":\"T1\"}")]))
+            .unwrap();
+        assert_eq!(kv.snapshot().unwrap(), seed(&[]));
+    }
 }
