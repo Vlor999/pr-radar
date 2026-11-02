@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react"
 
 import { HOUR_MS } from "@/lib/quiet"
 import { updateSettings, useSettings } from "@/lib/settings"
+import type { Reviewer } from "@/lib/reviewers"
 import type { Pr, SlackConversation, SlackMention } from "@/lib/types"
 
 type Team = { id: string; name: string }
@@ -14,6 +15,10 @@ const CONNECT_MS = 800
 const THROTTLE_MS = 3_000
 /** prochaine relecture des mentions, comme CACHE_TTL_MS de src/lib/slack.ts */
 const CACHE_TTL_MS = 10 * 60_000
+/** latence simulée de `conversations.list` : lignes fantômes de la table Slack → GitHub à la 1re ouverture */
+const LIST_MS = 900
+/** table Slack → GitHub stockée (comme KEY de src/lib/slack-github-map.ts) */
+const MAP_KEY = "pr-radar:slack-github"
 
 const ACME: Team = { id: "T0ACME", name: "acme" }
 let state: SlackState = { team: ACME, expired: false }
@@ -39,33 +44,204 @@ export async function disconnectSlack() {
   set({ team: null, expired: false })
 }
 
+/** ~50 contacts de DM fictifs pour la table Slack → GitHub des réglages : défilement, recherche, filtres */
+const FIRST = [
+  "Bruno",
+  "Chloé",
+  "David",
+  "Emma",
+  "Farid",
+  "Gaëlle",
+  "Hugo",
+  "Inès",
+  "Jules",
+  "Karim",
+  "Léa",
+  "Marc",
+  "Omar",
+  "Pauline",
+  "Quentin",
+  "Rose",
+  "Samir",
+  "Théo",
+  "Ursula",
+  "Victor",
+  "Wendy",
+  "Xavier",
+  "Yasmine",
+  "Zoé",
+  "Adrien",
+  "Bérénice",
+  "Cyril",
+  "Diane",
+  "Étienne",
+  "Fanny",
+  "Gilles",
+  "Hélène",
+  "Ilyes",
+  "Jade",
+  "Kevin",
+  "Lucie",
+  "Maxime",
+  "Noémie",
+  "Olivier",
+  "Prune",
+  "Raphaël",
+  "Sophie",
+  "Tom",
+  "Valentin",
+  "Agathe",
+  "Baptiste",
+]
+const LAST = [
+  "Bernard",
+  "Dubois",
+  "Thomas",
+  "Robert",
+  "Richard",
+  "Durand",
+  "Leroy",
+  "Moreau",
+  "Simon",
+  "Lefebvre",
+  "Michel",
+  "Garcia",
+  "Bertrand",
+  "Vincent",
+  "Fournier",
+  "Morel",
+  "Girard",
+  "André",
+  "Mercier",
+  "Dupont",
+  "Lambert",
+  "Bonnet",
+  "François",
+  "Martinez",
+  "Legrand",
+  "Garnier",
+  "Faure",
+  "Rousseau",
+  "Blanc",
+  "Guérin",
+  "Muller",
+  "Henry",
+  "Roussel",
+  "Nicolas",
+  "Perrin",
+  "Morin",
+  "Mathieu",
+  "Clément",
+  "Gauthier",
+  "Dumont",
+  "Lopez",
+  "Fontaine",
+  "Chevalier",
+  "Robin",
+  "Masson",
+  "Lemoine",
+]
+const ascii = (s: string) =>
+  s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
+
+type DemoContact = { id: string; names: string[]; handle: string }
+
+/** noms Slack des destinataires de DM 1:1 (users.info : nom complet, nom d'affichage, identifiant) */
+const CONTACTS: DemoContact[] = [
+  { id: "D1", names: ["Alice Martin", "Alice"], handle: "alice.martin" },
+  { id: "D2", names: ["Erin Laurent", "Erin"], handle: "erin" },
+  // deux comptes GitHub trouvés par le nom (frank, fpetit) ; aucun pour Nina
+  { id: "D3", names: ["Frank Petit", "Frank P."], handle: "frank.petit" },
+  { id: "D4", names: ["Nina Roux", "Nina"], handle: "nina" },
+  ...FIRST.map((f, i) => ({
+    id: `D${i + 10}`,
+    names: [`${f} ${LAST[i]}`, f],
+    handle: `${ascii(f)}.${ascii(LAST[i])}`,
+  })),
+]
+const DM_NAMES: Record<string, string[]> = Object.fromEntries(
+  CONTACTS.map((c) => [c.id, [...c.names, c.handle]]),
+)
+const ghLogin = (c: DemoContact) => c.handle.replace(".", "-")
+
+/**
+ * Utilisateurs GitHub assignables qui portent le nom d'un contact (rapprochés par nom, « à confirmer ») :
+ * un contact sur trois, deux comptes pour certains. Repris par `searchAssignable` de src/demo/github.ts.
+ */
+export const DEMO_DM_USERS: Reviewer[] = CONTACTS.slice(4).flatMap((c, i) =>
+  i % 3 === 0
+    ? [
+        { login: ghLogin(c), id: `U_${ghLogin(c)}`, name: c.names[0] },
+        ...(i % 9 === 0
+          ? [
+              {
+                login: `${ghLogin(c)}-acme`,
+                id: `U_${ghLogin(c)}-acme`,
+                name: c.names[0],
+              },
+            ]
+          : []),
+      ]
+    : [],
+)
+
+// liens ajoutés à la main (« liés ») : un contact sur quatre, deux comptes pour Hugo ; ajoutés s'ils manquent
+try {
+  const map = JSON.parse(localStorage.getItem(MAP_KEY) ?? "{}") as Record<
+    string,
+    unknown
+  >
+  const link = (login: string) => ({
+    provider: "github",
+    login,
+    id: `U_${login}`,
+  })
+  CONTACTS.slice(4).forEach((c, i) => {
+    const key = `${ACME.id}:U_${c.id}`
+    const hugo = c.names[1] === "Hugo"
+    if ((i % 4 !== 1 && !hugo) || key in map) return
+    map[key] = {
+      manual: [link(ghLogin(c)), ...(hugo ? [link("hugo-ext")] : [])],
+      excluded: [],
+    }
+  })
+  localStorage.setItem(MAP_KEY, JSON.stringify(map))
+} catch {}
+
 const CONVS: SlackConversation[] = [
   { id: "C1", name: "dev", kind: "public" },
   { id: "C2", name: "releases", kind: "public" },
   { id: "G1", name: "checkout-squad", kind: "private" },
-  { id: "D1", name: "Alice Martin", kind: "im" },
-  { id: "D2", name: "Erin Laurent", kind: "im" },
-  // table Slack → GitHub des réglages : deux comptes GitHub (frank, fpetit), aucun (Nina)
-  { id: "D3", name: "Frank Petit", kind: "im" },
-  { id: "D4", name: "Nina Roux", kind: "im" },
+  ...CONTACTS.map((c): SlackConversation => ({
+    id: c.id,
+    name: c.names[0],
+    kind: "im",
+  })),
   { id: "M1", name: "alice, bob", kind: "mpim" },
 ]
 
+/** liste déjà lue pendant la session : la table s'affiche aussitôt, comme avec le cache de src/lib/slack.ts */
+let listed: SlackConversation[] | null = null
+
+export const cachedConversations = () => listed
+
 export const listConversations = async (
   _onNamed: (list: SlackConversation[]) => void,
-): Promise<SlackConversation[]> =>
-  CONVS.map((c) =>
+): Promise<SlackConversation[]> => {
+  await new Promise((r) => setTimeout(r, LIST_MS))
+  listed = CONVS.map((c) =>
     c.kind === "im"
-      ? { ...c, contact: { user: `U_${c.id}`, names: DM_NAMES[c.id] ?? [] } }
+      ? {
+          ...c,
+          contact: {
+            user: `U_${c.id}`,
+            names: DM_NAMES[c.id] ?? [],
+            handle: CONTACTS.find((x) => x.id === c.id)?.handle,
+          },
+        }
       : c,
   )
-
-/** noms Slack des destinataires de DM 1:1 (users.info : nom complet, nom d'affichage, identifiant) */
-const DM_NAMES: Record<string, string[]> = {
-  D1: ["Alice Martin", "Alice", "alice.martin"],
-  D2: ["Erin Laurent", "Erin", "erin"],
-  D3: ["Frank Petit", "Frank P.", "frank.petit"],
-  D4: ["Nina Roux", "Nina", "nina"],
+  return listed
 }
 
 const ago = (h: number) => new Date(Date.now() - h * HOUR_MS).toISOString()
