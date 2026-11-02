@@ -43,9 +43,16 @@ section{padding:clamp(3rem,2rem + 4vw,5rem) 0}section+section{border-top:1px sol
 .shot{margin:0;min-width:0}.shot figcaption{margin-top:.75rem;font-size:14px;color:var(--muted)}
 /* features */
 .more{margin:2.5rem 0 .75rem}
-.chips{list-style:none;display:flex;flex-wrap:wrap;gap:8px;margin:0 0 1.5rem;padding:0}
-.chips li{padding:4px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:14px}
-.kb{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0;color:var(--muted)}
+.also{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:24px;margin:0}
+.also>div{padding-top:12px;border-top:1px solid var(--line)}
+.also h4{margin:0 0 8px;font-size:14px;font-weight:600}
+.also ul{list-style:none;margin:0;padding:0;color:var(--muted);font-size:15px}
+.also li{padding:4px 0}
+.keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:0 24px;margin:0}
+.keys div{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.keys dt{flex:none;display:flex;gap:4px;min-width:56px}
+.keys dd{margin:0;color:var(--muted);font-size:15px}
+.kbn{margin:12px 0 0;font-size:13px;color:var(--muted)}
 kbd{display:inline-block;min-width:26px;text-align:center;padding:2px 7px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:var(--card);color:var(--fg);font:13px 'JetBrains Mono',monospace}
 /* download */
 .dl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr));gap:1rem}
@@ -207,4 +214,28 @@ code{font:13px/1.5 'JetBrains Mono',monospace}
 @keyframes v-win{0%,30%{opacity:0;transform:translateY(14px) scale(.97)}38%,92%{opacity:1;transform:none}97%,100%{opacity:0}}
 @keyframes v-wdraw{0%,40%{transform:scaleY(0)}50%,100%{transform:none}}
 @keyframes v-wrise{0%,38%{opacity:0;transform:translateY(8px)}46%,100%{opacity:1;transform:none}}
+/* CI vignette: base styles = static state (failed job, re-run button); the loop opens the view and re-runs the job */
+.v-ci{display:flex;flex-direction:column;gap:8px}
+.vig.wide{grid-column:1/-1}
+@media(min-width:820px){.wide .v-ci{flex-direction:row;align-items:flex-start;gap:16px}.wide .v-ci>*{flex:1;min-width:0}.wide .vm{height:auto;min-height:180px}}
+.v-ci .pc{animation:v-rise 8s ease infinite both .4s}
+.v-cib{animation:v-cib 8s infinite both}
+.wf{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:color-mix(in srgb,var(--chip) 50%,var(--card));animation:v-ciopen 8s cubic-bezier(.22,1,.36,1) infinite both}
+.wfh{display:flex;justify-content:space-between;gap:8px;padding:0 4px;font-weight:500;white-space:nowrap}
+.mut{color:var(--muted);font-weight:400}.mono{font-family:'JetBrains Mono',monospace;font-size:11px}
+.wf ul{list-style:none;margin:0;padding:0}
+.wf li{display:flex;align-items:center;gap:6px;padding:2px 4px}
+.wf li>span:nth-child(2){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jd{color:var(--muted);font-variant-numeric:tabular-nums}.jd.sw{justify-items:end}
+.wf svg{flex:none;width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.wf .ok{color:var(--ok)}.ji.bad{color:var(--danger)}.ji.run{color:var(--warn);animation:spin .8s linear infinite}
+.sw{display:inline-grid;align-items:center}.sw>*{grid-area:1/1}
+.v-ci .jx{animation:v-ciout 8s infinite both}.v-ci .jr{opacity:0;animation:v-ciin 8s infinite both}
+.rr{align-self:flex-start;height:24px;margin-top:4px;padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);font-weight:500;animation:v-cipress 8s infinite both}
+.rr>span{display:inline-flex;align-items:center;gap:6px}
+@keyframes v-cib{0%,12%{transform:none}14%{transform:scale(.9)}16%,100%{transform:none}}
+@keyframes v-ciopen{0%,16%{opacity:0;transform:translateY(8px)}22%,90%{opacity:1;transform:none}96%,100%{opacity:0}}
+@keyframes v-cipress{0%,50%{transform:none}52%{transform:scale(.94)}54%,100%{transform:none}}
+@keyframes v-ciout{0%,54%{opacity:1}57%,92%{opacity:0}96%,100%{opacity:1}}
+@keyframes v-ciin{0%,54%{opacity:0}57%,92%{opacity:1}96%,100%{opacity:0}}
 @media(prefers-reduced-motion:reduce){.mock *,.mock *::before,.mock *::after,.vm *,.vm *::before,.vm *::after{animation:none!important;transition:none!important}}
