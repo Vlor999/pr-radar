@@ -358,12 +358,57 @@ fn refresh_tray(app: &AppHandle) {
     }
 }
 
+/// Ramène la fenêtre ; macOS : l'icône du Dock et l'entrée de ⌘Tab reviennent d'abord.
 fn show_main(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
     }
+}
+
+/// Arrière-plan : fenêtre cachée, seule l'icône de la barre des menus reste (actualisation, notifications,
+/// version web et MCP continuent) ; macOS retire aussi l'icône du Dock et l'entrée de ⌘Tab.
+/// Cacher la dernière fenêtre ne quitte pas : seule sa destruction déclenche `ExitRequested`.
+fn hide_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+    #[cfg(target_os = "macos")]
+    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+}
+
+/// « Quitter » du menu de l'app (⌘Q), à la place de l'élément prédéfini.
+#[cfg(target_os = "macos")]
+const APP_QUIT: &str = "app-quit";
+
+/// macOS : menu par défaut de Tauri, avec un « Quitter » (⌘Q) qui envoie l'app en arrière-plan. Le
+/// « Quitter » prédéfini appelle `terminate:` : tao (sans `applicationShouldTerminate:`) termine la boucle
+/// sans passer par `ExitRequested`, la sortie ne peut donc pas être annulée.
+#[cfg(target_os = "macos")]
+fn app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let menu = Menu::default(app)?;
+    if let Some(sub) = menu.items()?.first().and_then(|i| i.as_submenu().cloned()) {
+        // dernier élément du sous-menu de l'app : le « Quitter » prédéfini
+        if let Some(quit) = sub
+            .items()?
+            .pop()
+            .filter(|i| i.as_predefined_menuitem().is_some())
+        {
+            sub.remove(&quit)?;
+            let text = format!("Quit {}", app.package_info().name);
+            sub.append(&MenuItem::with_id(
+                app,
+                APP_QUIT,
+                text,
+                true,
+                Some("CmdOrCtrl+Q"),
+            )?)?;
+        }
+    }
+    Ok(menu)
 }
 
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -428,7 +473,19 @@ fn set_tray(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // ⌘Q comme le bouton de fermeture ; sans icône dans la barre des menus, vraie sortie
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(app_menu).on_menu_event(|app, e| {
+        if e.id() == APP_QUIT {
+            if app.tray_by_id(TRAY).is_some() {
+                hide_main(app);
+            } else {
+                app.exit(0);
+            }
+        }
+    });
+    builder
         // en premier (doc du plugin) : relancer l'app ramène la fenêtre au lieu d'ouvrir un second processus
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             show_main(app)
@@ -470,14 +527,15 @@ pub fn run() {
             }
             Ok(())
         })
-        // fermer la fenêtre la cache : l'app reste dans la barre des menus, « Quitter » (ou ⌘Q) la ferme.
-        // Sans icône, la fermeture quitte (sinon plus aucun moyen de rouvrir l'app).
+        // fermer la fenêtre (ou ⌘Q sur macOS) envoie l'app en arrière-plan : elle reste dans la barre des
+        // menus, dont seul « Quitter » la ferme. Sans icône, la fermeture quitte (sinon plus aucun moyen
+        // de rouvrir l'app).
         .on_window_event(|w, e| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = e
                 && w.app_handle().tray_by_id(TRAY).is_some()
             {
                 api.prevent_close();
-                let _ = w.hide();
+                hide_main(w.app_handle());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -514,13 +572,14 @@ pub fn run() {
         .expect("error while running tauri application")
         .run(|app, e| {
             // fermeture : serveur web arrêté, le socket MCP disparaît avec l'app, la session est close
-            // (Quitter, désinstallation et redémarrage après mise à jour passent tous par ici)
+            // (« Quitter » du menu de l'icône, désinstallation, redémarrage après mise à jour et signaux
+            // passent tous par ici ; ⌘Q et le bouton de fermeture cachent seulement la fenêtre)
             if let tauri::RunEvent::Exit = e {
                 web::shutdown(app);
                 let _ = mcp::mcp_disable(app.state::<mcp::McpState>());
                 crash::shutdown();
             }
-            // clic sur l'icône du Dock alors que la fenêtre est cachée
+            // clic sur l'icône du Dock, ou app relancée (Finder, Spotlight) alors qu'elle est en arrière-plan
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = e {
                 show_main(app);
