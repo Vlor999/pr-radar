@@ -32,6 +32,10 @@ const SEARCH_DEBOUNCE_MS = 250 // une requête GraphQL par frappe sinon
 /** repos lus par compte, comme MAP_REPOS_MAX de src/lib/github.ts (message de liste tronquée) */
 const REPOS_PER_ACCOUNT = 30
 
+/** Clé d'un compte GitHub vu par un compte PR Radar : le même utilisateur peut l'être par deux comptes. */
+const userKey = (u: { account?: string; login: string }) =>
+  `${u.account ?? ""}|${u.login.toLowerCase()}`
+
 const S = strings(
   {
     title: "Comptes GitHub des contacts",
@@ -177,7 +181,7 @@ export function SlackGithubTable({
                   )}
                   <LinkPicker
                     label={t.add(c.name)}
-                    linked={links.map((l) => l.login)}
+                    linked={links.map(userKey)}
                     onPick={(u) =>
                       linkAccount(team, c.user, {
                         provider: "github",
@@ -302,6 +306,7 @@ function LinkPicker({
   const [users, setUsers] = useState<AssignableUser[] | null>(null)
   const [error, setError] = useState<string>()
   const q = query.trim()
+  const multi = allAccounts().length > 1
 
   useEffect(() => {
     if (!open) return
@@ -328,12 +333,14 @@ function LinkPicker({
     }
   }, [open, q, t.searchError])
 
-  // déjà liés, et mes propres comptes : jamais reviewers de mes PR
-  const taken = new Set(
-    [...linked, ...allAccounts().flatMap((a) => a.login ?? [])].map((l) =>
-      l.toLowerCase(),
-    ),
+  // déjà liés (sur ce compte, ou sans compte précisé), et mes propres comptes : jamais reviewers de mes PR
+  const mine = new Set(
+    allAccounts().flatMap((a) => (a.login ? [a.login.toLowerCase()] : [])),
   )
+  const taken = (u: AssignableUser) =>
+    mine.has(u.login.toLowerCase()) ||
+    linked.includes(userKey(u)) ||
+    linked.includes(userKey({ login: u.login }))
   return (
     <Popover
       open={open}
@@ -363,9 +370,7 @@ function LinkPicker({
         <UserCommand
           query={query}
           onQueryChange={setQuery}
-          users={
-            users?.filter((u) => !taken.has(u.login.toLowerCase())) ?? null
-          }
+          users={users?.filter((u) => !taken(u)) ?? null}
           error={error}
           // avatars par login : seulement si tous les comptes sont sur github.com (voir `Avatar`)
           url={
@@ -373,9 +378,11 @@ function LinkPicker({
               ? "https://github.com/"
               : undefined
           }
+          // même utilisateur vu par deux comptes : deux lignes, chacune avec son compte
+          keyOf={(u) => `${u.account}|${u.id}`}
+          note={(u) => (multi ? findAccount(u.account)?.login : undefined)}
           onPick={(u) => {
-            const found = users?.find((x) => x.id === u.id)
-            if (found) onPick(found)
+            onPick(u)
             setOpen(false)
           }}
         />

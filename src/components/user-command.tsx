@@ -30,21 +30,26 @@ const S = strings(
  * cmdk : flèches, Entrée, survol et ARIA de combobox ; la recherche est faite par GitHub, pas de filtre local.
  * `users` null : chargement. Après un choix, le focus reste à la recherche.
  */
-export function UserCommand(props: {
+export function UserCommand<T extends Candidate>(props: {
   query: string
   onQueryChange: (q: string) => void
-  users: Candidate[] | null
+  users: T[] | null
   error?: string
   /** URL GitHub d'un objet du même hôte : avatars (voir `Avatar`) */
   url?: string
-  onPick: (u: Candidate) => void
+  /** clé unique d'une ligne (défaut : id GitHub) ; même utilisateur vu par deux comptes : `compte|id` */
+  keyOf?: (u: T) => string
+  /** précision affichée après le nom (compte PR Radar…) */
+  note?: (u: T) => string | undefined
+  onPick: (u: T) => void
 }) {
+  const keyOf = props.keyOf ?? ((u: T) => u.id)
   const t = useStrings(S)
   const input = useRef<HTMLInputElement>(null)
-  /** ligne active (flèches, Entrée) : login, valeur de l'item cmdk */
+  /** ligne active (flèches, Entrée) : clé de la ligne, valeur de l'item cmdk */
   const [active, setActive] = useState("")
   // résultats changés (recherche, choix) : la 1re ligne redevient active
-  const logins = props.users?.map((u) => u.login).join("\n") ?? ""
+  const logins = props.users?.map(keyOf).join("\n") ?? ""
   useEffect(() => setActive(logins.split("\n")[0]), [logins])
 
   return (
@@ -76,8 +81,8 @@ export function UserCommand(props: {
         ) : props.users.length ? (
           props.users.map((u) => (
             <CommandItem
-              key={u.id}
-              value={u.login}
+              key={keyOf(u)}
+              value={keyOf(u)}
               onSelect={() => {
                 props.onPick(u)
                 input.current?.focus()
@@ -89,6 +94,11 @@ export function UserCommand(props: {
               {u.name && (
                 <span className="min-w-0 truncate text-xs text-muted-foreground">
                   {u.name}
+                </span>
+              )}
+              {props.note?.(u) && (
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {props.note(u)}
                 </span>
               )}
               {u.slack && (
