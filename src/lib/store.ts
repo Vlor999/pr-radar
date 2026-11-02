@@ -12,6 +12,7 @@ import {
 } from "./github"
 import { log } from "./log"
 import { recordCosts, spentBy } from "./quota"
+import { refreshStatus, type RefreshStatus } from "./refresh-status"
 import { mergeReviews, type Reviews } from "./review"
 import { getSettings } from "./settings"
 import { saveItem } from "./sync"
@@ -51,6 +52,10 @@ export type Data = {
   mergedError?: string
   loading: boolean
   error?: string
+  /** issue du dernier chargement terminé (absent avant le premier) */
+  status?: RefreshStatus
+  /** fin de ce chargement, réussi ou non (`fetchedAt` ne bouge pas sur un échec) */
+  statusAt?: string
   /** erreur de jeton : l'interface propose de se reconnecter */
   authError?: boolean
   /** compte dont le jeton a été refusé */
@@ -171,6 +176,12 @@ export async function reload({ measure = false, delta = false } = {}) {
       mergedWindow: merged.error ? undefined : mergedWindow,
       mergedError: merged.error,
       loading: false,
+      status: refreshStatus({
+        accounts: queried.map((a) => a.id),
+        failedAccounts: shown.map((e) => e.account.id),
+        mergedError: merged.error,
+      }),
+      statusAt: new Date().toISOString(),
     })
     log(shown.length ? "warn" : "info", "refresh", {
       ms: ms(),
@@ -207,6 +218,8 @@ export async function reload({ measure = false, delta = false } = {}) {
       error: e instanceof Error ? e.message.slice(0, 300) : String(e),
       authError: e instanceof Error && e.name === "AuthError",
       authAccount: (e as { account?: string }).account,
+      status: "failed",
+      statusAt: new Date().toISOString(),
     })
   }
 }
