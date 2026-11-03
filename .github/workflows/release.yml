@@ -35,7 +35,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # target: own rust-cache key per macOS target (both run on the same runner type)
+          # target: rust toolchain target and own rust-cache key per build
           - platform: macos-latest
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
@@ -43,9 +43,19 @@ jobs:
             target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
           - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            args: ''
+          # native Arm64 runner (free for public repos)
+          - platform: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
             args: ''
           - platform: windows-latest
+            target: x86_64-pc-windows-msvc
             args: ''
+          # Arm64 cross-build on the x64 runner (Tauri docs: --target aarch64-pc-windows-msvc)
+          - platform: windows-latest
+            target: aarch64-pc-windows-msvc
+            args: --target aarch64-pc-windows-msvc
     runs-on: ${{ matrix.platform }}
     env:
       # Developer ID signing + Apple notarization: macOS only, when the secrets exist
@@ -60,7 +70,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.target }}
 
       - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
@@ -68,7 +78,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config
