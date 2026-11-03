@@ -6,34 +6,30 @@
 
 <p align="center"><a href="https://vlor999.github.io/pr-radar/">Website</a> · <a href="https://github.com/Vlor999/pr-radar/releases/latest">Download</a> · <a href="https://buymeacoffee.com/Vlor999">Buy me a coffee</a> · <code>brew install --cask vlor999/tap/pr-radar</code></p>
 
+## Why
+
+PR Radar is for following PR stacks across repos and answering review threads without opening the browser, on any desktop OS, with a local browser tab and a read-only MCP server for your agents. Comparison with github.com/pulls, Gitify and PR Marmot: [docs/comparison.md](docs/comparison.md).
+
 ## Features
 
 - PR tree per repo, with "depends on / blocks" stacks
-- Review, CI and conflict status; click the CI badge for jobs per workflow, with re-run of failed jobs
+- Review, CI and conflict status; CI jobs per workflow with re-run of failed jobs
 - Unresolved review threads shown with the code, reply or resolve in place
-- From the card: request reviewers, mark a draft ready for review, update a branch behind its base
-- Other people's PRs where you are assigned, mentioned or involved, placed in the tree with the reason
-- Filters and search
-- Ready-to-merge and stale PRs
-- New since your last visit
+- From the card: request reviewers, mark a draft ready, update a branch behind its base
+- Other people's PRs where you are assigned, mentioned or involved
+- Filters, search, ready-to-merge and stale PRs, new since your last visit
 - Merge calendar: month, week, day
-- Repo picker per organization
-- Local web version: the same interface in a browser tab, served by the app on 127.0.0.1 (opt-in)
-- Local MCP server: Claude Code, Claude Desktop, Antigravity, Codex, Cursor, Devin Desktop, Gemini CLI, VS Code, Windsurf or Zed read your PRs and their Slack mentions, read-only (opt-in; macOS and Linux)
-- System notifications, with Do not disturb (1 h or until tomorrow, also from the tray) and launch at login
-- Runs in the menu bar or tray: closing the window (and ⌘Q on macOS) keeps it running, Quit from the tray menu exits
-- Refresh adapted to the API quota; automatic refreshes reread only the PRs that changed, with a status dot next to Refresh
-- Settings by category, with a typo-tolerant search
-- Local activity log (Diagnostics settings, redacted, with retention) and a crash report you review before opening a GitHub issue
-- Light / dark / auto theme
-- Command palette `⌘K` / `Ctrl+K`, keyboard shortcuts: `/` `j` `k` `o` `e` `d`
-- English and French UI
+- Local web version ([docs/web.md](docs/web.md)) and read-only local MCP server for AI agents ([docs/mcp.md](docs/mcp.md)), both opt-in
+- System notifications with Do not disturb and launch at login; runs in the menu bar or tray
+- Quota-aware refresh, command palette `⌘K` / `Ctrl+K`, light / dark / auto theme, English and French UI
+
+More: repo picker per organization, settings by category with a typo-tolerant search, automatic refreshes that reread only changed PRs (status dot next to Refresh), local activity log (redacted, with retention) and reviewed crash reports (Diagnostics settings), keyboard shortcuts `/` `j` `k` `o` `e` `d`, Quit from the tray menu (closing the window or ⌘Q on macOS keeps the app running).
 
 ## Download
 
 - Download page: https://vlor999.github.io/pr-radar/
 - Releases: https://github.com/Vlor999/pr-radar/releases
-- Homebrew: `brew install --cask vlor999/tap/pr-radar` (cask updated by the release CI, secret `HOMEBREW_TAP_TOKEN`)
+- Homebrew: `brew install --cask vlor999/tap/pr-radar`
 
 ## First launch
 
@@ -42,73 +38,23 @@
 
 ## GitHub sign-in
 
-Two options:
-
-1. **Sign in with GitHub** (device flow): no server, the token is stored in the system keychain.
-2. **Personal access token**:
-   - fine-grained: read access to Pull requests + Contents/Metadata, write access to Pull requests to reply, resolve threads and mark drafts ready, write access to Contents to update a PR branch, and write access to Actions to re-run failed jobs;
-   - or classic with the `repo` scope (enough to re-run jobs: the `workflow` scope is only for editing workflow files).
+- **Sign in with GitHub** (device flow): no server, the token is stored in the system keychain.
+- **Personal access token**: fine-grained (read Pull requests + Contents/Metadata; write Pull requests to reply, resolve threads and mark drafts ready; write Contents to update a PR branch; write Actions to re-run failed jobs) or classic with the `repo` scope (the `workflow` scope is only for editing workflow files). Also used for GitHub Enterprise.
 
 Organization repos may require the organization to approve the OAuth app, or SSO authorization of the token.
 
-## Local web version and MCP server
-
-Both are off by default and run only while the app runs.
-
-**Web version.** Click the globe in the header: the app starts its local server if needed and opens `http://127.0.0.1:14200/` (default port, changeable in Web settings). The chevron next to the globe shows the status and leads to Web settings (port, start and stop, "Sign out browsers"). Account sign-in, Slack connection, updates and uninstall stay in the desktop app.
-
-**MCP server.** Click the plug icon next to the gear and turn the server on. The Setup section picks your client (Claude Code, Claude Desktop, Antigravity, Codex, Cursor, Devin Desktop, Gemini CLI, VS Code, Windsurf, Zed or any other) and gives the ready-to-paste command or config, with the real path of the app and where to paste it. Examples (macOS, the path depends on your install):
-
-```sh
-# Claude Code, once
-claude mcp add --scope user pr-radar -- '/Applications/PR Radar.app/Contents/MacOS/pr-radar' --mcp
-```
-
-For Claude Desktop, add this to `claude_desktop_config.json` (Settings › Developer › Edit Config), then restart Claude Desktop:
-
-```json
-{ "mcpServers": { "pr-radar": { "command": "/Applications/PR Radar.app/Contents/MacOS/pr-radar", "args": ["--mcp"] } } }
-```
-
-For the other clients, copy the command or config shown in the app's Setup section. Any other MCP client: declare `<path to pr-radar> --mcp` as a stdio command. Tools are read-only: `get_prs` (open PRs with CI, decision, conflicts, reviewers, size, unresolved threads, stack, Slack mentions; yours plus other people's PRs where you are assigned, mentioned or involved, with an `involved` field; and the "To review" tab; optional filters `repo`, `scope`, `needs_action`, `limit`), `get_pr` (unresolved review threads and conversation of one PR of the tree), `get_attention` (short list of what needs an action from you, one item per PR with its reasons and age, review requests and CI failures first, then oldest; optional filter `repo`), `get_checks` (`url`; CI jobs of one PR with state, workflow, duration and link of failing jobs, served only from the CI view already opened in the app: otherwise it answers `notLoaded` and points to `gh pr checks`) and `get_merged` (your PRs merged in the loaded window, setting "Recently merged", with `leadTime` from creation to merge as `45m` / `5h` / `3d` and `stats` count, median and p90; optional filters `from`, `to` as `YYYY-MM-DD` in UTC, `repo`). Prompts, shown as commands by MCP clients (Claude Code: `/mcp__pr-radar__<name>`), tell the agent which tools to call: `triage` (prioritized action list from `get_attention`), `review-queue` (PRs waiting for your review, oldest first), `fix-ci` (`url`; find the failing checks with `get_checks`, else `gh`, and fix them in the local checkout), `answer-threads` (`url`; a reply or code change per unresolved thread, nothing posted without your confirmation) and `standup` (optional `repo`; short update from your open PRs). The last 50 calls are listed in the app, without the content of the replies.
-
 ## Privacy
 
-No backend, no telemetry, no analytics. The app only talks to:
+No backend, no telemetry, no analytics. The app only talks to GitHub, to your GitHub Enterprise server if you add one, and to Slack if you connect it (read-only, tokens in the system keychain). Details: [docs/privacy.md](docs/privacy.md).
 
-- GitHub: the API with your token, avatars, and update checks on github.com (your IP address and the app version);
-- your GitHub Enterprise server, only if you add one: its API with your token;
-- Slack, only if you connect it: read-only search, tokens in the system keychain. Messages are read on your machine and sent nowhere else.
+## Docs
 
-Local web version, off by default: listens on 127.0.0.1 only, not reachable from other devices. The link opened by the app carries a single-use ticket valid 60 seconds, exchanged for an HttpOnly, SameSite=Strict session cookie set by the local app; sessions live in memory and "Sign out browsers" closes them all. Host and Origin are checked and there is no CORS, so other websites cannot call it. GitHub and Slack requests go through the app, to the same allowed hosts.
-
-Local MCP server, off by default: no network port. The agent starts `pr-radar --mcp` (a stdio shim), which talks to the running app through a Unix socket (mode `0600`, created only when you turn the server on). Read-only: no tool writes to GitHub or Slack, and replies are the state the app already holds, with no extra request.
-
-Settings, followed repos and "seen" marks stay in the app's local storage. The activity log (Settings › Diagnostics, on by default) is written on your machine only, without PR titles, comments, Slack messages or tokens. A crash report is never sent by the app: it opens a prefilled GitHub issue in your browser that you review and submit yourself. The [website](https://vlor999.github.io/pr-radar/) is hosted by GitHub Pages (which logs IP addresses), fetches the latest release from api.github.com in your browser, sets no cookies and only keeps your language choice in `localStorage`.
-
-## How it compares
-
-As of October 2026, based on each product's public features.
-
-| | github.com/pulls | Gitify | PR Radar |
-|---|---|---|---|
-| Platforms | any browser | macOS, Windows, Linux | macOS, Windows, Linux |
-| Stacked PRs as a tree, across repos | one PR at a time | no | yes |
-| Reply to unresolved review threads from the list | by opening each PR | no | yes |
-| Native notifications | web only | yes | yes |
-| Merge calendar | no | no | yes |
-| Issues, releases, discussions | yes | yes | PRs only |
-| Open in a browser tab | yes | no | yes (local, served by the app) |
-| MCP server for AI agents | separate [GitHub MCP server](https://github.com/github/github-mcp-server) | no | yes (local, read-only; macOS, Linux) |
-| GitHub Enterprise | yes | yes | yes (personal access token) |
-
-Where the alternatives win:
-
-- **github.com/pulls**: nothing to install, full review UI, GitHub Enterprise.
-- **Gitify**: your whole notification inbox (issues, releases, discussions) in the menu bar, GitHub Enterprise support.
-- **PR Marmot**: a native desktop app, with signed builds for Apple silicon Macs (Linux and Intel Macs via a source build).
-
-PR Radar is for following PR stacks across repos and answering review threads without opening the browser, on any desktop OS, with a local browser tab and a read-only MCP server for your agents.
+- [Local MCP server](docs/mcp.md)
+- [Local web version](docs/web.md)
+- [Privacy](docs/privacy.md)
+- [Comparison with other tools](docs/comparison.md)
+- [Development, releases, updates and signing](docs/development.md), [Apple notarization](docs/apple-notarization.md)
+- [Changelog](CHANGELOG.md)
 
 ## Development
 
@@ -120,15 +66,7 @@ npm run tauri dev
 npm test
 ```
 
-Release: bump the version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` on `dev`, then merge the `dev → main` PR. The release workflow creates the `vX.Y.Z` tag and the release (no manual tag).
-
-### In-app updates
-
-The app updates itself: it reads `latest.json` from the latest release, checks the signature against the public key in `src-tauri/tauri.conf.json`, installs, then restarts. CI signs each version with the private key stored in the repo secrets (`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Without this key, no update can ever be published for already-installed apps: keep a copy outside the repo.
-
-### macOS signing
-
-Without Apple secrets, macOS builds are ad-hoc signed (first launch: "Open Anyway" in Privacy & Security). With the `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` secrets (Developer ID Application certificate), the release signs and notarizes automatically: macOS then only shows "app downloaded from the internet".
+More in [docs/development.md](docs/development.md).
 
 ## License
 
