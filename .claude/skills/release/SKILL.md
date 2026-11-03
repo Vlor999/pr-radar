@@ -23,6 +23,6 @@ Flow: everything goes through `dev`; merging the `dev → main` PR triggers `rel
    gh pr checks --watch && gh pr merge --merge   # merge commit, no squash (otherwise dev and main diverge)
    ```
    No manual tag: `tauri-action` creates the `vX.Y.Z` tag and the release.
-6. Follow: `gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')`. All 4 builds (macOS arm64/x64, Windows, Linux) must be green.
+6. Follow: `gh run watch $(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')`. All 6 builds (macOS arm64/x64, Windows x64/arm64, Linux x64/arm64) must be green. `updater-urls` and `homebrew` run even when a build fails (warning on missing `latest.json` platforms): re-run the failed leg (`gh run rerun --failed`) before announcing the release.
 7. Check the release: `gh release view vX.Y.Z` → assets present, `latest.json` holds the new version. The Slack return page answers 200: `curl -so /dev/null -w '%{http_code}' https://vlor999.github.io/pr-radar/oauth.html`.
 8. If the Apple secrets exist (`gh secret list | grep APPLE`): check the notarization of the arm64 `.dmg` (see `docs/apple-notarization.md`, step 7).
