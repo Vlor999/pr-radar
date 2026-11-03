@@ -2,6 +2,7 @@ import { useMemo, useSyncExternalStore } from "react"
 
 // extensions : chargé aussi par node --test
 import { matchRecipients, type Reviewer } from "./reviewers.ts"
+import { fold, foldQuery } from "./settings-search.ts"
 import { onPulled, saveItem } from "./sync.ts"
 import type { SlackRecipient } from "./types.ts"
 
@@ -138,6 +139,58 @@ export function withoutLink(
           },
   }
 }
+
+/* ---------- Table des réglages : statut, recherche, filtres ---------- */
+
+/** `todo` : au moins une correspondance par nom à confirmer ; `linked` : liens manuels seulement ; `none` : aucun. */
+export type ContactStatus = "todo" | "linked" | "none"
+export type ContactFilter = "all" | ContactStatus
+
+/** Contact d'un DM 1:1 affiché dans la table, avec ses liens résolus. */
+export type ContactRow = {
+  user: string
+  name: string
+  names: string[]
+  handle?: string
+  links: ResolvedLink[]
+}
+
+export const contactStatus = (links: ResolvedLink[]): ContactStatus =>
+  links.some((l) => l.origin === "auto")
+    ? "todo"
+    : links.length
+      ? "linked"
+      : "none"
+
+export function contactCounts(
+  rows: Pick<ContactRow, "links">[],
+): Record<ContactStatus, number> {
+  const out = { todo: 0, linked: 0, none: 0 }
+  for (const r of rows) out[contactStatus(r.links)]++
+  return out
+}
+
+/** Recherche (`foldQuery`) : nom affiché, noms Slack, identifiant et logins liés. */
+export const matchesContact = (row: ContactRow, query: string) => {
+  const q = foldQuery(query)
+  return (
+    !q ||
+    [row.name, ...row.names, row.handle ?? "", ...row.links.map((l) => l.login)]
+      .map(fold)
+      .some((s) => s.includes(q))
+  )
+}
+
+export const filterContacts = <R extends ContactRow>(
+  rows: R[],
+  query: string,
+  filter: ContactFilter,
+) =>
+  rows.filter(
+    (r) =>
+      (filter === "all" || contactStatus(r.links) === filter) &&
+      matchesContact(r, query),
+  )
 
 /** Liens manuels d'un contact utilisables sur une PR du compte `account` (id GitHub connu). */
 const manualFor = (entry: ContactLinks | undefined, account?: string) =>

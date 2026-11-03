@@ -46,6 +46,10 @@ test("les réglages du journal local restent dans la fenêtre de l'app", () => {
   assert.equal(isSynced("pr-radar:log-settings"), false)
 })
 
+test("le cache des contacts Slack reste propre à chaque fenêtre", () => {
+  assert.equal(isSynced("pr-radar:slack-cache"), false)
+})
+
 test("une clé d'une autre application n'est pas partagée", () => {
   assert.equal(isSynced("other"), false)
 })

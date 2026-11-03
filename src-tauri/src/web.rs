@@ -52,12 +52,14 @@ const FETCH_MAX_BYTES: usize = 20 * 1024 * 1024;
 /// Clés partagées : même règle que `isSynced` (src/lib/sync.ts).
 const KV_PREFIX: &str = "pr-radar:";
 const KV_SEEN: &str = "pr-seen";
-const KV_LOCAL_ONLY: [&str; 4] = [
+const KV_LOCAL_ONLY: [&str; 5] = [
     "pr-radar:theme",
     "pr-radar:last-notification",
     "pr-radar:mcp-history",
     // réglages du journal local (src/lib/log-settings.ts) : dossier de la machine, jamais exposé au navigateur
     "pr-radar:log-settings",
+    // cache des contacts Slack de chaque fenêtre (src/lib/slack.ts)
+    "pr-radar:slack-cache",
 ];
 /// Taille totale de la copie partagée (clés + valeurs), sous le quota de localStorage (~5 Mo).
 const KV_MAX_BYTES: usize = 4 * 1024 * 1024;
@@ -1186,6 +1188,15 @@ mod tests {
             Some("{\"dir\":\"/etc\"}"),
         )]))
         .unwrap();
+        assert_eq!(kv.snapshot().unwrap(), seed(&[]));
+    }
+
+    #[test]
+    fn slack_cache_never_reaches_the_browser() {
+        assert!(!kv_key_ok("pr-radar:slack-cache"));
+        let mut kv = Kv::default();
+        kv.seed(seed(&[("pr-radar:slack-cache", "{\"team\":\"T1\"}")]))
+            .unwrap();
         assert_eq!(kv.snapshot().unwrap(), seed(&[]));
     }
 }

@@ -14,9 +14,9 @@ import { AuthSourceIcon } from "@/components/auth-source-icon"
 import { Login } from "@/components/login"
 import { words, type SettingsEntry } from "@/components/settings/category"
 import { SlackGithubTable } from "@/components/settings/slack-github"
+import { ConversationPicker } from "@/components/settings/slack-conversations"
 import { Row, Section, settingDomId, Toggle } from "@/components/settings/ui"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { GITHUB, type Account } from "@/lib/accounts"
 import { accountAdded, signOut } from "@/lib/actions"
 import { CLIENT_ID, useAuth } from "@/lib/auth"
@@ -26,6 +26,7 @@ import { openExternal } from "@/lib/open"
 import { isWeb } from "@/lib/platform"
 import { updateSettings, useSettings } from "@/lib/settings"
 import {
+  cachedConversations,
   connectSlack,
   disconnectSlack,
   forceRefreshMentions,
@@ -81,14 +82,6 @@ const S = strings(
       all: "Toutes les conversations (actuelles et futures)",
       allDescription:
         "Sinon, coche les conversations à surveiller. Rien de coché : fonctionnalité inactive.",
-      filter: "Filtrer les conversations",
-      loading: "Chargement des conversations…",
-      kinds: {
-        public: "public",
-        private: "privé",
-        im: "DM",
-        mpim: "DM de groupe",
-      },
     },
   },
   {
@@ -137,14 +130,6 @@ const S = strings(
       all: "All conversations (current and future)",
       allDescription:
         "Otherwise, check the conversations to watch. Nothing checked: feature off.",
-      filter: "Filter conversations",
-      loading: "Loading conversations…",
-      kinds: {
-        public: "public",
-        private: "private",
-        im: "DM",
-        mpim: "group DM",
-      },
     },
   },
 )
@@ -334,45 +319,44 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 function SlackSection() {
   const t = useStrings(S)
   const { team, expired, error: searchError } = useSlack()
-  const { slackAll, slackChannels } = useSettings()
+  const { slackAll } = useSettings()
   const progress = useSlackProgress()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const [convs, setConvs] = useState<SlackConversation[] | null>(null)
-  const [query, setQuery] = useState("")
+  // dernière liste lue (cache local) affichée tout de suite, relue en arrière-plan
+  const [convs, setConvs] = useState<SlackConversation[] | null>(() =>
+    team ? cachedConversations() : null,
+  )
   const live = !!team && !expired
+  // relue à chaque session Slack active (connexion, reconnexion) ; seuls le démontage ou la fin de la
+  // session coupent les mises à jour : les noms lus après la liste (`onNamed`) arrivent jusqu'au bout
   useEffect(() => {
     // lue même avec « toutes les conversations » : la table Slack → GitHub liste les DM 1:1
-    if (!live || convs) return
+    if (!live) return
+    let alive = true
     setError("")
-    // DM d'abord affichés avec l'id du destinataire, puis avec son nom
-    listConversations(setConvs).then(setConvs, (e: unknown) =>
-      setError(message(e)),
+    // DM sans nom connu d'abord affichés avec l'id du destinataire, puis avec son nom
+    listConversations((l) => alive && setConvs(l)).then(
+      (l) => alive && setConvs(l),
+      (e: unknown) => alive && setError(message(e)),
     )
-  }, [live, convs])
+    return () => {
+      alive = false
+    }
+  }, [live])
 
   const connect = async () => {
     setBusy(true)
     setError("")
     try {
       await connectSlack()
-      setConvs(null)
+      setConvs(cachedConversations())
     } catch (e) {
       setError(e === "timeout" ? t.slack.timeout : message(e))
     } finally {
       setBusy(false)
     }
   }
-  const toggle = (id: string, on: boolean) =>
-    updateSettings({
-      slackChannels: on
-        ? [...slackChannels, id]
-        : slackChannels.filter((c) => c !== id),
-    })
-  const shown = convs?.filter((c) =>
-    c.name.toLowerCase().includes(query.trim().toLowerCase()),
-  )
-
   return (
     <Section
       id="slack"
@@ -464,51 +448,12 @@ function SlackSection() {
             />
           </Row>
         )}
-        {live && !slackAll && (
-          <div className="flex flex-col gap-2 border-t py-3">
-            {!shown ? (
-              !error && (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
-                  {t.slack.loading}
-                </p>
-              )
-            ) : (
-              <>
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder={t.slack.filter}
-                  aria-label={t.slack.filter}
-                  className="max-w-64"
-                />
-                <ul className="flex max-h-64 flex-col overflow-y-auto">
-                  {shown.map((c) => (
-                    <li key={c.id}>
-                      <label className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-muted">
-                        <input
-                          type="checkbox"
-                          checked={slackChannels.includes(c.id)}
-                          onChange={(e) => toggle(c.id, e.target.checked)}
-                          className="accent-primary"
-                        />
-                        <span className="min-w-0 truncate">
-                          {c.kind === "public" || c.kind === "private"
-                            ? `#${c.name}`
-                            : c.name}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {t.slack.kinds[c.kind]}
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
+        {/* tout de suite (cache local), lignes fantômes tant que la liste n'est pas lue (sauf échec sans cache) */}
+        {live && !slackAll && (convs || !error) && (
+          <ConversationPicker convs={convs} />
         )}
-        {live && team && convs && (
+        {/* tout de suite, lignes fantômes tant que la liste n'est pas lue (sauf échec sans cache) */}
+        {live && team && (convs || !error) && (
           <SlackGithubTable convs={convs} team={team.id} />
         )}
       </>

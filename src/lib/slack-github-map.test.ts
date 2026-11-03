@@ -3,8 +3,11 @@ import { test } from "node:test"
 
 import type { Reviewer } from "./reviewers.ts"
 import {
+  contactCounts,
   contactKey,
+  contactStatus,
   dmReviewers,
+  filterContacts,
   lookupRecipients,
   parseMap,
   resolveLinks,
@@ -12,7 +15,9 @@ import {
   withLink,
   withoutLink,
   type ContactLinks,
+  type ContactRow,
   type LinkedAccount,
+  type ResolvedLink,
   type SlackGithubMap,
 } from "./slack-github-map.ts"
 
@@ -183,4 +188,58 @@ test("un lien manuel sans compte précisé masque les correspondances automatiqu
     gh("erin-l2", { account: "ghe" }),
   ])
   assert.deepEqual(logins(out), ["erin-work"])
+})
+
+const link = (login: string, origin: ResolvedLink["origin"]): ResolvedLink => ({
+  ...gh(login),
+  origin,
+})
+const row = (extra: Partial<ContactRow> = {}): ContactRow => ({
+  user: "U1",
+  name: "Élodie Dupré",
+  names: ["Élodie Dupré", "elo"],
+  handle: "elodie.dupre",
+  links: [],
+  ...extra,
+})
+
+test("statut d'un contact : à confirmer dès un lien automatique, lié si tout est manuel, sinon aucun", () => {
+  assert.equal(contactStatus([link("a", "manual"), link("b", "auto")]), "todo")
+  assert.equal(contactStatus([link("a", "manual")]), "linked")
+  assert.equal(contactStatus([]), "none")
+})
+
+test("compteurs de la table par statut", () => {
+  assert.deepEqual(
+    contactCounts([
+      row({ links: [link("a", "auto")] }),
+      row({ links: [link("b", "manual")] }),
+      row({ links: [link("c", "manual")] }),
+      row(),
+    ]),
+    { todo: 1, linked: 2, none: 1 },
+  )
+})
+
+test("recherche sans casse ni accents sur le nom, l'identifiant et les logins liés", () => {
+  const rows = [row({ links: [link("edupre-gh", "manual")] })]
+  for (const q of ["elodie dup", "@elodie.d", "ELO", "dupre-GH"])
+    assert.equal(filterContacts(rows, q, "all").length, 1, q)
+  assert.equal(filterContacts(rows, "bob", "all").length, 0)
+})
+
+test("filtre par statut combiné à la recherche", () => {
+  const todo = row({ user: "U1", links: [link("a", "auto")] })
+  const linked = row({
+    user: "U2",
+    name: "Bob",
+    names: ["Bob"],
+    handle: "bob",
+    links: [link("b", "manual")],
+  })
+  const none = row({ user: "U3", links: [] })
+  const rows = [todo, linked, none]
+  assert.deepEqual(filterContacts(rows, "", "linked"), [linked])
+  assert.deepEqual(filterContacts(rows, "elodie", "none"), [none])
+  assert.deepEqual(filterContacts(rows, " ", "all"), rows)
 })
