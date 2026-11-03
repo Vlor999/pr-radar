@@ -16,6 +16,17 @@ jobs:
           REPO: ${{ github.event.pull_request.head.repo.full_name }}
         run: '[[ $HEAD == dev && $REPO == "$GITHUB_REPOSITORY" ]] || { echo "PRs to main must come from dev"; exit 1; }'
 
+  # the version merged to main must have its CHANGELOG.md section: release.yml uses it as release notes
+  # (required check in the main ruleset)
+  changelog:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: scripts/changelog-section.sh "$(node -p "require('./package.json').version")" > /dev/null
+
   check:
     timeout-minutes: 15
     runs-on: ubuntu-22.04
