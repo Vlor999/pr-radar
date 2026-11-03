@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Linux arm64 (AppImage, .deb, .rpm) and Windows arm64 (installer) builds, linked from the download page.
+
 ## [0.15.0] - 2026-11-03
 
 ### Added
