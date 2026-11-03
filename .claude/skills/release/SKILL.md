@@ -15,7 +15,7 @@ Flow: everything goes through `dev`; merging the `dev → main` PR triggers `rel
    - `src-tauri/tauri.conf.json`
    - `src-tauri/Cargo.toml` (`[package] version`)
    then `npm install --package-lock-only` (and `cargo check` in `src-tauri` for `Cargo.lock`).
-   In `CHANGELOG.md`, move the `[Unreleased]` entries into a new `## [X.Y.Z] - YYYY-MM-DD` section (today's date), leave `## [Unreleased]` empty, and update the compare links at the bottom (`[Unreleased]` → `vX.Y.Z...HEAD`, new `[X.Y.Z]` → `vPREV...vX.Y.Z`). This section is the release notes: `release.yml` fails without it. Check: `scripts/changelog-section.sh X.Y.Z`.
+   In `CHANGELOG.md`, move the `[Unreleased]` entries into a new `## [X.Y.Z] - YYYY-MM-DD` section (today's date), leave `## [Unreleased]` empty, and update the compare links at the bottom (`[Unreleased]` → `vX.Y.Z...HEAD`, new `[X.Y.Z]` → `vPREV...vX.Y.Z`). This section is the release notes: `release.yml` fails without it, and the `changelog` CI job blocks the `dev → main` PR. Check: `scripts/changelog-section.sh X.Y.Z`.
 4. Commit `chore: release vX.Y.Z` on `dev` (version bump and `CHANGELOG.md` together), with the Co-Authored-By trailer.
 5. Confirm with the user before pushing (public action), then:
    ```sh
