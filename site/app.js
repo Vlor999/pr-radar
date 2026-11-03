@@ -218,15 +218,21 @@
     var arm = find(a, /_aarch64\.dmg$/), x64 = find(a, /_x64\.dmg$/);
     var macMain = os === 'mac-x64' ? x64 || arm : arm || x64, macAlt = macMain === arm ? x64 : arm;
     function chip(asset) { return asset === arm ? 'Apple Silicon' : 'Intel'; }
-    var win = find(a, /_x64-setup\.exe$/) || find(a, /\.msi$/);
+    // x64 patterns only: the arm64 builds (_arm64-setup.exe, _aarch64.AppImage, _arm64.deb, .aarch64.rpm) are listed as extras.
+    var win = find(a, /_x64-setup\.exe$/) || find(a, /_x64_[^_]+\.msi$/);
     var all = [
       { key: 'mac', title: 'macOS', main: macMain, label: macMain && t('Télécharger pour ', 'Download for ') + chip(macMain),
         or: t('ou ', 'or '), extra: macAlt ? [{ asset: macAlt, label: chip(macAlt) + ' (.dmg)' }] : [],
         note: t('✓ Signée et notarisée par Apple', '✓ Signed and notarized by Apple'), brew: true },
-      { key: 'win', title: 'Windows', main: win, label: win && t('Télécharger', 'Download') + (/\.msi$/.test(win.name) ? ' (.msi)' : ' (.exe)') },
-      { key: 'linux', title: 'Linux', main: find(a, /\.AppImage$/), label: t('Télécharger AppImage', 'Download AppImage'), or: t('ou paquet ', 'or package '), extra: [
-        { asset: find(a, /\.deb$/), label: '.deb (Debian, Ubuntu)' },
-        { asset: find(a, /\.rpm$/), label: '.rpm (Fedora)' }
+      { key: 'win', title: 'Windows', main: win, label: win && t('Télécharger', 'Download') + (/\.msi$/.test(win.name) ? ' (.msi)' : ' (.exe)'), or: t('ou ', 'or '), extra: [
+        { asset: find(a, /_arm64-setup\.exe$/), label: 'ARM64 (.exe)' }
+      ].filter(function (k) { return k.asset; }) },
+      { key: 'linux', title: 'Linux', main: find(a, /_amd64\.AppImage$/), label: t('Télécharger AppImage', 'Download AppImage'), or: t('ou paquet ', 'or package '), extra: [
+        { asset: find(a, /_amd64\.deb$/), label: '.deb (Debian, Ubuntu)' },
+        { asset: find(a, /\.x86_64\.rpm$/), label: '.rpm (Fedora)' },
+        { asset: find(a, /_aarch64\.AppImage$/), label: 'ARM64 AppImage' },
+        { asset: find(a, /_arm64\.deb$/), label: 'ARM64 .deb' },
+        { asset: find(a, /\.aarch64\.rpm$/), label: 'ARM64 .rpm' }
       ].filter(function (k) { return k.asset; }) }
     ].filter(function (p) { return p.main; });
     if (!all.length) return fail();

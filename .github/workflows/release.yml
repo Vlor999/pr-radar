@@ -48,7 +48,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # target: own rust-cache key per macOS target (both run on the same runner type)
+          # target: rust toolchain target and own rust-cache key per build
           - platform: macos-latest
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
@@ -56,9 +56,19 @@ jobs:
             target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
           - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            args: ''
+          # native Arm64 runner (free for public repos)
+          - platform: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
             args: ''
           - platform: windows-latest
+            target: x86_64-pc-windows-msvc
             args: ''
+          # Arm64 cross-build on the x64 runner (Tauri docs: --target aarch64-pc-windows-msvc)
+          - platform: windows-latest
+            target: aarch64-pc-windows-msvc
+            args: --target aarch64-pc-windows-msvc
     runs-on: ${{ matrix.platform }}
     env:
       # Developer ID signing + Apple notarization: macOS only, when the secrets exist
@@ -73,7 +83,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.target }}
 
       - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
@@ -81,7 +91,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config
@@ -128,8 +138,10 @@ jobs:
   # tauri-action writes api.github.com asset URLs in latest.json: without a token, the updater hits the
   # 60 requests/hour per IP limit and gets a JSON error instead of the archive. Point them to the direct downloads.
   updater-urls:
-    # a failed build skips this job: latest.json keeps the API URLs until the failed jobs are re-run
+    # runs even if some builds failed: the platforms that built get direct URLs, the missing ones are reported as a warning
+    # (same gating as release: new version or workflow_dispatch)
     needs: [version, release]
+    if: ${{ !cancelled() && needs.release.result != 'skipped' && (needs.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -147,11 +159,16 @@ jobs:
           jq --slurpfile u urls.json '.platforms |= map_values(.url = ($u[0][.url] // .url))' latest.json > fixed.json
           jq -e '(.platforms | length > 0) and ([.platforms[].url | startswith("https://github.com/")] | all)' fixed.json
           mv fixed.json latest.json
+          # updater keys written by tauri-action v1 ({os}-{arch}); a missing one = a failed build, to re-run
+          missing=$(jq -r '.platforms as $p | ["darwin-aarch64", "darwin-x86_64", "linux-x86_64", "linux-aarch64", "windows-x86_64", "windows-aarch64"] - ($p | keys) | join(" ")' latest.json)
+          [[ -z $missing ]] || echo "::warning::latest.json is missing platforms: $missing"
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber latest.json
 
   # Homebrew cask (Vlor999/homebrew-tap): updated only when the HOMEBREW_TAP_TOKEN secret exists
   homebrew:
     needs: release
+    # runs even if a non-macOS build failed (the .dmg download fails if a macOS one did)
+    if: ${{ !cancelled() && needs.release.result != 'skipped' }}
     runs-on: ubuntu-latest
     env:
       HAS_TAP: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}

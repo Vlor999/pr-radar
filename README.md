@@ -28,7 +28,7 @@ More: repo picker per organization, settings by category with a typo-tolerant se
 ## Download
 
 - Download page: https://vlor999.github.io/pr-radar/
-- Releases: https://github.com/Vlor999/pr-radar/releases
+- Releases: https://github.com/Vlor999/pr-radar/releases (macOS, Windows and Linux, x64 and arm64)
 - Homebrew: `brew install --cask vlor999/tap/pr-radar`
 
 ## First launch
