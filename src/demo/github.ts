@@ -23,6 +23,8 @@ import type {
   Thread,
 } from "@/lib/types"
 
+import { DEMO_DM_USERS } from "./slack"
+
 /** latence d'une mutation GitHub : laisse voir l'état « en cours » des boutons */
 const MUTATION_MS = 800
 /** latence de la première lecture des jobs d'une PR : laisse voir le chargement de la vue CI */
@@ -552,6 +554,8 @@ const ME: Reviewer = { login: "me", id: "U_me", name: null }
 /** comme ASSIGNABLE_PAGE de src/lib/github.ts, réduit pour que le DM Slack soit hors de la 1re page */
 const ASSIGNABLE_PAGE = 4
 const DM_LOOKUP_PAGE = 5
+/** latence simulée de `searchAssignable` sans recherche (table Slack → GitHub des réglages) */
+const ASSIGNABLE_MS = 1_200
 /** latence simulée de la mutation `requestReviews` : la demande s'affiche avant la réponse */
 const REQUEST_MS = 1_500
 
@@ -578,13 +582,20 @@ export const fetchReviewerOptions = async (
 })
 export const fetchDmReviewers = async (_repo: string, names: string[]) =>
   names.flatMap((n) => search(n, DM_LOOKUP_PAGE))
-export const searchAssignable = async (_repos: string[], query: string) => ({
-  users: search(query, DEMO_USERS.length + 1).map((u) => ({
-    ...u,
-    account: DEFAULT_ID,
-  })),
-  truncated: false,
-})
+export const searchAssignable = async (_repos: string[], query: string) => {
+  // correspondances par nom de la table Slack → GitHub : elles arrivent après les lignes
+  if (!query) await new Promise((r) => setTimeout(r, ASSIGNABLE_MS))
+  const q = query.toLowerCase()
+  return {
+    users: [
+      ...search(query, DEMO_USERS.length + 1),
+      ...DEMO_DM_USERS.filter((u) =>
+        [u.login, u.name ?? ""].some((s) => s.toLowerCase().includes(q)),
+      ),
+    ].map((u) => ({ ...u, account: DEFAULT_ID })),
+    truncated: false,
+  }
+}
 export const requestReviewer = async (
   prId: string,
   userId: string,

@@ -1,9 +1,17 @@
 import { cn } from "cn"
 import { Plus, X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { GithubMark } from "@/components/auth-source-icon"
-import { Row } from "@/components/settings/ui"
+import {
+  Count,
+  LIST_ROW,
+  ListFooter,
+  ListToolbar,
+  pulse,
+  ScrollList,
+  SlackAvatar,
+} from "@/components/settings/slack-list"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -14,15 +22,20 @@ import { UserCommand } from "@/components/user-command"
 import { GITHUB } from "@/lib/accounts"
 import { allAccounts, findAccount } from "@/lib/auth"
 import { searchAssignable, type AssignableUser } from "@/lib/github"
-import { strings, useStrings } from "@/lib/i18n"
+import { locale, strings, useStrings } from "@/lib/i18n"
 import { matchRecipients } from "@/lib/reviewers"
 import {
   confirmLink,
+  contactCounts,
   contactKey,
+  filterContacts,
   linkAccount,
   resolveLinks,
   unlinkAccount,
   useSlackGithubMap,
+  type ContactFilter,
+  type ContactRow,
+  type ContactStatus,
   type ResolvedLink,
 } from "@/lib/slack-github-map"
 import { getRepos } from "@/lib/store"
@@ -31,6 +44,13 @@ import type { SlackConversation } from "@/lib/types"
 const SEARCH_DEBOUNCE_MS = 250 // une requête GraphQL par frappe sinon
 /** repos lus par compte, comme MAP_REPOS_MAX de src/lib/github.ts (message de liste tronquée) */
 const REPOS_PER_ACCOUNT = 30
+const STATUSES: ContactStatus[] = ["todo", "linked", "none"]
+/** pastille de chaque statut (texte à côté : décorative) ; aucun compte = couleur des filets */
+const DOT: Record<ContactStatus, string> = {
+  todo: "bg-amber-500",
+  linked: "bg-primary",
+  none: "bg-border",
+}
 
 /** Clé d'un compte GitHub vu par un compte PR Radar : le même utilisateur peut l'être par deux comptes. */
 const userKey = (u: { account?: string; login: string }) =>
@@ -39,8 +59,21 @@ const userKey = (u: { account?: string; login: string }) =>
 const S = strings(
   {
     title: "Comptes GitHub des contacts",
-    description:
-      "Contacts de tes DM Slack 1:1 : quand tu leur envoies une PR, leurs comptes sont proposés en reviewers. Pointillés : trouvés par le nom ; pleins : ajoutés à la main.",
+    contacts: (n: number) =>
+      `${n} contact${n > 1 ? "s" : ""} de DM Slack, proposés en reviewers des PR que tu leur envoies`,
+    contactsLoading: "Chargement des contacts de DM Slack…",
+    counts: { todo: "à confirmer", linked: "liés", none: "sans compte" },
+    filters: {
+      all: "Tous",
+      todo: "À confirmer",
+      linked: "Liés",
+      none: "Aucun",
+    },
+    filterBy: "Filtrer par statut",
+    search: "Rechercher un contact",
+    searchPlaceholder: "Nom, @identifiant ou login GitHub",
+    noMatch: (q: string) => `Aucun contact ne correspond à « ${q} ».`,
+    legend: "Pointillés = trouvé par le nom · plein = confirmé",
     loading: "Recherche des correspondances…",
     none: "Aucun compte",
     empty: "Aucun DM 1:1",
@@ -57,8 +90,16 @@ const S = strings(
   },
   {
     title: "Contacts' GitHub accounts",
-    description:
-      "Contacts of your 1:1 Slack DMs: when you send them a PR, their accounts are suggested as reviewers. Dashed: found by name; solid: added by hand.",
+    contacts: (n: number) =>
+      `${n} Slack DM contact${n > 1 ? "s" : ""}, suggested as reviewers of the PRs you send them`,
+    contactsLoading: "Loading Slack DM contacts…",
+    counts: { todo: "to confirm", linked: "linked", none: "no account" },
+    filters: { all: "All", todo: "To confirm", linked: "Linked", none: "None" },
+    filterBy: "Filter by status",
+    search: "Search contacts",
+    searchPlaceholder: "Name, @handle or GitHub login",
+    noMatch: (q: string) => `No contact matches “${q}”.`,
+    legend: "Dashed = found by name · solid = confirmed",
     loading: "Looking for matches…",
     none: "No account",
     empty: "No 1:1 DM",
@@ -76,17 +117,20 @@ const S = strings(
 )
 
 type Contact = NonNullable<SlackConversation["contact"]> & { name: string }
+type Row = ContactRow & { contact: Contact }
 
 /**
- * Table Slack → GitHub (1:N) : un contact par DM 1:1, ses comptes liés en pastilles. Correspondances
- * automatiques calculées en local sur les utilisateurs assignables des repos suivis (`searchAssignable` :
- * une requête par compte, en cache 10 min), pas une requête par contact.
+ * Table Slack → GitHub (1:N) : un contact par DM 1:1, ses comptes liés en pastilles, avec recherche, filtres
+ * par statut et hauteur bornée (~8 lignes, défilement propre). `convs` absent : lignes fantômes. Pas de
+ * virtualisation : 50 à 200 lignes restent légères. Correspondances automatiques calculées en local sur
+ * les utilisateurs assignables des repos suivis (`searchAssignable` : une requête par compte, en cache
+ * 10 min), pas une requête par contact ; elles s'ajoutent aux lignes déjà affichées.
  */
 export function SlackGithubTable({
   convs,
   team,
 }: {
-  convs: SlackConversation[]
+  convs: SlackConversation[] | null
   team: string
 }) {
   const t = useStrings(S)
@@ -98,14 +142,27 @@ export function SlackGithubTable({
   // échec : `found` reste null, message traduit et « Réessayer » (relance par `attempt`)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  const [query, setQuery] = useState("")
+  const [filter, setFilter] = useState<ContactFilter>("all")
   const users = found?.users
-  const contacts: Contact[] = convs.flatMap((c) =>
-    c.kind === "im" && c.contact ? [{ ...c.contact, name: c.name }] : [],
-  )
   const multi = allAccounts().length > 1
+  const contacts = useMemo(() => {
+    const collator = new Intl.Collator(locale(), { sensitivity: "base" })
+    return convs
+      ?.flatMap((c) =>
+        c.kind === "im" && c.contact ? [{ ...c.contact, name: c.name }] : [],
+      )
+      .sort(
+        // pas encore nommés (id Slack) à la fin
+        (a, b) =>
+          Number(!a.names.length) - Number(!b.names.length) ||
+          collator.compare(a.name, b.name),
+      )
+  }, [convs])
+  const count = contacts?.length ?? 0
 
   useEffect(() => {
-    if (!contacts.length) return
+    if (!count) return
     let live = true
     setFailed(false)
     searchAssignable(getRepos() ?? [], "").then(
@@ -115,13 +172,54 @@ export function SlackGithubTable({
     return () => {
       live = false
     }
-  }, [contacts.length, attempt])
+  }, [count, attempt])
+
+  const rows = useMemo(
+    () =>
+      contacts?.map((c): Row => {
+        const auto = matchRecipients(
+          [{ id: c.user, names: c.names.length ? c.names : [c.name] }],
+          users ?? [],
+        ).map((u) => ({
+          provider: "github" as const,
+          login: u.login,
+          id: u.id,
+          ...(multi && { account: u.account }),
+        }))
+        return {
+          user: c.user,
+          name: c.name,
+          names: c.names,
+          ...(c.handle && { handle: c.handle }),
+          links: resolveLinks(map[contactKey(team, c.user)], auto),
+          contact: c,
+        }
+      }),
+    [contacts, users, map, team, multi],
+  )
+  const counts = rows && contactCounts(rows)
+  const shown = rows && filterContacts(rows, query, filter)
+  const matching = !users && !failed
 
   return (
-    <>
-      <Row label={t.title} description={t.description} />
+    <div className="-mx-4 border-t">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 px-4 py-3">
+        <div className="min-w-0">
+          <div className="text-sm font-medium">{t.title}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            {rows ? t.contacts(count) : t.contactsLoading}
+          </div>
+        </div>
+        {counts && count > 0 && (
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums">
+            {STATUSES.map((s) => (
+              <Count key={s} n={counts[s]} label={t.counts[s]} dot={DOT[s]} />
+            ))}
+          </div>
+        )}
+      </div>
       {failed && (
-        <p className="flex items-center gap-2 pb-3 text-xs text-destructive">
+        <p className="flex items-center gap-2 px-4 pb-3 text-xs text-destructive">
           {t.loadError}
           <Button
             variant="outline"
@@ -134,94 +232,122 @@ export function SlackGithubTable({
         </p>
       )}
       {found?.truncated && (
-        <p className="pb-3 text-xs text-muted-foreground">
+        <p className="px-4 pb-3 text-xs text-muted-foreground">
           {t.truncated(REPOS_PER_ACCOUNT)}
         </p>
       )}
-      {!contacts.length ? (
-        <p className="pb-3 text-sm text-muted-foreground">{t.empty}</p>
+      {rows && !count ? (
+        <p className="px-4 pb-3 text-sm text-muted-foreground">{t.empty}</p>
       ) : (
-        <ul className="flex max-h-96 flex-col overflow-y-auto pb-3">
-          {contacts.map((c) => {
-            const auto = matchRecipients(
-              [{ id: c.user, names: c.names.length ? c.names : [c.name] }],
-              users ?? [],
-            ).map((u) => ({
-              provider: "github" as const,
-              login: u.login,
-              id: u.id,
-              ...(multi && { account: u.account }),
-            }))
-            const links = resolveLinks(map[contactKey(team, c.user)], auto)
-            const other = c.names.filter((n) => n !== c.name).join(" · ")
-            return (
-              <li key={c.user} className="flex items-center gap-3 py-2">
-                <SlackAvatar contact={c} />
-                <div className="w-40 min-w-0 shrink-0">
-                  <p className="truncate text-sm">{c.name}</p>
-                  {other && (
-                    <p className="truncate text-xs text-muted-foreground">
-                      {other}
-                    </p>
-                  )}
-                </div>
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-                  {links.map((l) => (
-                    <LinkChip
-                      key={`${l.account ?? ""}|${l.login}`}
-                      link={l}
-                      onConfirm={() => confirmLink(team, c.user, l)}
-                      onRemove={() => unlinkAccount(team, c.user, l)}
-                    />
-                  ))}
-                  {!links.length && (
-                    <span className="text-xs text-muted-foreground">
-                      {users || failed ? t.none : t.loading}
-                    </span>
-                  )}
-                  <LinkPicker
-                    label={t.add(c.name)}
-                    linked={links.map(userKey)}
-                    onPick={(u) =>
-                      linkAccount(team, c.user, {
-                        provider: "github",
-                        login: u.login,
-                        id: u.id,
-                        ...(multi && { account: u.account }),
-                      })
-                    }
-                  />
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+        <>
+          <ListToolbar
+            query={query}
+            onQuery={setQuery}
+            placeholder={t.searchPlaceholder}
+            searchLabel={t.search}
+            filter={filter}
+            onFilter={setFilter}
+            filterLabel={t.filterBy}
+            options={(["all", ...STATUSES] as const).map((f) => ({
+              value: f,
+              label: t.filters[f],
+              ...(f !== "all" && counts && { count: counts[f] }),
+            }))}
+          />
+          <ScrollList
+            query={query}
+            noMatch={t.noMatch}
+            rows={
+              shown?.map((r) => (
+                <ContactItem
+                  key={r.user}
+                  row={r}
+                  team={team}
+                  matching={matching}
+                  multi={multi}
+                />
+              )) ?? null
+            }
+            skeleton={
+              <>
+                <span className={cn("size-6 shrink-0 rounded-full", pulse)} />
+                <span className="flex w-40 shrink-0 flex-col gap-1.5">
+                  <span className={cn("h-3 w-28 rounded-sm", pulse)} />
+                  <span className={cn("h-2.5 w-16 rounded-sm", pulse)} />
+                </span>
+                <span className={cn("h-6 w-24 rounded-sm", pulse)} />
+              </>
+            }
+          />
+          <ListFooter
+            shown={shown?.length}
+            total={count}
+            status={shown && matching ? t.loading : undefined}
+          >
+            <span>{t.legend}</span>
+          </ListFooter>
+        </>
       )}
-    </>
+    </div>
   )
 }
 
-/** Avatar Slack du contact (48 px, affiché en 20 px), sinon son initiale. */
-function SlackAvatar({ contact }: { contact: Contact }) {
-  const [failed, setFailed] = useState(false)
-  const base = "size-5 shrink-0 rounded-full bg-muted"
-  return contact.image && !failed ? (
-    <img
-      src={contact.image}
-      alt=""
-      onError={() => setFailed(true)}
-      className={base}
-    />
-  ) : (
-    <span
-      aria-hidden
-      className={cn(
-        base,
-        "grid place-items-center text-[10px] font-medium uppercase",
-      )}
-    >
-      {contact.name[0]}
-    </span>
+/** Ligne d'un contact : avatar, nom et @identifiant, pastilles des comptes liés, « + ». */
+function ContactItem({
+  row,
+  team,
+  matching,
+  multi,
+}: {
+  row: Row
+  team: string
+  /** correspondances par nom pas encore lues */
+  matching: boolean
+  multi: boolean
+}) {
+  const t = useStrings(S)
+  const { contact: c, links } = row
+  const other = c.names.filter((n) => n !== c.name).join(" · ")
+  return (
+    <li className={LIST_ROW}>
+      <SlackAvatar contact={c} />
+      <div className="w-40 min-w-0 shrink-0">
+        <p className="truncate text-sm" title={other || undefined}>
+          {c.name}
+        </p>
+        {c.handle && (
+          <p className="truncate text-xs text-muted-foreground">@{c.handle}</p>
+        )}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        {links.map((l) => (
+          <LinkChip
+            key={`${l.account ?? ""}|${l.login}`}
+            link={l}
+            onConfirm={() => confirmLink(team, c.user, l)}
+            onRemove={() => unlinkAccount(team, c.user, l)}
+          />
+        ))}
+        {!links.length &&
+          (matching ? (
+            <span aria-hidden className={cn("h-6 w-24 rounded-sm", pulse)} />
+          ) : (
+            <span className="text-xs text-muted-foreground">{t.none}</span>
+          ))}
+        <LinkPicker
+          label={t.add(c.name)}
+          linked={links.map(userKey)}
+          onPick={(u) =>
+            linkAccount(team, c.user, {
+              provider: "github",
+              login: u.login,
+              id: u.id,
+              ...(multi && { account: u.account }),
+            })
+          }
+        />
+      </div>
+    </li>
   )
 }
 

@@ -98,8 +98,8 @@ export type SlackConversation = {
   id: string
   name: string
   kind: "public" | "private" | "im" | "mpim"
-  /** DM 1:1 : le contact, id Slack, noms connus (`slackNames`) et avatar ; noms et avatar lus après la liste */
-  contact?: { user: string; names: string[]; image?: string }
+  /** DM 1:1 : le contact, id Slack, noms connus (`slackNames`), identifiant et avatar ; lus après la liste (ou en cache) */
+  contact?: { user: string; names: string[]; handle?: string; image?: string }
 }
 
 /** PR d'un autre qui attend ma review (onglet « À reviewer »). */
