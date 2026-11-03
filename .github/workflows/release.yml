@@ -15,6 +15,7 @@ jobs:
     outputs:
       new: ${{ steps.check.outputs.new }}
       tag: ${{ steps.check.outputs.tag }}
+      notes: ${{ steps.notes.outputs.notes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: check
@@ -24,6 +25,18 @@ jobs:
           v=$(node -p "require('./package.json').version")
           if gh release view "v$v" >/dev/null 2>&1; then echo new=false; else echo new=true; fi >> "$GITHUB_OUTPUT"
           echo "tag=v$v" >> "$GITHUB_OUTPUT"
+      # release notes = the version's CHANGELOG.md section: no section, no release
+      - id: notes
+        if: steps.check.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.check.outputs.tag }}
+        run: |
+          if ! notes=$(bash scripts/changelog-section.sh "${TAG#v}"); then
+            echo "::error file=CHANGELOG.md::no '## [${TAG#v}]' section in CHANGELOG.md: move the [Unreleased] entries into it before releasing"
+            exit 1
+          fi
+          d="EOF_$(openssl rand -hex 16)"
+          printf 'notes<<%s\n%s\n%s\n' "$d" "$notes" "$d" >> "$GITHUB_OUTPUT"
 
   release:
     needs: version
@@ -112,10 +125,12 @@ jobs:
           tagName: v__VERSION__
           releaseName: 'PR Radar v__VERSION__'
           releaseBody: |
-            Téléchargement : https://vlor999.github.io/pr-radar/
+            ${{ needs.version.outputs.notes }}
 
-            - macOS : app signée et notarisée par Apple, rien à contourner.
-            - Windows (SmartScreen) : Informations complémentaires > Exécuter quand même.
+            Download: https://vlor999.github.io/pr-radar/
+
+            - macOS: signed and notarized by Apple, nothing to bypass.
+            - Windows (SmartScreen): More info > Run anyway.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

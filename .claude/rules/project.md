@@ -15,6 +15,7 @@ description: "PR Radar project rules: branches, commits, PRs, validation, releas
 
 - Conventional Commits (`feat`, `fix`, `perf`, `ci`, `chore`, `docs`, `refactor`, `test`), with the `Co-Authored-By` trailer.
 - Atomic commits ordered by dependency: skill `logical-commit-sequencer`.
+- User-visible change: the PR adds a line under `## [Unreleased]` in `CHANGELOG.md` (Added / Changed / Fixed / Security, written for the user).
 - PR body: `## Intent` / `## Choices and caveats`. No question in the body: an open decision is settled with the user before the PR is opened.
 - Review: skill `mr-review`. Review fixes: new commits on the same branch, pushed to the same PR.
 - Stacked PR (only when the user asks): branch from the parent feature branch, `gh pr create --base <parent branch>`. Retarget to `dev` (`gh pr edit --base dev`) once the parent is merged.
