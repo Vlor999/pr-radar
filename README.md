@@ -13,14 +13,14 @@ PR Radar is for following PR stacks across repos and answering review threads wi
 ## Features
 
 - PR tree per repo, with "depends on / blocks" stacks
-- Review, CI and conflict status; CI jobs per workflow with re-run of failed jobs
+- Review, CI and conflict status; CI jobs per workflow (click the CI badge), with re-run of failed jobs
 - Unresolved review threads shown with the code, reply or resolve in place
 - From the card: request reviewers, mark a draft ready, update a branch behind its base
-- Other people's PRs where you are assigned, mentioned or involved
+- Other people's PRs where you are assigned, mentioned or involved, placed in the tree with the reason
 - Filters, search, ready-to-merge and stale PRs, new since your last visit
 - Merge calendar: month, week, day
-- Local web version ([docs/web.md](docs/web.md)) and read-only local MCP server for AI agents ([docs/mcp.md](docs/mcp.md)), both opt-in
-- System notifications with Do not disturb and launch at login; runs in the menu bar or tray
+- Local web version ([docs/web.md](docs/web.md)) and read-only local MCP server for AI agents (your PRs and their Slack mentions) ([docs/mcp.md](docs/mcp.md)), both opt-in
+- System notifications with Do not disturb (1 h or until tomorrow, also from the tray) and launch at login; runs in the menu bar or tray
 - Quota-aware refresh, command palette `⌘K` / `Ctrl+K`, light / dark / auto theme, English and French UI
 
 More: repo picker per organization, settings by category with a typo-tolerant search, automatic refreshes that reread only changed PRs (status dot next to Refresh), local activity log (redacted, with retention) and reviewed crash reports (Diagnostics settings), keyboard shortcuts `/` `j` `k` `o` `e` `d`, Quit from the tray menu (closing the window or ⌘Q on macOS keeps the app running).
@@ -39,7 +39,7 @@ More: repo picker per organization, settings by category with a typo-tolerant se
 ## GitHub sign-in
 
 - **Sign in with GitHub** (device flow): no server, the token is stored in the system keychain.
-- **Personal access token**: fine-grained (read Pull requests + Contents/Metadata; write Pull requests to reply, resolve threads and mark drafts ready; write Contents to update a PR branch; write Actions to re-run failed jobs) or classic with the `repo` scope (the `workflow` scope is only for editing workflow files). Also used for GitHub Enterprise.
+- **Personal access token**: fine-grained (read Pull requests + Contents/Metadata; write Pull requests to reply, resolve threads and mark drafts ready; write Contents to update a PR branch; write Actions to re-run failed jobs) or classic with the `repo` scope (enough to re-run jobs; the `workflow` scope is only for editing workflow files). Also used for GitHub Enterprise.
 
 Organization repos may require the organization to approve the OAuth app, or SSO authorization of the token.
 

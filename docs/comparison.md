@@ -5,7 +5,6 @@ As of October 2026, based on each product's public features. "?" means not compa
 | | github.com/pulls | Gitify | PR Marmot | PR Radar |
 |---|---|---|---|---|
 | Platforms | any browser | macOS, Windows, Linux | macOS (signed builds for Apple silicon Macs), Linux and Intel Macs via a source build | macOS, Windows, Linux |
-| Native desktop app | no | yes | yes | yes |
 | Stacked PRs as a tree, across repos | one PR at a time | no | ? | yes |
 | Reply to unresolved review threads from the list | by opening each PR | no | ? | yes |
 | Native notifications | web only | yes | ? | yes |
