@@ -36,6 +36,8 @@ export type Settings = {
   mergedDays: number
   /** repos retirés du panneau latéral */
   hiddenRepos: string[]
+  /** vue Fil du calendrier : PR masquées (`repo#numéro`), même si elles ont une nouvelle activité */
+  timelineHidden: string[]
   /** langue de l'interface ; null = pas encore choisie (question au premier lancement) */
   lang: Lang | null
   /** mentions Slack : toutes les conversations (actuelles et futures), sans filtre */
@@ -71,6 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   staleDays: 5,
   mergedDays: 7,
   hiddenRepos: [],
+  timelineHidden: [],
   lang: null,
   slackAll: false,
   slackChannels: [],
@@ -127,6 +130,9 @@ export function parseSettings(raw: string | null): Settings {
           ? normalZone(saved.quietTimeZone)
           : null,
       refreshMinutes: refreshMinutesOf(saved.refreshMinutes),
+      timelineHidden: Array.isArray(saved.timelineHidden)
+        ? saved.timelineHidden.filter((k) => typeof k === "string")
+        : [],
     }
   } catch {
     return DEFAULT_SETTINGS
