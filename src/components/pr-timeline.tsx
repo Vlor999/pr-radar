@@ -119,6 +119,7 @@ const S = strings(
     more: (n: number) => `+ ${n} autre${n > 1 ? "s" : ""}`,
     events: (n: number) => `${n} événements`,
     openSlack: "Ouvrir dans Slack",
+    linksHint: "Entrée pour atteindre les liens",
   },
   {
     open: (d: string) => `open ${d}`,
@@ -178,6 +179,7 @@ const S = strings(
     more: (n: number) => `+ ${n} more`,
     events: (n: number) => `${n} events`,
     openSlack: "Open in Slack",
+    linksHint: "Enter to reach the links",
   },
 )
 type T = typeof S.fr
@@ -272,7 +274,14 @@ function look(e: TimelineEvent): { className: string; icon: ReactNode } {
   }
 }
 
-type Tip = { id: string; items: TimelineEvent[]; rect: DOMRect }
+/** `anchor` : marqueur d'origine (focus rendu à Échap) ; `focus` : ouverte au clavier, focus sur son 1er lien */
+type Tip = {
+  id: string
+  items: TimelineEvent[]
+  rect: DOMRect
+  anchor: HTMLElement
+  focus?: boolean
+}
 
 function Marker({
   m,
@@ -287,8 +296,15 @@ function Marker({
   onShow: (tip: Tip) => void
   onHide: () => void
 }) {
-  const show = (el: HTMLElement) =>
-    onShow({ id, items: m.items, rect: el.getBoundingClientRect() })
+  const show = (el: HTMLElement, focus = false) =>
+    onShow({
+      id,
+      items: m.items,
+      rect: el.getBoundingClientRect(),
+      anchor: el,
+      focus,
+    })
+  const links = m.items.some((e) => e.permalink)
   const cluster = m.type === "cluster"
   const { className, icon } = look(m.lead)
   const label =
@@ -298,8 +314,10 @@ function Marker({
   return (
     <button
       type="button"
-      aria-label={label}
+      aria-label={links ? `${label} · ${t.linksHint}` : label}
       aria-describedby={`${id}-tip`}
+      // Entrée / Espace : focus dans l'info-bulle, pour atteindre le lien Slack au clavier
+      onClick={(e) => links && show(e.currentTarget, true)}
       style={{ left: m.x }}
       onMouseEnter={(e) => show(e.currentTarget)}
       onMouseLeave={onHide}
@@ -309,7 +327,7 @@ function Marker({
       className={cn(
         MARK,
         cluster
-          ? "z-1 flex h-5.5 min-w-5.5 gap-0.5 rounded-full border-muted-foreground/60 px-1.5 text-xs font-semibold text-foreground tabular-nums"
+          ? "z-1 flex h-5.5 min-w-5.5 gap-0.5 rounded-sm border-muted-foreground/60 px-1.5 text-xs font-semibold text-foreground tabular-nums"
           : cn("z-1", className),
       )}
     >
@@ -322,7 +340,7 @@ function Marker({
         icon
       )}
       {!cluster && m.items.length > 1 && (
-        <span className="absolute -top-2 -right-2.5 h-4 min-w-4 rounded-full bg-card px-1 text-center text-xs leading-4 font-medium text-foreground tabular-nums ring-1 ring-foreground/15">
+        <span className="absolute -top-2 -right-2.5 h-4 min-w-4 rounded-sm bg-card px-1 text-center text-xs leading-4 font-medium text-foreground tabular-nums ring-1 ring-foreground/15">
           {m.items.length}
         </span>
       )}
@@ -392,11 +410,13 @@ function Tooltip({
   t,
   onEnter,
   onLeave,
+  onClose,
 }: {
   tip: Tip
   t: T
   onEnter: () => void
   onLeave: () => void
+  onClose: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
@@ -413,6 +433,7 @@ function Tooltip({
     let top = rect.bottom + 8
     if (top + h > innerHeight - 8) top = rect.top - h - 8
     setPos({ left, top: Math.max(8, top) })
+    if (tip.focus) el.querySelector<HTMLElement>("a[href]")?.focus()
   }, [tip])
   const extra = tip.items.length - TIMELINE_TOOLTIP_MAX
   return (
@@ -422,8 +443,18 @@ function Tooltip({
       role="tooltip"
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
+      // focus dans l'info-bulle (lien Slack) : elle reste ouverte ; il en sort : elle se ferme
+      onFocus={onEnter}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) onLeave()
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") return
+        tip.anchor.focus()
+        onClose()
+      }}
       style={pos ?? { left: -9999, top: 0 }}
-      className="fixed z-50 max-h-96 w-max max-w-sm overflow-y-auto rounded-xl bg-popover p-3 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:ring-foreground/10"
+      className="fixed z-50 max-h-96 w-max max-w-sm overflow-y-auto rounded-xl bg-popover p-3 text-sm text-popover-foreground shadow-sm ring-1 ring-foreground/5 dark:ring-foreground/10"
     >
       {tip.items.slice(0, TIMELINE_TOOLTIP_MAX).map((e, i) => (
         <TipItem key={i} e={e} t={t} />
@@ -468,7 +499,7 @@ export function TimelineLegend() {
     [dot({ kind: "merge", at: "" }), t.kinds.merge],
     [dot({ kind: "close", at: "" }), t.kinds.close],
     [
-      <span className="flex h-5.5 items-center gap-0.5 rounded-full border border-muted-foreground/60 bg-card px-1.5 text-xs font-semibold tabular-nums">
+      <span className="flex h-5.5 items-center gap-0.5 rounded-sm border border-muted-foreground/60 bg-card px-1.5 text-xs font-semibold tabular-nums">
         <Layers className="size-3" strokeWidth={2.5} />3
       </span>,
       t.kinds.cluster,
@@ -511,7 +542,7 @@ export function TimelineLegend() {
         id="timeline-legend"
         role="tooltip"
         className={cn(
-          "invisible absolute top-full z-50 mt-1.5 flex w-64 -translate-y-1 flex-col gap-2 rounded-xl bg-popover p-3 text-sm text-popover-foreground opacity-0 shadow-lg ring-1 ring-foreground/5 transition-[opacity,transform,visibility] duration-150 ease-out group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 motion-reduce:transition-none dark:ring-foreground/10",
+          "invisible absolute top-full z-50 mt-1.5 flex w-64 -translate-y-1 flex-col gap-2 rounded-xl bg-popover p-3 text-sm text-popover-foreground opacity-0 shadow-sm ring-1 ring-foreground/5 transition-[opacity,transform,visibility] duration-150 ease-out group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 motion-reduce:transition-none dark:ring-foreground/10",
           end ? "right-0" : "left-0",
         )}
       >
@@ -603,6 +634,14 @@ function SearchField({
     }
   }
 
+  // option active toujours visible quand ↑ / ↓ fait défiler la liste
+  useEffect(() => {
+    if (open)
+      document
+        .getElementById(`timeline-opt-${active}`)
+        ?.scrollIntoView({ block: "nearest" })
+  }, [open, active])
+
   let lastType: Suggestion["type"] | null = null
   return (
     <div className="relative w-full max-w-sm">
@@ -647,7 +686,7 @@ function SearchField({
           aria-label={t.search}
           aria-autocomplete="list"
           aria-expanded={open}
-          aria-controls="timeline-suggestions"
+          aria-controls={open ? "timeline-suggestions" : undefined}
           aria-activedescendant={
             open && opts[active] ? `timeline-opt-${active}` : undefined
           }
@@ -674,7 +713,7 @@ function SearchField({
           role="listbox"
           aria-multiselectable="true"
           aria-label={t.search}
-          className="absolute top-full left-0 z-40 mt-1 max-h-96 w-full overflow-y-auto rounded-xl bg-popover p-1 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:ring-foreground/10"
+          className="absolute top-full left-0 z-40 mt-1 max-h-96 w-full overflow-y-auto rounded-xl bg-popover p-1 text-sm text-popover-foreground shadow-sm ring-1 ring-foreground/5 dark:ring-foreground/10"
         >
           {!opts.length && (
             <li className="px-2 py-2 text-muted-foreground">
@@ -1145,6 +1184,10 @@ export function PrTimeline({ last, days }: { last: Date; days: number }) {
           t={t}
           onEnter={() => clearTimeout(closing.current)}
           onLeave={hideTip}
+          onClose={() => {
+            clearTimeout(closing.current)
+            setTip(null)
+          }}
         />
       )}
     </div>
