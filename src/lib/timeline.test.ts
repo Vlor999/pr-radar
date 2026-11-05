@@ -664,3 +664,56 @@ test("les PR fermées sont cherchées même quand mes PR ouvertes viennent de l'
     "is:pr is:closed closed:>=2026-01-01 created:<=2026-01-11 repo:o/r",
   )
 })
+
+test("fenêtre qui finit après aujourd'hui, arbre complet : mes PR ouvertes viennent de l'arbre", () => {
+  assert.equal(exceptMineFor("2026-01-12", "2026-01-10", true), true)
+})
+
+test("PR de l'arbre mergée depuis la dernière actualisation : état et merge de la lecture légère, textes de l'arbre", () => {
+  const tree = pr([
+    { kind: "start", at: D(1) },
+    { kind: "comment", at: D(2), who: "ada", text: "Ok" },
+  ])
+  const light = pr(
+    [
+      { kind: "start", at: D(1) },
+      { kind: "comment", at: D(2), who: "ada" },
+      { kind: "merge", at: D(3), who: "me" },
+    ],
+    { state: "MERGED" },
+  )
+  const [p] = mergeTimeline([tree], [light])
+  assert.equal(p.state, "MERGED")
+  assert.deepEqual(
+    p.events.map((e) => [e.kind, e.text]),
+    [
+      ["start", undefined],
+      ["comment", "Ok"],
+      ["merge", undefined],
+    ],
+  )
+  assert.equal(row(p).status, "merged")
+})
+
+test("PR de l'arbre fermée puis rouverte puis fermée : seule la nouvelle fermeture est ajoutée", () => {
+  const tree = pr([
+    { kind: "start", at: D(1) },
+    { kind: "close", at: D(2) },
+    { kind: "reopen", at: D(3) },
+  ])
+  const light = pr(
+    [
+      { kind: "start", at: D(1) },
+      { kind: "close", at: D(2) },
+      { kind: "reopen", at: D(3) },
+      { kind: "close", at: D(4) },
+    ],
+    { state: "CLOSED" },
+  )
+  const [p] = mergeTimeline([tree], [light])
+  assert.deepEqual(
+    p.events.map((e) => e.kind),
+    ["start", "close", "reopen", "close"],
+  )
+  assert.equal(p.state, "CLOSED")
+})

@@ -207,13 +207,36 @@ function fromStore(p: Pr, toText: (html: string) => string): TimelinePr {
 export const storeTimeline = (prs: Pr[], toText: (html: string) => string) =>
   prs.filter((p) => !p.bot).map((p) => fromStore(p, toText))
 
-/** Fil de la vue : PR de l'arbre (plus riches : textes, Slack), puis celles de la lecture légère absentes de l'arbre. */
+/**
+ * Fil de la vue : PR de l'arbre (plus riches : textes, Slack), puis celles de la lecture légère absentes de l'arbre.
+ * PR de l'arbre ouverte mais finie dans la lecture légère (mergée ou fermée depuis la dernière actualisation) :
+ * textes et Slack de l'arbre, état et merge / fermeture de la lecture légère.
+ */
 export function mergeTimeline(
   store: TimelinePr[],
   light: TimelinePr[],
 ): TimelinePr[] {
+  const fresh = new Map(light.map((p) => [prKey(p), p]))
   const known = new Set(store.map(prKey))
-  return [...store, ...light.filter((p) => !known.has(prKey(p)))]
+  return [
+    ...store.map((p) => {
+      const l = fresh.get(prKey(p))
+      if (!l || l.state === "OPEN" || p.state !== "OPEN") return p
+      const seen = new Set(p.events.map((e) => `${e.kind}@${e.at}`))
+      const ends = l.events.filter(
+        (e) =>
+          (e.kind === "merge" || e.kind === "close") &&
+          !seen.has(`${e.kind}@${e.at}`),
+      )
+      return {
+        ...p,
+        state: l.state,
+        draft: l.draft,
+        events: [...p.events, ...ends].sort(byTime),
+      }
+    }),
+    ...light.filter((p) => !known.has(prKey(p))),
+  ]
 }
 
 /** Jour local `YYYY-MM-DD`. */
