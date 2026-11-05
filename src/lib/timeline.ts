@@ -4,6 +4,7 @@
  */
 // extensions : chargé aussi par node --test
 import {
+  TIMELINE_BODY_MAX_CHARS,
   TIMELINE_DRAFT_MIN_MS,
   TIMELINE_FADE_PX,
   TIMELINE_MARKER_GAP_PX,
@@ -20,14 +21,14 @@ export type RawTimelineItem =
       author: Actor
       state: string
       submittedAt: string | null
-      body: string
+      bodyText: string
       comments: { totalCount: number }
     }
   | {
       __typename: "IssueComment"
       author: Actor
       createdAt: string
-      body: string
+      bodyText: string
     }
   | {
       __typename:
@@ -49,6 +50,27 @@ export type RawTimelinePr = {
   repository: { nameWithOwner: string }
   timelineItems: { nodes: (RawTimelineItem | null)[] }
 }
+
+/** Texte gardé pour l'info-bulle (6 lignes affichées) : le cache et l'état restent légers. */
+export const clip = (text: string) =>
+  text.length > TIMELINE_BODY_MAX_CHARS
+    ? `${text.slice(0, TIMELINE_BODY_MAX_CHARS).trimEnd()}…`
+    : text
+
+/** Jour `YYYY-MM-DD` décalé de `n` jours (calendrier, sans fuseau). */
+export const shiftDay = (day: string, n: number) =>
+  new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000)
+    .toISOString()
+    .slice(0, 10)
+
+/**
+ * Bornes de la recherche GitHub pour une fenêtre de jours locaux : GitHub compare les dates en UTC, d'où
+ * un jour de marge de chaque côté ; `toRows` garde ensuite exactement la fenêtre.
+ */
+export const searchBounds = (from: string, to: string) => ({
+  from: shiftDay(from, -1),
+  to: shiftDay(to, 1),
+})
 
 /** Auteur robot (Renovate, Dependabot) : type `Bot` en GraphQL, ou login `…[bot]`. */
 export const isBot = (a: Actor) =>
@@ -78,7 +100,7 @@ export function toTimelinePr(
           kind: "review",
           at: n.submittedAt,
           who: n.author?.login,
-          text: n.body,
+          text: clip(n.bodyText),
           review: n.state,
           threads: n.comments.totalCount,
         })
@@ -88,7 +110,7 @@ export function toTimelinePr(
           kind: "comment",
           at: n.createdAt,
           who: n.author?.login,
-          text: n.body,
+          text: clip(n.bodyText),
         })
         break
       case "MergedEvent":
@@ -334,8 +356,10 @@ export function layoutRow(
     const b = Math.min(x(to), stop)
     if (b > a) segments.push({ from: a, to: b, kind })
   }
-  const ready = r.events.find((e) => e.kind === "ready")
-  if (r.draft && !ready) cut(r.t0, r.tEnd, "draft")
+  // brouillon aujourd'hui : tout le fil, même avec un « prête » plus ancien (remise en brouillon). Sinon le
+  // tronçon s'arrête au « prête » lu ; absent (hors des derniers événements lus) : rien à dessiner
+  const ready = r.events.findLast((e) => e.kind === "ready")
+  if (r.draft) cut(r.t0, r.tEnd, "draft")
   else if (ready && Date.parse(ready.at) - r.t0 > TIMELINE_DRAFT_MIN_MS)
     cut(r.t0, Date.parse(ready.at), "draft")
   r.events.forEach((e, i) => {

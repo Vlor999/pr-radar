@@ -2,8 +2,10 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import {
+  clip,
   isBot,
   layoutRow,
+  searchBounds,
   toRows,
   toTimelinePr,
   windowOf,
@@ -94,7 +96,7 @@ test("une review en attente n'est pas un événement", () => {
         author: { login: "ada" },
         state: "PENDING",
         submittedAt: null,
-        body: "",
+        bodyText: "",
         comments: { totalCount: 0 },
       },
     ]),
@@ -115,7 +117,7 @@ test("une review garde son état, son auteur et ses commentaires de code", () =>
         author: { login: "ada" },
         state: "CHANGES_REQUESTED",
         submittedAt: "2026-01-02T10:00:00Z",
-        body: "Voir le cas du 31",
+        bodyText: "Voir le cas du 31",
         comments: { totalCount: 4 },
       },
     ]),
@@ -372,4 +374,85 @@ test("le passage en « prête » n'a pas de marqueur", () => {
   ])
   const l = layoutRow(row(p), W, WIDTH)
   assert.ok(l.markers.every((m) => m.lead.kind !== "ready"))
+})
+
+const mergeAndClose = (closeOffsetMs: number) =>
+  toTimelinePr(
+    raw(
+      [
+        {
+          __typename: "MergedEvent",
+          actor: { login: "me" },
+          createdAt: "2026-01-02T10:00:00.000Z",
+        },
+        {
+          __typename: "ClosedEvent",
+          actor: { login: "me" },
+          createdAt: new Date(
+            Date.parse("2026-01-02T10:00:00.000Z") + closeOffsetMs,
+          ).toISOString(),
+        },
+      ],
+      { state: "MERGED", mergedAt: "2026-01-02T10:00:00.000Z" },
+    ),
+    "o/r",
+    "me",
+  ).events.map((e) => e.kind)
+
+test("une fermeture à moins de 5 s du merge est ignorée", () => {
+  assert.deepEqual(mergeAndClose(4_999), ["start", "merge"])
+})
+
+test("une fermeture à 5 s du merge ou plus est gardée", () => {
+  assert.deepEqual(mergeAndClose(5_000), ["start", "merge", "close"])
+})
+
+test("une PR sans auteur (compte supprimé) est à ghost", () => {
+  const p = toTimelinePr(raw([], { author: null }), "o/r", "me")
+  assert.equal(p.author, "ghost")
+  assert.equal(p.events[0].who, "ghost")
+  assert.equal(p.mine, false)
+})
+
+test("le texte d'un commentaire est coupé à la lecture", () => {
+  const p = toTimelinePr(
+    raw([
+      {
+        __typename: "IssueComment",
+        author: { login: "ada" },
+        createdAt: D(2),
+        bodyText: "x".repeat(5_000),
+      },
+    ]),
+    "o/r",
+    "me",
+  )
+  assert.equal(p.events[1].text, clip("x".repeat(5_000)))
+  assert.ok(p.events[1].text!.length < 1_000)
+})
+
+test("les bornes de recherche ont un jour de marge de chaque côté", () => {
+  assert.deepEqual(searchBounds("2026-03-01", "2026-12-31"), {
+    from: "2026-02-28",
+    to: "2027-01-01",
+  })
+})
+
+test("une PR passée en revue dont le « prête » n'est pas lu n'a pas de tronçon brouillon", () => {
+  const l = layoutRow(row(pr([{ kind: "start", at: D(3) }])), W, WIDTH)
+  assert.ok(l.segments.every((s) => s.kind !== "draft"))
+})
+
+test("une PR remise en brouillon après un « prête » reste en pointillés jusqu'au bout", () => {
+  const p = pr(
+    [
+      { kind: "start", at: D(2) },
+      { kind: "ready", at: D(4) },
+    ],
+    { draft: true },
+  )
+  const draft = layoutRow(row(p), W, WIDTH).segments.find(
+    (s) => s.kind === "draft",
+  )
+  assert.ok(draft && Math.round(draft.to) === 900)
 })

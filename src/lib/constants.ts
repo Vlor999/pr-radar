@@ -181,12 +181,16 @@ export const SLACK_SKELETON_ROWS = 6
 export const TIMELINE_WINDOWS = [7, 14, 21, 30] as const
 export const TIMELINE_DEFAULT_DAYS = 21
 /**
- * PR par page de recherche. Coût GraphQL : 1 + N requêtes de `timelineItems` (une par PR), / 100 :
- * 25 PR × 100 événements ≈ 1 point par page, réponse de taille raisonnable.
+ * PR par page de recherche. Coût GraphQL : (1 + N requêtes de `timelineItems`, une par PR) / 100, soit
+ * 1 point par page ; 20 PR × 50 événements (`bodyText` entier) garde une réponse de quelques centaines de Ko.
  */
-export const TIMELINE_PAGE_SIZE = 25
+export const TIMELINE_PAGE_SIZE = 20
 /** événements lus par PR (les plus récents : `last`) ; GitHub : 100 au plus par connexion */
-export const TIMELINE_ITEMS_MAX = 100
+export const TIMELINE_ITEMS_MAX = 50
+/** texte d'un commentaire ou d'une review gardé après lecture (l'info-bulle en montre 6 lignes) */
+export const TIMELINE_BODY_MAX_CHARS = 600
+/** recherche GitHub : 1 000 résultats au plus par requête, au-delà la liste est tronquée */
+export const SEARCH_RESULTS_MAX = 1_000
 /** `ClosedEvent` à moins de ce délai du merge : la fermeture qui accompagne le merge, ignorée */
 export const TIMELINE_MERGE_CLOSE_MS = 5_000
 /** passage en « prête » moins d'une heure après l'ouverture : pas de tronçon brouillon affiché */
