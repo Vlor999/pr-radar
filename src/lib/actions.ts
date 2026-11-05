@@ -9,6 +9,7 @@ import {
   commentOnPr,
   reposWithMyOpenPrs,
   fetchMerged,
+  fetchTimeline,
   listRepos,
   markReady,
   replyToThread,
@@ -31,7 +32,7 @@ import {
   setRepos,
 } from "./store"
 import { pull } from "./sync"
-import type { MergedPr } from "./types"
+import type { MergedPr, TimelinePr } from "./types"
 
 /** message d'erreur affiché tel quel dans l'interface, tronqué au-delà */
 const MAX_ERROR_CHARS = 300
@@ -243,6 +244,27 @@ export async function mergedBetween(
     return { prs: [], error: "Dates invalides" }
   try {
     return { prs: await fetchMerged(getRepos() ?? [], from, to) }
+  } catch (e) {
+    return { prs: [], error: message(e) }
+  }
+}
+
+/** Vue Fil : PR des repos suivis sur une période (YYYY-MM-DD inclus), les miennes et celles des autres. */
+export async function timelineBetween(
+  from: string,
+  to: string,
+): Promise<{ prs: TimelinePr[]; error?: string }> {
+  const date = /^\d{4}-\d{2}-\d{2}$/
+  if (!date.test(from) || !date.test(to))
+    return { prs: [], error: "Dates invalides" }
+  try {
+    const { data, errors } = await fetchTimeline(getRepos() ?? [], from, to)
+    return {
+      prs: data,
+      ...(errors.length && {
+        error: errors.map((e) => message(e.error)).join(" ; "),
+      }),
+    }
   } catch (e) {
     return { prs: [], error: message(e) }
   }

@@ -31,7 +31,11 @@ import {
   type GqlResponse,
   type RepoNode,
 } from "./graphql"
-import { NODES_PER_QUERY } from "./constants"
+import {
+  NODES_PER_QUERY,
+  TIMELINE_ITEMS_MAX,
+  TIMELINE_PAGE_SIZE,
+} from "./constants"
 import {
   fingerprint,
   isFullRead,
@@ -50,8 +54,17 @@ import {
 } from "./pr-query"
 import { addCost, trackQuota } from "./quota"
 import { toReview, type RawReview } from "./review"
+import { isBot, toTimelinePr, type RawTimelinePr } from "./timeline"
 import type { Reviewer } from "./reviewers"
-import type { CiView, Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
+import type {
+  CiView,
+  Decision,
+  MergedPr,
+  Pr,
+  ReviewPr,
+  Thread,
+  TimelinePr,
+} from "./types"
 
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
@@ -593,6 +606,69 @@ export function fetchMerged(
         }))
         .sort((a, b) => b.mergedAt.localeCompare(a.mergedAt))
     },
+  )
+}
+
+// vue Fil : PR et leurs derniers événements (pas les commits). Coût : voir TIMELINE_PAGE_SIZE.
+const TIMELINE_QUERY = `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: ${TIMELINE_PAGE_SIZE}, after: $after) {
+  pageInfo { hasNextPage endCursor }
+  nodes { ... on PullRequest {
+    number title url state isDraft createdAt mergedAt closedAt
+    author { login __typename } repository { nameWithOwner }
+    timelineItems(last: ${TIMELINE_ITEMS_MAX}, itemTypes: [PULL_REQUEST_REVIEW, ISSUE_COMMENT, MERGED_EVENT, CLOSED_EVENT, REOPENED_EVENT, READY_FOR_REVIEW_EVENT]) { nodes {
+      __typename
+      ... on PullRequestReview { author { login } state submittedAt body comments { totalCount } }
+      ... on IssueComment { author { login } createdAt body }
+      ... on MergedEvent { actor { login } createdAt }
+      ... on ClosedEvent { actor { login } createdAt }
+      ... on ReopenedEvent { actor { login } createdAt }
+      ... on ReadyForReviewEvent { actor { login } createdAt }
+    } }
+  } } } }`
+
+/**
+ * Vue Fil : PR des repos suivis présentes entre deux dates (YYYY-MM-DD, incluses), de tout auteur sauf les
+ * robots, avec leurs événements. Deux recherches par lot de repos : ouvertes avant la fin, et fermées (ou
+ * mergées) après le début. `errors` : comptes en échec, les autres sont gardés.
+ */
+export function fetchTimeline(
+  repos: string[],
+  from: string,
+  to: string,
+): Promise<{ data: TimelinePr[]; errors: AccountError[] }> {
+  return cached(
+    `timeline:${repos.join(",")}|${from}..${to}`,
+    CACHE_TTL_MS,
+    () =>
+      perFollowed(repos, async (a, names) => {
+        const login = await me(a)
+        const raws = (
+          await Promise.all(
+            chunk(names, REPOS_PER_QUERY).flatMap((c) => {
+              const filter = c.map((r) => "repo:" + r).join(" ")
+              return [
+                searchAll<RawTimelinePr>(
+                  conn(a),
+                  TIMELINE_QUERY,
+                  `is:pr is:open created:<=${to} ${filter}`,
+                  1,
+                ),
+                searchAll<RawTimelinePr>(
+                  conn(a),
+                  TIMELINE_QUERY,
+                  `is:pr is:closed closed:>=${from} created:<=${to} ${filter}`,
+                  0, // aucune PR fermée sur la période est courant : pas de relance
+                ),
+              ]
+            }),
+          )
+        ).flat()
+        return raws
+          .filter((p) => !isBot(p.author))
+          .map((p) =>
+            toTimelinePr(p, repoKey(a.id, p.repository.nameWithOwner), login),
+          )
+      }),
   )
 }
 

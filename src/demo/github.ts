@@ -21,6 +21,8 @@ import type {
   Pr,
   ReviewPr,
   Thread,
+  TimelineEvent,
+  TimelinePr,
 } from "@/lib/types"
 
 import { DEMO_DM_USERS } from "./slack"
@@ -755,4 +757,226 @@ export const rerunFailedJobs = async (repo: string, runId: number) => {
   const p = PRS.find((p) => p.repo === repo && p.ci === "FAILURE")
   if (p) p.ci = "PENDING"
   console.info("[demo] rerun failed jobs", repo, runId)
+}
+
+/* ---------- Vue Fil : cas limites, dates relatives à maintenant ---------- */
+
+const DAY_START = () => {
+  const n = new Date()
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate())
+}
+/** `d` jours depuis aujourd'hui (négatif : passé), à `h:m` */
+const on = (d: number, h: number, m = 0) => {
+  const t = DAY_START()
+  return new Date(
+    t.getFullYear(),
+    t.getMonth(),
+    t.getDate() + d,
+    h,
+    m,
+  ).toISOString()
+}
+const minAgo = (min: number) =>
+  new Date(Date.now() - min * 60_000).toISOString()
+const LOREM = "lorem ipsum dolor sit amet ".repeat(30)
+
+const tl = (
+  repo: string,
+  number: number,
+  title: string,
+  state: TimelinePr["state"],
+  events: TimelineEvent[],
+  draft = false,
+): TimelinePr => {
+  const author = events[0].who ?? "me"
+  return {
+    repo,
+    number,
+    title,
+    url: `https://github.com/${repo}/pull/${number}`,
+    state,
+    draft,
+    author,
+    mine: author === "me",
+    createdAt: events[0].at,
+    events,
+  }
+}
+
+const timeline = (): TimelinePr[] => [
+  // ouverte avant la fenêtre, changements demandés, commentaire très long, relances Slack
+  tl(
+    "acme/api",
+    141,
+    "feat(billing): proration des abonnements en cours de mois",
+    "OPEN",
+    [
+      { kind: "start", at: on(-26, 10), who: "me" },
+      {
+        kind: "review",
+        review: "CHANGES_REQUESTED",
+        at: on(-20, 11),
+        who: "ada",
+        text: "Le calcul au prorata ignore les fuseaux, voir le cas du 31.",
+        threads: 4,
+      },
+      {
+        kind: "comment",
+        at: on(-19, 16),
+        who: "me",
+        text:
+          'Corrigé, j\'ai ajouté les cas de test :\n```ts\nexpect(prorata("2026-01-31", plan)).toBe(1290)\nexpect(prorata("2026-02-28", plan)).toBe(1000)\n```\nEt un commentaire très long pour la troncature de l\'info-bulle : ' +
+          LOREM,
+      },
+      {
+        kind: "review",
+        review: "COMMENTED",
+        at: on(-4, 17),
+        who: "linus",
+        text: "",
+        threads: 2,
+      },
+    ],
+  ),
+  // ouverte et mergée le même jour, événements groupés
+  tl(
+    "acme/web",
+    112,
+    "fix(nav): lien actif perdu après rechargement",
+    "MERGED",
+    [
+      { kind: "start", at: on(-1, 9), who: "me" },
+      {
+        kind: "comment",
+        at: on(-1, 9, 20),
+        who: "grace",
+        text: "Ok je regarde",
+      },
+      {
+        kind: "review",
+        review: "APPROVED",
+        at: on(-1, 9, 35),
+        who: "grace",
+        text: "LGTM",
+      },
+      { kind: "merge", at: on(-1, 10, 5), who: "me" },
+    ],
+  ),
+  // changements demandés puis fermée sans merge
+  tl("acme/web", 115, "feat(search): recherche floue côté client", "CLOSED", [
+    { kind: "start", at: on(-6, 11), who: "me" },
+    {
+      kind: "review",
+      review: "CHANGES_REQUESTED",
+      at: on(-5, 10),
+      who: "ada",
+      text: "On garde la recherche serveur, le bundle prend 40 ko.",
+    },
+    {
+      kind: "comment",
+      at: on(-4, 15),
+      who: "me",
+      text: "Compris, je ferme et je repars sur l'endpoint.",
+    },
+    { kind: "close", at: on(-3, 9), who: "me" },
+  ]),
+  // brouillon ouvert il y a une heure
+  tl(
+    "acme/api",
+    144,
+    "chore(deps): montée de version du client HTTP",
+    "OPEN",
+    [{ kind: "start", at: minAgo(60), who: "me" }],
+    true,
+  ),
+  // PR d'un autre, sans activité depuis 10 jours
+  tl("globex/billing", 31, "ci: cache des dépendances entre jobs", "OPEN", [
+    { kind: "start", at: on(-10, 14), who: "linus" },
+  ]),
+  // fermée, rouverte, puis mergée
+  tl("acme/api", 140, "feat(auth): rotation des refresh tokens", "MERGED", [
+    { kind: "start", at: on(-12, 10), who: "me" },
+    { kind: "close", at: on(-8, 18), who: "me" },
+    { kind: "reopen", at: on(-7, 9), who: "me" },
+    {
+      kind: "review",
+      review: "APPROVED",
+      at: on(-3, 11),
+      who: "linus",
+      text: "",
+    },
+    { kind: "merge", at: on(-2, 16), who: "me" },
+  ]),
+  // PR d'un autre : rafale de 12 événements dans la journée
+  tl("acme/web", 118, "refactor(forms): un seul hook de validation", "MERGED", [
+    { kind: "start", at: on(-4, 9), who: "grace" },
+    ...Array.from({ length: 12 }, (_, i): TimelineEvent => ({
+      kind: i % 3 ? "comment" : "review",
+      review: i === 11 ? "APPROVED" : "COMMENTED",
+      at: on(-4, 10, i * 10),
+      who: i % 2 ? "grace" : "me",
+      text: `Échange ${i + 1} sur le nommage du hook`,
+    })),
+    { kind: "merge", at: on(-4, 12, 40), who: "me" },
+  ]),
+  // PR d'un autre, approuvée et mergée par moi
+  tl(
+    "acme/api",
+    145,
+    "fix(webhooks): signature vérifiée sur le corps brut",
+    "MERGED",
+    [
+      { kind: "start", at: on(-2, 15), who: "ada" },
+      {
+        kind: "review",
+        review: "APPROVED",
+        at: minAgo(240),
+        who: "me",
+        text: "Bien vu",
+      },
+      { kind: "merge", at: minAgo(180), who: "me" },
+    ],
+  ),
+  // titre très long, brouillon passé en revue
+  tl(
+    "acme/web",
+    120,
+    "feat(dashboard): export CSV des tableaux filtrés avec colonnes choisies, encodage UTF-8 et séparateur configurable",
+    "OPEN",
+    [
+      { kind: "start", at: on(-3, 8), who: "me" },
+      { kind: "ready", at: on(-2, 10), who: "me" },
+      {
+        kind: "review",
+        review: "COMMENTED",
+        at: minAgo(90),
+        who: "grace",
+        text: "Deux remarques sur l'encodage",
+        threads: 2,
+      },
+    ],
+  ),
+]
+
+export const fetchTimeline = async (
+  repos: string[],
+  from: string,
+  to: string,
+): Promise<{ data: TimelinePr[]; errors: AccountError[] }> => {
+  await new Promise((r) => setTimeout(r, REFRESH_MS))
+  const end = new Date(`${to}T23:59:59`).toISOString()
+  const start = new Date(`${from}T00:00:00`).toISOString()
+  return {
+    data: timeline().filter((p) => {
+      const done = p.events.find(
+        (e) => e.kind === "merge" || e.kind === "close",
+      )
+      return (
+        has(repos)(p.repo) &&
+        p.createdAt <= end &&
+        (p.state === "OPEN" || (!!done && done.at >= start))
+      )
+    }),
+    errors: [],
+  }
 }
