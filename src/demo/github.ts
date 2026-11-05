@@ -124,6 +124,9 @@ const pr = (p: Partial<Pr> & Pick<Pr, "repo" | "number" | "title">): Pr => ({
   reviews: [],
   requested: [{ who: "alice" }],
   updated: ago(2),
+  createdAt: ago(72),
+  author: p.involved?.author ?? "me",
+  events: [],
   ...p,
 })
 

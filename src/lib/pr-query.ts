@@ -1,16 +1,21 @@
 /** Requête GraphQL des PR ouvertes : logique pure, sans Tauri. */
 import { GITHUB } from "./accounts.ts"
-import { PROBE_PAGE_SIZE } from "./constants.ts"
-import type { Note } from "./types.ts"
+import { PR_EVENTS_MAX, PROBE_PAGE_SIZE } from "./constants.ts"
+import type { Note, PrEvent } from "./types.ts"
 
 /** Champs d'une PR affichée ; `STACK` remplacé par `queryFor`. */
 const PR_FIELDS = `
-      id number title url isDraft updatedAt mergeable viewerCanUpdateBranch reviewDecision headRefName baseRefName additions deletions changedFiles
+      id number title url isDraft createdAt updatedAt mergeable viewerCanUpdateBranch reviewDecision headRefName baseRefName additions deletions changedFiles
       repository { nameWithOwner }
-      isCrossRepository author { login } assignees(first: 10) { nodes { login } }
+      isCrossRepository author { login __typename } assignees(first: 10) { nodes { login } }
       comments(first: 100) { nodes { author { login } } }
       conversation: comments(last: 10) { nodes { author { login } bodyHTML url createdAt } }
-      reviews(last: 30) { nodes { author { login } state bodyHTML url submittedAt } }
+      reviews(last: 30) { nodes { author { login } state bodyHTML url submittedAt comments { totalCount } } }
+      events: timelineItems(last: ${PR_EVENTS_MAX}, itemTypes: [READY_FOR_REVIEW_EVENT, CLOSED_EVENT, REOPENED_EVENT]) { nodes {
+        __typename
+        ... on ReadyForReviewEvent { actor { login } createdAt }
+        ... on ClosedEvent { actor { login } createdAt }
+        ... on ReopenedEvent { actor { login } createdAt } } }
       reviewThreads(first: 50) { nodes { id isResolved isOutdated path line
         hunk: comments(first: 1) { nodes { diffHunk } }
         comments(first: 20) { nodes { author { login } bodyHTML url createdAt } } } }
@@ -62,6 +67,58 @@ export type RawConversation = {
     nodes: (RawNote & { state: string; submittedAt: string | null })[]
   }
 }
+
+/** Champs de la vue Fil lus avec chaque PR ouverte. */
+export type RawPrEvents = {
+  reviews: {
+    nodes: {
+      author: { login: string } | null
+      state: string
+      submittedAt: string | null
+      url: string
+      comments: { totalCount: number }
+    }[]
+  }
+  events: {
+    nodes: ({
+      __typename: "ReadyForReviewEvent" | "ClosedEvent" | "ReopenedEvent"
+      actor: { login: string } | null
+      createdAt: string
+    } | null)[]
+  }
+}
+
+const EVENT_KINDS = {
+  ReadyForReviewEvent: "ready",
+  ClosedEvent: "close",
+  ReopenedEvent: "reopen",
+} as const
+
+/** Reviews envoyées (avec ou sans texte) et événements « prête », fermeture, réouverture, par date. */
+export const toPrEvents = ({ reviews, events }: RawPrEvents): PrEvent[] =>
+  [
+    ...reviews.nodes
+      .filter((r) => r.submittedAt && r.state !== "PENDING")
+      .map((r): PrEvent => ({
+        kind: "review",
+        who: r.author?.login ?? "ghost",
+        at: r.submittedAt!,
+        review: r.state,
+        threads: r.comments.totalCount,
+        url: r.url,
+      })),
+    ...events.nodes.flatMap((e): PrEvent[] =>
+      e && e.__typename in EVENT_KINDS
+        ? [
+            {
+              kind: EVENT_KINDS[e.__typename],
+              who: e.actor?.login ?? "ghost",
+              at: e.createdAt,
+            },
+          ]
+        : [],
+    ),
+  ].sort((a, b) => a.at.localeCompare(b.at))
 
 /** Commentaires généraux et textes de review, du plus ancien au plus récent (review sans texte ou non envoyée ignorée). */
 export const toConversation = ({

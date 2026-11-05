@@ -187,6 +187,11 @@ export const TIMELINE_DEFAULT_DAYS = 21
 export const TIMELINE_PAGE_SIZE = 20
 /** événements lus par PR (les plus récents : `last`) ; GitHub : 100 au plus par connexion */
 export const TIMELINE_ITEMS_MAX = 50
+/**
+ * événements « prête », fermeture, réouverture lus avec chaque PR ouverte de l'arbre (`fetchPrs`). Coût mesuré
+ * de `nodes(ids:)` inchangé avec eux (1, 5 et 20 ids : 1, 5 et 22 points), réponse +3 %.
+ */
+export const PR_EVENTS_MAX = 10
 /** texte d'un commentaire ou d'une review gardé après lecture (l'info-bulle en montre 6 lignes) */
 export const TIMELINE_BODY_MAX_CHARS = 600
 /** recherche GitHub : 1 000 résultats au plus par requête, au-delà la liste est tronquée */

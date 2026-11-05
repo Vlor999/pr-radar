@@ -50,8 +50,10 @@ import { mentionedIds, reasonOf, uniqueById } from "./involved"
 import { log } from "./log"
 import {
   toConversation,
+  toPrEvents,
   withStackFallback,
   type RawConversation,
+  type RawPrEvents,
 } from "./pr-query"
 import { addCost, trackQuota } from "./quota"
 import { toReview, type RawReview } from "./review"
@@ -193,12 +195,13 @@ async function gql<T>(
 
 type Login = { author: { login: string } | null }
 type RawComment = Login & { bodyHTML: string; url: string; createdAt: string }
-type RawPr = RawConversation & {
+type RawOpenPr = RawConversation & {
   id: string
   number: number
   title: string
   url: string
   isDraft: boolean
+  createdAt: string
   updatedAt: string
   mergeable: string
   viewerCanUpdateBranch: boolean
@@ -210,7 +213,7 @@ type RawPr = RawConversation & {
   changedFiles: number
   repository: { nameWithOwner: string }
   isCrossRepository: boolean
-  author: { login: string } | null
+  author: { login: string; __typename?: string } | null
   assignees: { nodes: { login: string }[] }
   comments: { nodes: Login[] }
   reviewThreads: {
@@ -238,6 +241,8 @@ type RawPr = RawConversation & {
     stack: { number: number; size: number }
   } | null
 }
+type RawPr = RawOpenPr & RawPrEvents
+
 type Page<N> = {
   search: {
     pageInfo: { hasNextPage: boolean; endCursor: string }
@@ -360,6 +365,10 @@ function toPr(
           : [],
     ),
     updated: p.updatedAt,
+    createdAt: p.createdAt,
+    author: p.author?.login ?? "ghost",
+    ...(isBot(p.author) && { bot: true }),
+    events: toPrEvents(p),
     ...(p.stackEntry && {
       stack: { ...p.stackEntry.stack, position: p.stackEntry.position },
     }),

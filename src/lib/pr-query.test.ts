@@ -5,6 +5,7 @@ import {
   isStackFieldError,
   queryFor,
   toConversation,
+  toPrEvents,
   withStackFallback,
 } from "./pr-query.ts"
 
@@ -157,4 +158,71 @@ test("conversation : commentaires et textes de review mêlés par date, review v
       ["ghost", "c2", undefined],
     ],
   )
+})
+
+const review = (state: string, submittedAt: string | null, n = 0) => ({
+  author: { login: "ada" },
+  state,
+  submittedAt,
+  url: `r-${submittedAt}`,
+  comments: { totalCount: n },
+})
+
+test("événements de la vue Fil : reviews envoyées et prête / fermeture / réouverture, par date", () => {
+  const events = toPrEvents({
+    reviews: {
+      nodes: [
+        review("APPROVED", "2026-01-04T00:00:00Z"),
+        review("COMMENTED", "2026-01-02T00:00:00Z", 2),
+      ],
+    },
+    events: {
+      nodes: [
+        {
+          __typename: "ReadyForReviewEvent",
+          actor: { login: "me" },
+          createdAt: "2026-01-03T00:00:00Z",
+        },
+        null,
+        {
+          __typename: "ClosedEvent",
+          actor: null,
+          createdAt: "2026-01-05T00:00:00Z",
+        },
+      ],
+    },
+  })
+  assert.deepEqual(events, [
+    {
+      kind: "review",
+      who: "ada",
+      at: "2026-01-02T00:00:00Z",
+      review: "COMMENTED",
+      threads: 2,
+      url: "r-2026-01-02T00:00:00Z",
+    },
+    { kind: "ready", who: "me", at: "2026-01-03T00:00:00Z" },
+    {
+      kind: "review",
+      who: "ada",
+      at: "2026-01-04T00:00:00Z",
+      review: "APPROVED",
+      threads: 0,
+      url: "r-2026-01-04T00:00:00Z",
+    },
+    { kind: "close", who: "ghost", at: "2026-01-05T00:00:00Z" },
+  ])
+})
+
+test("une review en attente ou non envoyée n'est pas un événement de la vue Fil", () => {
+  const events = toPrEvents({
+    reviews: {
+      nodes: [
+        review("PENDING", "2026-01-02T00:00:00Z"),
+        review("COMMENTED", null),
+      ],
+    },
+    events: { nodes: [] },
+  })
+  assert.deepEqual(events, [])
 })
