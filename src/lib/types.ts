@@ -77,6 +77,44 @@ export type MergedPr = {
 
 export type RepoTree = { repo: string; roots: Root[]; merged: MergedPr[] }
 
+/** Événement du fil d'une PR (vue Fil du calendrier). */
+export type TimelineEvent = {
+  kind:
+    | "start"
+    | "slack"
+    | "review"
+    | "comment"
+    | "merge"
+    | "close"
+    | "reopen"
+    | "ready"
+  at: string
+  who?: string
+  text?: string
+  /** review : `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, `DISMISSED` */
+  review?: string
+  /** review : commentaires de code joints */
+  threads?: number
+  /** Slack : `#channel` ou `DM · nom` */
+  where?: string
+  permalink?: string
+}
+
+/** PR d'un repo suivi (la mienne ou celle d'un autre) avec ses événements, pour la vue Fil. */
+export type TimelinePr = {
+  repo: string
+  number: number
+  title: string
+  url: string
+  state: "OPEN" | "MERGED" | "CLOSED"
+  draft: boolean
+  author: string
+  mine: boolean
+  createdAt: string
+  /** triés par date, `start` en premier */
+  events: TimelineEvent[]
+}
+
 /** Message Slack qui contient le lien d'une PR. */
 export type SlackMention = {
   author: string

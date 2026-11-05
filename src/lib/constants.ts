@@ -174,3 +174,39 @@ export const SLACK_USER_TTL_MS = 7 * DAY_MS
 export const SLACK_USER_MAX_AGE_MS = 30 * DAY_MS
 /** lignes fantômes de la table Slack → GitHub tant que la liste des contacts n'est pas lue */
 export const SLACK_SKELETON_ROWS = 6
+
+/* ---------- Vue Fil du calendrier (timeline.ts, github.ts, pr-timeline.tsx) ---------- */
+
+/** tailles de fenêtre proposées, en jours, et celle par défaut */
+export const TIMELINE_WINDOWS = [7, 14, 21, 30] as const
+export const TIMELINE_DEFAULT_DAYS = 21
+/**
+ * PR par page de recherche. Coût GraphQL : 1 + N requêtes de `timelineItems` (une par PR), / 100 :
+ * 25 PR × 100 événements ≈ 1 point par page, réponse de taille raisonnable.
+ */
+export const TIMELINE_PAGE_SIZE = 25
+/** événements lus par PR (les plus récents : `last`) ; GitHub : 100 au plus par connexion */
+export const TIMELINE_ITEMS_MAX = 100
+/** `ClosedEvent` à moins de ce délai du merge : la fermeture qui accompagne le merge, ignorée */
+export const TIMELINE_MERGE_CLOSE_MS = 5_000
+/** passage en « prête » moins d'une heure après l'ouverture : pas de tronçon brouillon affiché */
+export const TIMELINE_DRAFT_MIN_MS = 3_600_000
+/** marqueurs plus proches (px) : regroupés en un seul, ou absorbés par l'ouverture / la fin */
+export const TIMELINE_MARKER_GAP_PX = 24
+/** fondu du fil d'une PR ouverte avant la fenêtre (px) */
+export const TIMELINE_FADE_PX = 24
+/** largeur minimale d'une colonne de jour (px) : au-delà, la grille défile horizontalement */
+export const TIMELINE_MIN_DAY_PX = 44
+/** largeur de la colonne des libellés (px) ; écran étroit */
+export const TIMELINE_LABEL_PX = 300
+export const TIMELINE_LABEL_NARROW_PX = 168
+/** événements listés dans l'info-bulle d'un groupe ; au-delà, « N autres » */
+export const TIMELINE_TOOLTIP_MAX = 8
+/** suggestions de la recherche : repos, PR trouvées, PR récentes (champ vide) */
+export const TIMELINE_SUGGEST_REPOS = 4
+export const TIMELINE_SUGGEST_PRS = 6
+export const TIMELINE_SUGGEST_RECENT = 5
+/** info-bulle d'un marqueur : délai avant de la fermer, le temps d'y amener la souris (lien Slack) */
+export const TIMELINE_TIP_CLOSE_MS = 120
+/** largeur de la légende (`w-64`) : alignée à droite de son icône quand la place manque */
+export const TIMELINE_LEGEND_W_PX = 256
