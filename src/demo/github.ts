@@ -962,7 +962,11 @@ export const fetchTimeline = async (
   repos: string[],
   from: string,
   to: string,
-): Promise<{ data: TimelinePr[]; errors: AccountError[] }> => {
+): Promise<{
+  data: TimelinePr[]
+  errors: AccountError[]
+  truncated: boolean
+}> => {
   await new Promise((r) => setTimeout(r, REFRESH_MS))
   const end = new Date(`${to}T23:59:59`).toISOString()
   const start = new Date(`${from}T00:00:00`).toISOString()
@@ -978,5 +982,6 @@ export const fetchTimeline = async (
       )
     }),
     errors: [],
+    truncated: false,
   }
 }

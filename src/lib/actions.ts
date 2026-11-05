@@ -2,7 +2,7 @@
  * Actions de l'interface (ex-server actions de la version web) : mêmes noms, mêmes retours,
  * exécutées ici dans l'app, puis rechargement des données.
  */
-import { splitKey } from "./accounts"
+import { describeErrors, splitKey } from "./accounts"
 import { allAccounts, logout } from "./auth"
 import {
   clearCache,
@@ -19,6 +19,7 @@ import {
   resolveThread,
   updateBranch,
 } from "./github"
+import { pick, strings } from "./i18n"
 import { log } from "./log"
 import { prNumberOf } from "./log-data"
 import { forgetQuota } from "./quota"
@@ -33,6 +34,17 @@ import {
 } from "./store"
 import { pull } from "./sync"
 import type { MergedPr, TimelinePr } from "./types"
+
+const S = strings(
+  {
+    truncated:
+      "Plus de 1 000 PR sur un lot de repos : la liste est incomplète, réduis la période",
+  },
+  {
+    truncated:
+      "More than 1,000 PRs in a batch of repos: the list is incomplete, shorten the period",
+  },
+)
 
 /** message d'erreur affiché tel quel dans l'interface, tronqué au-delà */
 const MAX_ERROR_CHARS = 300
@@ -258,13 +270,16 @@ export async function timelineBetween(
   if (!date.test(from) || !date.test(to))
     return { prs: [], error: "Dates invalides" }
   try {
-    const { data, errors } = await fetchTimeline(getRepos() ?? [], from, to)
-    return {
-      prs: data,
-      ...(errors.length && {
-        error: errors.map((e) => message(e.error)).join(" ; "),
-      }),
-    }
+    const { data, errors, truncated } = await fetchTimeline(
+      getRepos() ?? [],
+      from,
+      to,
+    )
+    const notes = [
+      ...(errors.length ? [describeErrors(errors)] : []),
+      ...(truncated ? [pick(S).truncated] : []),
+    ]
+    return { prs: data, ...(notes.length && { error: notes.join(" ; ") }) }
   } catch (e) {
     return { prs: [], error: message(e) }
   }
