@@ -738,3 +738,32 @@ test("une PR sortie de l'arbre quitte le fil converti, un robot n'y entre pas", 
   toStore([open()])
   assert.deepEqual(toStore([open({ number: 2, url: "u2", bot: true })]), [])
 })
+
+test("PR ouverte dans les deux sources : les événements anciens de la lecture légère s'ajoutent à l'arbre, sans doublon", () => {
+  const tree = pr([
+    { kind: "start", at: D(1), who: "me" },
+    { kind: "review", at: D(5), who: "ada", review: "APPROVED", text: "LGTM" },
+    { kind: "comment", at: D(6), who: "bob", text: "Ok" },
+  ])
+  const light = pr([
+    { kind: "start", at: D(1), who: "me" },
+    { kind: "comment", at: D(2), who: "bob" },
+    { kind: "review", at: D(3), who: "ada", review: "CHANGES_REQUESTED" },
+    { kind: "ready", at: D(4) },
+    { kind: "review", at: D(5), who: "ada", review: "APPROVED" },
+    { kind: "comment", at: D(6), who: "bob" },
+  ])
+  const [p] = mergeTimeline([tree], [light])
+  assert.equal(p.state, "OPEN")
+  assert.deepEqual(
+    p.events.map((e) => [e.kind, e.at, e.text]),
+    [
+      ["start", D(1), undefined],
+      ["comment", D(2), undefined],
+      ["review", D(3), undefined],
+      ["ready", D(4), undefined],
+      ["review", D(5), "LGTM"],
+      ["comment", D(6), "Ok"],
+    ],
+  )
+})

@@ -227,10 +227,15 @@ export function storeTimelineMemo(toText: (html: string) => string) {
   }
 }
 
+/** Même événement lu par les deux sources (l'arbre et la lecture légère, sans url) : type, date, auteur. */
+const eventKey = (e: TimelineEvent) => `${e.kind}@${e.at}@${e.who ?? "ghost"}`
+
 /**
  * Fil de la vue : PR de l'arbre (plus riches : textes, Slack), puis celles de la lecture légère absentes de l'arbre.
- * PR de l'arbre ouverte mais finie dans la lecture légère (mergée ou fermée depuis la dernière actualisation) :
- * textes et Slack de l'arbre, état et merge / fermeture de la lecture légère.
+ * PR dans les deux : textes et Slack de l'arbre, plus les événements de la lecture légère qu'il n'a pas (l'arbre
+ * est borné : 30 commentaires, 30 reviews, 10 « prête » / fermeture / réouverture ; la lecture légère va jusqu'à
+ * `TIMELINE_ITEMS_MAX`). Ouverte dans l'arbre mais finie dans la lecture légère (mergée ou fermée depuis la
+ * dernière actualisation) : état de la lecture légère.
  */
 export function mergeTimeline(
   store: TimelinePr[],
@@ -241,18 +246,14 @@ export function mergeTimeline(
   return [
     ...store.map((p) => {
       const l = fresh.get(prKey(p))
-      if (!l || l.state === "OPEN" || p.state !== "OPEN") return p
-      const seen = new Set(p.events.map((e) => `${e.kind}@${e.at}`))
-      const ends = l.events.filter(
-        (e) =>
-          (e.kind === "merge" || e.kind === "close") &&
-          !seen.has(`${e.kind}@${e.at}`),
-      )
+      if (!l) return p
+      const seen = new Set(p.events.map(eventKey))
+      const extra = l.events.filter((e) => !seen.has(eventKey(e)))
+      const ended = l.state !== "OPEN" && p.state === "OPEN"
       return {
         ...p,
-        state: l.state,
-        draft: l.draft,
-        events: [...p.events, ...ends].sort(byTime),
+        ...(ended && { state: l.state, draft: l.draft }),
+        events: extra.length ? [...p.events, ...extra].sort(byTime) : p.events,
       }
     }),
     ...light.filter((p) => !known.has(prKey(p))),
