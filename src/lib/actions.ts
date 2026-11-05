@@ -33,6 +33,7 @@ import {
   setRepos,
 } from "./store"
 import { pull } from "./sync"
+import { exceptMineFor, localDay } from "./timeline"
 import type { MergedPr, TimelinePr } from "./types"
 
 const S = strings(
@@ -261,7 +262,10 @@ export async function mergedBetween(
   }
 }
 
-/** Vue Fil : PR des repos suivis sur une période (YYYY-MM-DD inclus), les miennes et celles des autres. */
+/**
+ * Vue Fil, lecture légère : PR des repos suivis sur une période (YYYY-MM-DD inclus), les miennes et celles des
+ * autres ; sur la fenêtre d'aujourd'hui, mes PR ouvertes sont laissées à l'arbre (`exceptMineFor`).
+ */
 export async function timelineBetween(
   from: string,
   to: string,
@@ -270,10 +274,18 @@ export async function timelineBetween(
   if (!date.test(from) || !date.test(to))
     return { prs: [], error: "Dates invalides" }
   try {
+    const d = getData()
     const { data, errors, truncated } = await fetchTimeline(
       getRepos() ?? [],
       from,
       to,
+      {
+        exceptMine: exceptMineFor(
+          to,
+          localDay(new Date()),
+          !!d.fetchedAt && !d.error,
+        ),
+      },
     )
     const notes = [
       ...(errors.length ? [describeErrors(errors)] : []),

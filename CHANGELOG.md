@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Linux arm64 (AppImage, .deb, .rpm) and Windows arm64 (installer) builds, linked from the download page.
-- Timeline view in the calendar, now its default: every PR of your followed repos (yours and your teammates') as a line over 7 to 30 days, with reviews, comments, Slack messages, merges and closes, plus search, filters and per-PR hiding.
+- Timeline view in the calendar, now its default: every PR of your followed repos (yours and your teammates') as a line over 7 to 30 days, with reviews, comments, Slack messages, merges and closes, plus search, filters and per-PR hiding. Comment and review text, and Slack messages, are shown for the open PRs of your dashboard; other PRs (merged, closed, or not involving you) show who did what and when.
 
 ## [0.15.0] - 2026-11-03
 

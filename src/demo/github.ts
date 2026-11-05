@@ -56,6 +56,27 @@ export class AuthError extends Error {
 
 const ago = (h: number) => new Date(Date.now() - h * HOUR_MS).toISOString()
 
+/* ---------- Dates relatives à maintenant (vue Fil) ---------- */
+
+const DAY_START = () => {
+  const n = new Date()
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate())
+}
+/** `d` jours depuis aujourd'hui (négatif : passé), à `h:m` */
+const on = (d: number, h: number, m = 0) => {
+  const t = DAY_START()
+  return new Date(
+    t.getFullYear(),
+    t.getMonth(),
+    t.getDate() + d,
+    h,
+    m,
+  ).toISOString()
+}
+const minAgo = (min: number) =>
+  new Date(Date.now() - min * 60_000).toISOString()
+const LOREM = "lorem ipsum dolor sit amet ".repeat(30)
+
 const REPOS = [
   "acme/web",
   "acme/api",
@@ -140,6 +161,8 @@ const PRS: Pr[] = [
     decision: "APPROVED",
     reviews: [{ who: "alice", state: "APPROVED" }],
     requested: [],
+    createdAt: ago(5 * 24),
+    events: [{ kind: "review", who: "alice", at: ago(20), review: "APPROVED" }],
   }),
   pr({
     repo: "acme/web",
@@ -151,6 +174,16 @@ const PRS: Pr[] = [
     unresolved: 1,
     comments: 2,
     threads: [thread("t1", "src/checkout/address.ts", SUGGESTION)],
+    createdAt: ago(4 * 24),
+    events: [
+      {
+        kind: "review",
+        who: "alice",
+        at: ago(5),
+        review: "COMMENTED",
+        threads: 1,
+      },
+    ],
   }),
   pr({
     repo: "acme/web",
@@ -161,6 +194,7 @@ const PRS: Pr[] = [
     stack: { number: 5, position: 3, size: 3 },
     draft: true,
     ci: "PENDING",
+    createdAt: ago(3 * 24),
   }),
   pr({
     repo: "acme/api",
@@ -194,6 +228,17 @@ const PRS: Pr[] = [
         state: "CHANGES_REQUESTED",
       },
     ],
+    events: [
+      {
+        kind: "review",
+        who: "bob",
+        at: ago(24),
+        review: "CHANGES_REQUESTED",
+        threads: 1,
+        url: `${COMMENT_URL}c88-2`,
+      },
+    ],
+    createdAt: ago(8 * 24),
     updated: ago(30),
   }),
   pr({
@@ -202,6 +247,7 @@ const PRS: Pr[] = [
     title: "Mise à jour de Node 22",
     ci: "FAILURE",
     conflicting: true,
+    createdAt: ago(14 * 24),
     updated: ago(150),
   }),
   pr({
@@ -222,6 +268,99 @@ const PRS: Pr[] = [
     additions: 640,
     deletions: 12,
     files: 14,
+    createdAt: ago(2 * 24),
+  }),
+  // vue Fil, PR ouvertes de l'arbre (textes et Slack) : ouverte avant la fenêtre, changements demandés,
+  // commentaire très long, relances Slack (src/demo/slack.ts)
+  pr({
+    repo: "acme/api",
+    number: 141,
+    title: "feat(billing): proration des abonnements en cours de mois",
+    head: "feat/proration",
+    decision: "CHANGES_REQUESTED",
+    reviews: [{ who: "ada", state: "CHANGES_REQUESTED" }],
+    requested: [{ who: "linus" }],
+    comments: 1,
+    createdAt: on(-26, 10),
+    conversation: [
+      {
+        author: "ada",
+        body: "<p>Le calcul au prorata ignore les fuseaux, voir le cas du 31.</p>",
+        url: `${COMMENT_URL}r141-1`,
+        at: on(-20, 11),
+        state: "CHANGES_REQUESTED",
+      },
+      {
+        author: "me",
+        body: `<p>Corrigé, j'ai ajouté les cas de test :</p>
+<div class="highlight highlight-source-ts notranslate position-relative overflow-auto"><pre><span class="pl-en">expect</span>(<span class="pl-en">prorata</span>(<span class="pl-s">"2026-01-31"</span>, <span class="pl-s1">plan</span>)).<span class="pl-en">toBe</span>(<span class="pl-c1">1290</span>)
+<span class="pl-en">expect</span>(<span class="pl-en">prorata</span>(<span class="pl-s">"2026-02-28"</span>, <span class="pl-s1">plan</span>)).<span class="pl-en">toBe</span>(<span class="pl-c1">1000</span>)</pre></div>
+<p>Et un commentaire très long pour la troncature de l'info-bulle : ${LOREM}</p>`,
+        url: `${COMMENT_URL}c141-1`,
+        at: on(-19, 16),
+      },
+    ],
+    events: [
+      {
+        kind: "review",
+        who: "ada",
+        at: on(-20, 11),
+        review: "CHANGES_REQUESTED",
+        threads: 4,
+        url: `${COMMENT_URL}r141-1`,
+      },
+      {
+        kind: "review",
+        who: "linus",
+        at: on(-4, 17),
+        review: "COMMENTED",
+        threads: 2,
+      },
+    ],
+    updated: on(-4, 17),
+  }),
+  // brouillon ouvert il y a une heure
+  pr({
+    repo: "acme/api",
+    number: 144,
+    title: "chore(deps): montée de version du client HTTP",
+    head: "chore/http-client",
+    draft: true,
+    ci: "PENDING",
+    requested: [],
+    createdAt: minAgo(60),
+    updated: minAgo(60),
+  }),
+  // titre très long, brouillon passé en revue
+  pr({
+    repo: "acme/web",
+    number: 120,
+    title:
+      "feat(dashboard): export CSV des tableaux filtrés avec colonnes choisies, encodage UTF-8 et séparateur configurable",
+    head: "feat/dashboard-csv",
+    requested: [{ who: "grace" }],
+    createdAt: on(-3, 8),
+    conversation: [
+      {
+        author: "grace",
+        body: "<p>Deux remarques sur l'encodage</p>",
+        url: `${COMMENT_URL}r120-1`,
+        at: minAgo(90),
+        state: "COMMENTED",
+      },
+    ],
+    events: [
+      { kind: "ready", who: "me", at: on(-2, 10) },
+      {
+        kind: "review",
+        who: "grace",
+        at: minAgo(90),
+        review: "COMMENTED",
+        threads: 2,
+        url: `${COMMENT_URL}r120-1`,
+      },
+    ],
+    updated: minAgo(90),
   }),
   // PR des autres qui me concernent (motif en pastille), dans l'arbre avec les miennes
   pr({
@@ -234,6 +373,8 @@ const PRS: Pr[] = [
     decision: "APPROVED", // approuvée, mais pas « prête à merger » : ce n'est pas la mienne
     reviews: [{ who: "bob", state: "APPROVED" }],
     requested: [],
+    createdAt: ago(3 * 24),
+    events: [{ kind: "review", who: "bob", at: ago(6), review: "APPROVED" }],
     updated: ago(6),
   }),
   pr({
@@ -245,6 +386,16 @@ const PRS: Pr[] = [
     involved: { reason: "involved", author: "bob" },
     reviews: [{ who: "me", state: "COMMENTED" }],
     requested: [{ who: "me" }],
+    createdAt: ago(6 * 24),
+    events: [
+      {
+        kind: "review",
+        who: "me",
+        at: ago(2 * 24),
+        review: "COMMENTED",
+        threads: 3,
+      },
+    ],
     updated: ago(3),
   }),
   pr({
@@ -254,6 +405,7 @@ const PRS: Pr[] = [
     involved: { reason: "mentioned", author: "carol" },
     comments: 4,
     requested: [{ who: "dave" }],
+    createdAt: ago(9 * 24),
     updated: ago(10),
   }),
   pr({
@@ -267,6 +419,15 @@ const PRS: Pr[] = [
     decision: "CHANGES_REQUESTED",
     reviews: [{ who: "me", state: "CHANGES_REQUESTED" }],
     requested: [],
+    createdAt: ago(5 * 24),
+    events: [
+      {
+        kind: "review",
+        who: "me",
+        at: ago(28),
+        review: "CHANGES_REQUESTED",
+      },
+    ],
     updated: ago(28),
   }),
   // repo public hors de listRepos() : non suivi dans la démo (voir la graine plus bas),
@@ -762,27 +923,6 @@ export const rerunFailedJobs = async (repo: string, runId: number) => {
   console.info("[demo] rerun failed jobs", repo, runId)
 }
 
-/* ---------- Vue Fil : cas limites, dates relatives à maintenant ---------- */
-
-const DAY_START = () => {
-  const n = new Date()
-  return new Date(n.getFullYear(), n.getMonth(), n.getDate())
-}
-/** `d` jours depuis aujourd'hui (négatif : passé), à `h:m` */
-const on = (d: number, h: number, m = 0) => {
-  const t = DAY_START()
-  return new Date(
-    t.getFullYear(),
-    t.getMonth(),
-    t.getDate() + d,
-    h,
-    m,
-  ).toISOString()
-}
-const minAgo = (min: number) =>
-  new Date(Date.now() - min * 60_000).toISOString()
-const LOREM = "lorem ipsum dolor sit amet ".repeat(30)
-
 const tl = (
   repo: string,
   number: number,
@@ -807,40 +947,6 @@ const tl = (
 }
 
 const timeline = (): TimelinePr[] => [
-  // ouverte avant la fenêtre, changements demandés, commentaire très long, relances Slack
-  tl(
-    "acme/api",
-    141,
-    "feat(billing): proration des abonnements en cours de mois",
-    "OPEN",
-    [
-      { kind: "start", at: on(-26, 10), who: "me" },
-      {
-        kind: "review",
-        review: "CHANGES_REQUESTED",
-        at: on(-20, 11),
-        who: "ada",
-        text: "Le calcul au prorata ignore les fuseaux, voir le cas du 31.",
-        threads: 4,
-      },
-      {
-        kind: "comment",
-        at: on(-19, 16),
-        who: "me",
-        text:
-          'Corrigé, j\'ai ajouté les cas de test :\n```ts\nexpect(prorata("2026-01-31", plan)).toBe(1290)\nexpect(prorata("2026-02-28", plan)).toBe(1000)\n```\nEt un commentaire très long pour la troncature de l\'info-bulle : ' +
-          LOREM,
-      },
-      {
-        kind: "review",
-        review: "COMMENTED",
-        at: on(-4, 17),
-        who: "linus",
-        text: "",
-        threads: 2,
-      },
-    ],
-  ),
   // ouverte et mergée le même jour, événements groupés
   tl(
     "acme/web",
@@ -853,14 +959,12 @@ const timeline = (): TimelinePr[] => [
         kind: "comment",
         at: on(-1, 9, 20),
         who: "grace",
-        text: "Ok je regarde",
       },
       {
         kind: "review",
         review: "APPROVED",
         at: on(-1, 9, 35),
         who: "grace",
-        text: "LGTM",
       },
       { kind: "merge", at: on(-1, 10, 5), who: "me" },
     ],
@@ -873,25 +977,14 @@ const timeline = (): TimelinePr[] => [
       review: "CHANGES_REQUESTED",
       at: on(-5, 10),
       who: "ada",
-      text: "On garde la recherche serveur, le bundle prend 40 ko.",
     },
     {
       kind: "comment",
       at: on(-4, 15),
       who: "me",
-      text: "Compris, je ferme et je repars sur l'endpoint.",
     },
     { kind: "close", at: on(-3, 9), who: "me" },
   ]),
-  // brouillon ouvert il y a une heure
-  tl(
-    "acme/api",
-    144,
-    "chore(deps): montée de version du client HTTP",
-    "OPEN",
-    [{ kind: "start", at: minAgo(60), who: "me" }],
-    true,
-  ),
   // PR d'un autre, sans activité depuis 10 jours
   tl("globex/billing", 31, "ci: cache des dépendances entre jobs", "OPEN", [
     { kind: "start", at: on(-10, 14), who: "linus" },
@@ -906,7 +999,6 @@ const timeline = (): TimelinePr[] => [
       review: "APPROVED",
       at: on(-3, 11),
       who: "linus",
-      text: "",
     },
     { kind: "merge", at: on(-2, 16), who: "me" },
   ]),
@@ -918,7 +1010,6 @@ const timeline = (): TimelinePr[] => [
       review: i === 11 ? "APPROVED" : "COMMENTED",
       at: on(-4, 10, i * 10),
       who: i % 2 ? "grace" : "me",
-      text: `Échange ${i + 1} sur le nommage du hook`,
     })),
     { kind: "merge", at: on(-4, 12, 40), who: "me" },
   ]),
@@ -935,36 +1026,44 @@ const timeline = (): TimelinePr[] => [
         review: "APPROVED",
         at: minAgo(240),
         who: "me",
-        text: "Bien vu",
       },
       { kind: "merge", at: minAgo(180), who: "me" },
     ],
   ),
-  // titre très long, brouillon passé en revue
+  // fenêtre précédente (◀) : mergée, puis fermée par un autre
   tl(
     "acme/web",
-    120,
-    "feat(dashboard): export CSV des tableaux filtrés avec colonnes choisies, encodage UTF-8 et séparateur configurable",
-    "OPEN",
+    98,
+    "feat(i18n): sélecteur de langue du pied de page",
+    "MERGED",
     [
-      { kind: "start", at: on(-3, 8), who: "me" },
-      { kind: "ready", at: on(-2, 10), who: "me" },
+      { kind: "start", at: on(-34, 10), who: "me" },
       {
         kind: "review",
-        review: "COMMENTED",
-        at: minAgo(90),
+        review: "APPROVED",
+        at: on(-31, 14),
         who: "grace",
-        text: "Deux remarques sur l'encodage",
-        threads: 2,
+        threads: 1,
       },
+      { kind: "merge", at: on(-30, 11), who: "me" },
     ],
   ),
+  tl("globex/billing", 28, "fix(pdf): marges des factures A4", "CLOSED", [
+    { kind: "start", at: on(-29, 9), who: "linus" },
+    { kind: "comment", at: on(-27, 15), who: "me" },
+    { kind: "close", at: on(-24, 17), who: "linus" },
+  ]),
 ]
 
+/**
+ * Lecture légère de la vue Fil (sans texte) : PR finies et PR ouvertes des autres hors de l'arbre ; mes PR
+ * ouvertes (141, 144, 120) viennent de l'arbre (`PRS`), avec textes et Slack.
+ */
 export const fetchTimeline = async (
   repos: string[],
   from: string,
   to: string,
+  { exceptMine = false }: { exceptMine?: boolean } = {},
 ): Promise<{
   data: TimelinePr[]
   errors: AccountError[]
@@ -981,7 +1080,9 @@ export const fetchTimeline = async (
       return (
         has(repos)(p.repo) &&
         p.createdAt <= end &&
-        (p.state === "OPEN" || (!!done && done.at >= start))
+        (p.state === "OPEN"
+          ? !(exceptMine && p.mine)
+          : !!done && done.at >= start)
       )
     }),
     errors: [],

@@ -60,6 +60,7 @@ import { toReview, type RawReview } from "./review"
 import {
   isBot,
   searchBounds,
+  timelineSearches,
   toTimelinePr,
   type RawTimelinePr,
 } from "./timeline"
@@ -624,7 +625,7 @@ export function fetchMerged(
   )
 }
 
-// vue Fil : PR et leurs derniers événements (pas les commits). Coût : voir TIMELINE_PAGE_SIZE.
+// vue Fil, PR absentes de l'arbre : leurs derniers événements, sans texte (pas les commits). Coût : voir TIMELINE_PAGE_SIZE.
 const TIMELINE_QUERY = `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: ${TIMELINE_PAGE_SIZE}, after: $after) {
   issueCount pageInfo { hasNextPage endCursor }
   nodes { ... on PullRequest {
@@ -632,8 +633,8 @@ const TIMELINE_QUERY = `query($q: String!, $after: String) { search(query: $q, t
     author { login __typename } repository { nameWithOwner }
     timelineItems(last: ${TIMELINE_ITEMS_MAX}, itemTypes: [PULL_REQUEST_REVIEW, ISSUE_COMMENT, MERGED_EVENT, CLOSED_EVENT, REOPENED_EVENT, READY_FOR_REVIEW_EVENT]) { nodes {
       __typename
-      ... on PullRequestReview { author { login } state submittedAt bodyText comments { totalCount } }
-      ... on IssueComment { author { login } createdAt bodyText }
+      ... on PullRequestReview { author { login } state submittedAt comments { totalCount } }
+      ... on IssueComment { author { login } createdAt }
       ... on MergedEvent { actor { login } createdAt }
       ... on ClosedEvent { actor { login } createdAt }
       ... on ReopenedEvent { actor { login } createdAt }
@@ -643,7 +644,7 @@ const TIMELINE_QUERY = `query($q: String!, $after: String) { search(query: $q, t
 
 /**
  * Une recherche de la vue Fil, page par page. `truncated` : plus de `SEARCH_RESULTS_MAX` résultats, GitHub
- * n'en sert pas davantage. Textes coupés dès la lecture (`toTimelinePr`) : le cache reste léger.
+ * n'en sert pas davantage.
  */
 async function searchTimeline(
   a: Account,
@@ -674,19 +675,21 @@ async function searchTimeline(
 }
 
 /**
- * Vue Fil : PR des repos suivis présentes entre deux dates (YYYY-MM-DD, incluses), de tout auteur sauf les
- * robots, avec leurs événements. Deux recherches par lot de repos : ouvertes avant la fin, et fermées (ou
- * mergées) après le début, bornes élargies d'un jour (dates UTC de GitHub). Lots lus l'un après l'autre :
- * pas de rafale de requêtes (limite secondaire de GitHub). `errors` : comptes en échec, les autres sont
- * gardés ; `truncated` : une recherche a dépassé 1 000 résultats.
+ * Vue Fil, lecture légère (sans texte) : PR des repos suivis présentes entre deux dates (YYYY-MM-DD, incluses),
+ * de tout auteur sauf les robots, avec leurs événements. Deux recherches par lot de repos : ouvertes avant la
+ * fin (`exceptMine` : celles des autres seulement, les miennes viennent de l'arbre), et fermées (ou mergées)
+ * après le début, bornes élargies d'un jour (dates UTC de GitHub). Lots lus l'un après l'autre : pas de rafale
+ * de requêtes (limite secondaire de GitHub). `errors` : comptes en échec, les autres sont gardés ;
+ * `truncated` : une recherche a dépassé 1 000 résultats.
  */
 export function fetchTimeline(
   repos: string[],
   from: string,
   to: string,
+  { exceptMine = false } = {},
 ): Promise<{ data: TimelinePr[]; errors: AccountError[]; truncated: boolean }> {
   return cached(
-    `timeline:${repos.join(",")}|${from}..${to}`,
+    `timeline:${repos.join(",")}|${from}..${to}|${exceptMine}`,
     CACHE_TTL_MS,
     async () => {
       const b = searchBounds(from, to)
@@ -696,10 +699,7 @@ export function fetchTimeline(
         const out: TimelinePr[] = []
         for (const c of chunk(names, REPOS_PER_QUERY)) {
           const filter = c.map((r) => "repo:" + r).join(" ")
-          for (const q of [
-            `is:pr is:open created:<=${b.to} ${filter}`,
-            `is:pr is:closed closed:>=${b.from} created:<=${b.to} ${filter}`,
-          ]) {
+          for (const q of timelineSearches(b, filter, exceptMine)) {
             const r = await searchTimeline(a, login, q)
             truncated ||= r.truncated
             out.push(...r.prs)

@@ -382,7 +382,7 @@ const MENTIONS: Record<string, SlackMention[]> = {
       3,
     ),
   ],
-  // vue Fil (src/demo/github.ts, `fetchTimeline`)
+  // vue Fil : PR ouverte de l'arbre (src/demo/github.ts, `PRS`) ; les PR de la lecture légère n'ont pas de points Slack
   "https://github.com/acme/api/pull/141": [
     at(
       "C1",
@@ -395,22 +395,6 @@ const MENTIONS: Record<string, SlackMention[]> = {
       "me",
       "Je relance sur <https://github.com/acme/api/pull/141|acme/api#141>, il bloque la facturation de décembre",
       5 * 24 + 2,
-    ),
-  ],
-  "https://github.com/acme/web/pull/112": [
-    at(
-      "C1",
-      "me",
-      "Fix rapide sur la nav : <https://github.com/acme/web/pull/112>",
-      26,
-    ),
-  ],
-  "https://github.com/globex/billing/pull/31": [
-    at(
-      "G1",
-      "linus",
-      "Qui peut relire le cache CI ? <https://github.com/globex/billing/pull/31>",
-      9 * 24,
     ),
   ],
   "https://github.com/globex/billing/pull/7": [

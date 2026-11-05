@@ -3,9 +3,13 @@ import { test } from "node:test"
 
 import {
   clip,
+  exceptMineFor,
   isBot,
   layoutRow,
+  mergeTimeline,
   searchBounds,
+  storeTimeline,
+  timelineSearches,
   toRows,
   toTimelinePr,
   windowOf,
@@ -14,7 +18,7 @@ import {
   type RawTimelinePr,
   type TimelineWindow,
 } from "./timeline.ts"
-import type { SlackMention, TimelineEvent, TimelinePr } from "./types.ts"
+import type { Pr, SlackMention, TimelineEvent, TimelinePr } from "./types.ts"
 
 const raw = (
   nodes: RawTimelineItem[],
@@ -96,7 +100,6 @@ test("une review en attente n'est pas un événement", () => {
         author: { login: "ada" },
         state: "PENDING",
         submittedAt: null,
-        bodyText: "",
         comments: { totalCount: 0 },
       },
     ]),
@@ -109,7 +112,7 @@ test("une review en attente n'est pas un événement", () => {
   )
 })
 
-test("une review garde son état, son auteur et ses commentaires de code", () => {
+test("une review lue légère garde son état, son auteur et ses commentaires de code, sans texte", () => {
   const p = toTimelinePr(
     raw([
       {
@@ -117,7 +120,6 @@ test("une review garde son état, son auteur et ses commentaires de code", () =>
         author: { login: "ada" },
         state: "CHANGES_REQUESTED",
         submittedAt: "2026-01-02T10:00:00Z",
-        bodyText: "Voir le cas du 31",
         comments: { totalCount: 4 },
       },
     ]),
@@ -128,7 +130,6 @@ test("une review garde son état, son auteur et ses commentaires de code", () =>
     kind: "review",
     at: "2026-01-02T10:00:00Z",
     who: "ada",
-    text: "Voir le cas du 31",
     review: "CHANGES_REQUESTED",
     threads: 4,
   })
@@ -414,23 +415,6 @@ test("une PR sans auteur (compte supprimé) est à ghost", () => {
   assert.equal(p.mine, false)
 })
 
-test("le texte d'un commentaire est coupé à la lecture", () => {
-  const p = toTimelinePr(
-    raw([
-      {
-        __typename: "IssueComment",
-        author: { login: "ada" },
-        createdAt: D(2),
-        bodyText: "x".repeat(5_000),
-      },
-    ]),
-    "o/r",
-    "me",
-  )
-  assert.equal(p.events[1].text, clip("x".repeat(5_000)))
-  assert.ok(p.events[1].text!.length < 1_000)
-})
-
 test("les bornes de recherche ont un jour de marge de chaque côté", () => {
   assert.deepEqual(searchBounds("2026-03-01", "2026-12-31"), {
     from: "2026-02-28",
@@ -455,4 +439,228 @@ test("une PR remise en brouillon après un « prête » reste en pointillés jus
     (s) => s.kind === "draft",
   )
   assert.ok(draft && Math.round(draft.to) === 900)
+})
+
+/* ---------- PR de l'arbre ---------- */
+
+const open = (extra: Partial<Pr> = {}): Pr => ({
+  id: "PR_1",
+  repo: "o/r",
+  number: 1,
+  title: "PR 1",
+  url: "https://github.com/o/r/pull/1",
+  head: "feat/1",
+  base: "main",
+  draft: false,
+  decision: null,
+  conflicting: false,
+  canUpdateBranch: false,
+  sha: null,
+  ci: null,
+  comments: 0,
+  unresolved: 0,
+  threads: [],
+  conversation: [],
+  additions: 0,
+  deletions: 0,
+  files: 0,
+  reviews: [],
+  requested: [],
+  updated: "2026-01-05T00:00:00Z",
+  createdAt: "2026-01-01T10:00:00Z",
+  author: "me",
+  events: [],
+  ...extra,
+})
+const stripTags = (html: string) => html.replace(/<[^>]+>/g, "")
+const fromTree = (p: Pr) => storeTimeline([p], stripTags)[0]
+
+test("une PR de l'arbre commence à son ouverture, par son auteur", () => {
+  const p = fromTree(
+    open({ author: "ada", involved: { reason: "assigned", author: "ada" } }),
+  )
+  assert.deepEqual(p.events, [
+    { kind: "start", at: "2026-01-01T10:00:00Z", who: "ada" },
+  ])
+  assert.equal(p.mine, false)
+  assert.equal(p.state, "OPEN")
+})
+
+test("une review de l'arbre reprend son texte de la conversation, en texte brut", () => {
+  const url = "https://github.com/o/r/pull/1#pullrequestreview-1"
+  const p = fromTree(
+    open({
+      events: [
+        {
+          kind: "review",
+          who: "ada",
+          at: D(2),
+          review: "CHANGES_REQUESTED",
+          threads: 3,
+          url,
+        },
+      ],
+      conversation: [
+        {
+          author: "ada",
+          body: "<p>Voir le <code>31</code></p>",
+          url,
+          at: D(2),
+          state: "CHANGES_REQUESTED",
+        },
+      ],
+    }),
+  )
+  assert.deepEqual(p.events[1], {
+    kind: "review",
+    at: D(2),
+    who: "ada",
+    review: "CHANGES_REQUESTED",
+    threads: 3,
+    text: "Voir le 31",
+  })
+})
+
+test("une review de l'arbre sans texte reste un événement, sans texte", () => {
+  const p = fromTree(
+    open({
+      events: [
+        {
+          kind: "review",
+          who: "ada",
+          at: D(2),
+          review: "APPROVED",
+          threads: 0,
+          url: "u",
+        },
+      ],
+    }),
+  )
+  assert.equal(p.events[1].review, "APPROVED")
+  assert.equal("text" in p.events[1], false)
+})
+
+test("les commentaires généraux de l'arbre sont des commentaires, pas les textes de review", () => {
+  const p = fromTree(
+    open({
+      conversation: [
+        { author: "bob", body: "<p>Ok</p>", url: "c1", at: D(3) },
+        {
+          author: "ada",
+          body: "<p>LGTM</p>",
+          url: "r1",
+          at: D(4),
+          state: "APPROVED",
+        },
+      ],
+    }),
+  )
+  assert.deepEqual(
+    p.events.map((e) => [e.kind, e.who, e.text]),
+    [
+      ["start", "me", undefined],
+      ["comment", "bob", "Ok"],
+    ],
+  )
+})
+
+test("le texte d'un commentaire de l'arbre est coupé", () => {
+  const p = fromTree(
+    open({
+      conversation: [
+        { author: "bob", body: "x".repeat(5_000), url: "c1", at: D(3) },
+      ],
+    }),
+  )
+  assert.equal(p.events[1].text, clip("x".repeat(5_000)))
+  assert.ok(p.events[1].text!.length < 1_000)
+})
+
+test("prête, fermeture et réouverture de l'arbre s'insèrent dans le fil par date", () => {
+  const p = fromTree(
+    open({
+      draft: false,
+      events: [
+        { kind: "ready", who: "me", at: D(2) },
+        { kind: "close", who: "me", at: D(3) },
+        { kind: "reopen", who: "me", at: D(4) },
+      ],
+    }),
+  )
+  assert.deepEqual(
+    p.events.map((e) => e.kind),
+    ["start", "ready", "close", "reopen"],
+  )
+})
+
+test("une PR de l'arbre d'un robot n'est pas dans le fil", () => {
+  assert.deepEqual(storeTimeline([open({ bot: true })], stripTags), [])
+})
+
+test("une PR de l'arbre remplace celle de la lecture légère, les autres sont gardées", () => {
+  const tree = pr([{ kind: "start", at: D(1), text: "arbre" }])
+  const light = [
+    pr([{ kind: "start", at: D(1) }]),
+    pr([{ kind: "start", at: D(2) }], { number: 2 }),
+  ]
+  const out = mergeTimeline([tree], light)
+  assert.deepEqual(
+    out.map((p) => [p.number, p.events[0].text]),
+    [
+      [1, "arbre"],
+      [2, undefined],
+    ],
+  )
+})
+
+test("même numéro dans deux repos : pas un doublon", () => {
+  const out = mergeTimeline(
+    [pr([{ kind: "start", at: D(1) }])],
+    [pr([{ kind: "start", at: D(1) }], { repo: "o/autre" })],
+  )
+  assert.equal(out.length, 2)
+})
+
+/* ---------- Recherches légères ---------- */
+
+test("fenêtre d'aujourd'hui, arbre complet : mes PR ouvertes ne sont pas cherchées", () => {
+  assert.equal(exceptMineFor("2026-01-10", "2026-01-10", true), true)
+  assert.match(
+    timelineSearches(
+      { from: "2026-01-01", to: "2026-01-11" },
+      "repo:o/r",
+      true,
+    )[0],
+    /^is:pr is:open -author:@me created:<=2026-01-11 repo:o\/r$/,
+  )
+})
+
+test("fenêtre passée : tout est cherché, l'arbre n'a que l'état actuel", () => {
+  assert.equal(exceptMineFor("2026-01-09", "2026-01-10", true), false)
+  assert.deepEqual(
+    timelineSearches(
+      { from: "2026-01-01", to: "2026-01-10" },
+      "repo:o/r",
+      false,
+    ),
+    [
+      "is:pr is:open created:<=2026-01-10 repo:o/r",
+      "is:pr is:closed closed:>=2026-01-01 created:<=2026-01-10 repo:o/r",
+    ],
+  )
+})
+
+test("arbre pas encore chargé ou en erreur : tout est cherché", () => {
+  assert.equal(exceptMineFor("2026-01-10", "2026-01-10", false), false)
+})
+
+test("les PR fermées sont cherchées même quand mes PR ouvertes viennent de l'arbre", () => {
+  assert.equal(
+    timelineSearches(
+      { from: "2026-01-01", to: "2026-01-11" },
+      "repo:o/r",
+      true,
+    )[1],
+    "is:pr is:closed closed:>=2026-01-01 created:<=2026-01-11 repo:o/r",
+  )
 })
