@@ -2,10 +2,13 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import {
+  isEventsFieldError,
   isStackFieldError,
   queryFor,
+  timelineFields,
   toConversation,
   toPrEvents,
+  withEventsFallback,
   withStackFallback,
 } from "./pr-query.ts"
 
@@ -225,4 +228,101 @@ test("une review en attente ou non envoyée n'est pas un événement de la vue F
     events: { nodes: [] },
   })
   assert.deepEqual(events, [])
+})
+
+test("les événements de la vue Fil sont lus avec chaque PR, sauf une fois refusés", () => {
+  assert.match(queryFor("ghe.example.com"), /READY_FOR_REVIEW_EVENT/)
+  assert.doesNotMatch(
+    queryFor("ghe.example.com", false, "nodes", true),
+    /timelineItems|EVENTS\b/,
+  )
+  assert.doesNotMatch(queryFor("github.com", false, "probe"), /timelineItems/)
+})
+
+const EVENTS_ERROR = new Error(
+  "Argument 'itemTypes' on Field 'timelineItems' has an invalid value",
+)
+
+test("seule une erreur sur les événements de la vue Fil déclenche leur repli", () => {
+  assert.equal(isEventsFieldError(EVENTS_ERROR), true)
+  assert.equal(isEventsFieldError(FIELD_ERROR), false)
+  assert.equal(isEventsFieldError(new Error("Something went wrong")), false)
+})
+
+test("un refus des événements relance une fois sans eux et le retient", async () => {
+  const calls: boolean[] = []
+  let refused = false
+  const out = await withEventsFallback(
+    false,
+    async (without) => {
+      calls.push(without)
+      if (!without) throw EVENTS_ERROR
+      return "ok"
+    },
+    () => (refused = true),
+  )
+  assert.equal(out, "ok")
+  assert.equal(refused, true)
+  assert.deepEqual(calls, [false, true])
+})
+
+test("une autre erreur n'est pas rattrapée par le repli des événements", async () => {
+  await assert.rejects(
+    withEventsFallback(
+      false,
+      async () => {
+        throw new Error("HTTP 502")
+      },
+      () => assert.fail("pas de repli"),
+    ),
+    /HTTP 502/,
+  )
+})
+
+test("événements déjà refusés : lecture directe sans eux", async () => {
+  const calls: boolean[] = []
+  await withEventsFallback(
+    true,
+    async (w) => calls.push(w),
+    () => {},
+  )
+  assert.deepEqual(calls, [true])
+})
+
+test("champs de la vue Fil d'une PR : ouverture, auteur, robot et événements", () => {
+  const fields = timelineFields({
+    createdAt: "2026-01-01T00:00:00Z",
+    author: { login: "renovate", __typename: "Bot" },
+    reviews: { nodes: [review("APPROVED", "2026-01-02T00:00:00Z")] },
+    events: { nodes: [] },
+  })
+  assert.deepEqual(fields, {
+    createdAt: "2026-01-01T00:00:00Z",
+    author: "renovate",
+    bot: true,
+    events: [
+      {
+        kind: "review",
+        who: "ada",
+        at: "2026-01-02T00:00:00Z",
+        review: "APPROVED",
+        threads: 0,
+        url: "r-2026-01-02T00:00:00Z",
+      },
+    ],
+  })
+})
+
+test("PR sans auteur ni événements lus (champ refusé) : ghost, pas robot, reviews gardées", () => {
+  const fields = timelineFields({
+    createdAt: "2026-01-01T00:00:00Z",
+    author: null,
+    reviews: { nodes: [review("COMMENTED", "2026-01-02T00:00:00Z")] },
+  })
+  assert.equal(fields.author, "ghost")
+  assert.equal("bot" in fields, false)
+  assert.deepEqual(
+    fields.events.map((e) => e.kind),
+    ["review"],
+  )
 })

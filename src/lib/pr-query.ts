@@ -5,9 +5,10 @@ import {
   PR_EVENTS_MAX,
   PROBE_PAGE_SIZE,
 } from "./constants.ts"
-import type { Note, PrEvent } from "./types.ts"
+import { isBot } from "./timeline.ts"
+import type { Note, Pr, PrEvent } from "./types.ts"
 
-/** Champs d'une PR affichée ; `STACK` remplacé par `queryFor`. */
+/** Champs d'une PR affichée ; `STACK` et `EVENTS` remplacés par `queryFor`. */
 const PR_FIELDS = `
       id number title url isDraft createdAt updatedAt mergeable viewerCanUpdateBranch reviewDecision headRefName baseRefName additions deletions changedFiles
       repository { nameWithOwner }
@@ -15,11 +16,7 @@ const PR_FIELDS = `
       comments(first: 100) { nodes { author { login } } }
       conversation: comments(last: ${CONVERSATION_MAX}) { nodes { author { login } bodyHTML url createdAt } }
       reviews(last: 30) { nodes { author { login } state bodyHTML url submittedAt comments { totalCount } } }
-      events: timelineItems(last: ${PR_EVENTS_MAX}, itemTypes: [READY_FOR_REVIEW_EVENT, CLOSED_EVENT, REOPENED_EVENT]) { nodes {
-        __typename
-        ... on ReadyForReviewEvent { actor { login } createdAt }
-        ... on ClosedEvent { actor { login } createdAt }
-        ... on ReopenedEvent { actor { login } createdAt } } }
+      EVENTS
       reviewThreads(first: 50) { nodes { id isResolved isOutdated path line
         hunk: comments(first: 1) { nodes { diffHunk } }
         comments(first: 20) { nodes { author { login } bodyHTML url createdAt } } } }
@@ -74,6 +71,8 @@ export type RawConversation = {
 
 /** Champs de la vue Fil lus avec chaque PR ouverte. */
 export type RawPrEvents = {
+  createdAt: string
+  author: { login: string; __typename?: string } | null
   reviews: {
     nodes: {
       author: { login: string } | null
@@ -83,7 +82,8 @@ export type RawPrEvents = {
       comments: { totalCount: number }
     }[]
   }
-  events: {
+  /** absent : champ refusé par le serveur (GitHub Enterprise ancien), voir `withEventsFallback` */
+  events?: {
     nodes: ({
       __typename: "ReadyForReviewEvent" | "ClosedEvent" | "ReopenedEvent"
       actor: { login: string } | null
@@ -99,7 +99,10 @@ const EVENT_KINDS = {
 } as const
 
 /** Reviews envoyées (avec ou sans texte) et événements « prête », fermeture, réouverture, par date. */
-export const toPrEvents = ({ reviews, events }: RawPrEvents): PrEvent[] =>
+export const toPrEvents = ({
+  reviews,
+  events,
+}: Pick<RawPrEvents, "reviews" | "events">): PrEvent[] =>
   [
     ...reviews.nodes
       .filter((r) => r.submittedAt && r.state !== "PENDING")
@@ -111,7 +114,7 @@ export const toPrEvents = ({ reviews, events }: RawPrEvents): PrEvent[] =>
         threads: r.comments.totalCount,
         url: r.url,
       })),
-    ...events.nodes.flatMap((e): PrEvent[] =>
+    ...(events?.nodes ?? []).flatMap((e): PrEvent[] =>
       e && e.__typename in EVENT_KINDS
         ? [
             {
@@ -143,15 +146,35 @@ export const toConversation = ({
     }))
     .sort((a, b) => a.at.localeCompare(b.at))
 
+/** Champs de la vue Fil d'une PR ouverte : ouverture, auteur (robot ou non), reviews et événements. */
+export const timelineFields = (
+  p: RawPrEvents,
+): Pick<Pr, "createdAt" | "author" | "bot" | "events"> => ({
+  createdAt: p.createdAt,
+  author: p.author?.login ?? "ghost",
+  ...(isBot(p.author) && { bot: true }),
+  events: toPrEvents(p),
+})
+
+// événements de la vue Fil : un GitHub Enterprise ancien peut refuser un type d'`itemTypes`
+const EVENTS = `events: timelineItems(last: ${PR_EVENTS_MAX}, itemTypes: [READY_FOR_REVIEW_EVENT, CLOSED_EVENT, REOPENED_EVENT]) { nodes {
+        __typename
+        ... on ReadyForReviewEvent { actor { login } createdAt }
+        ... on ClosedEvent { actor { login } createdAt }
+        ... on ReopenedEvent { actor { login } createdAt } } }`
+
 // stacks natifs (preview GitHub.com, juillet 2026) : champ absent du schéma GHES, la requête y échouerait
 const STACK = "stackEntry { position stack { number size } }"
-/** `withoutStack` : GitHub a déjà refusé le champ pour ce compte. */
+/** `withoutStack`, `withoutEvents` : GitHub a déjà refusé ce champ pour ce compte. */
 export const queryFor = (
   host: string,
   withoutStack = false,
   kind: QueryKind = "nodes",
+  withoutEvents = false,
 ) =>
-  QUERIES[kind].replace("STACK", host === GITHUB && !withoutStack ? STACK : "")
+  QUERIES[kind]
+    .replace("STACK", host === GITHUB && !withoutStack ? STACK : "")
+    .replace("EVENTS", withoutEvents ? "" : EVENTS)
 /** Erreur de validation GraphQL sur le champ des stacks natifs (preview retirée, compte sans accès). */
 export const isStackFieldError = (e: unknown) =>
   e instanceof Error && e.message.includes("stackEntry")
@@ -166,9 +189,32 @@ export const withStackFallback = <T>(
   run: (query: string) => Promise<T>,
   onRefused: () => void,
   kind: QueryKind = "nodes",
+  withoutEvents = false,
 ): Promise<T> =>
-  run(queryFor(host, skip, kind)).catch((e: unknown) => {
+  run(queryFor(host, skip, kind, withoutEvents)).catch((e: unknown) => {
     if (skip || !isStackFieldError(e)) throw e
     onRefused()
-    return run(queryFor(host, true, kind))
+    return run(queryFor(host, true, kind, withoutEvents))
+  })
+
+/** Erreur de validation GraphQL sur les événements de la vue Fil (champ ou type d'événement inconnu du serveur). */
+export const isEventsFieldError = (e: unknown) =>
+  e instanceof Error &&
+  /timelineItems|itemTypes|ReadyForReviewEvent|ReopenedEvent|ClosedEvent|READY_FOR_REVIEW_EVENT|REOPENED_EVENT|CLOSED_EVENT/.test(
+    e.message,
+  )
+
+/**
+ * Lance `run` avec les événements de la vue Fil, sauf si `skip` ; si GitHub les refuse, appelle `onRefused` et
+ * relance une fois sans : les PR de ce compte gardent leurs reviews dans le fil, sans « prête », fermeture, réouverture.
+ */
+export const withEventsFallback = <T>(
+  skip: boolean,
+  run: (withoutEvents: boolean) => Promise<T>,
+  onRefused: () => void,
+): Promise<T> =>
+  run(skip).catch((e: unknown) => {
+    if (skip || !isEventsFieldError(e)) throw e
+    onRefused()
+    return run(true)
   })

@@ -50,7 +50,8 @@ import { mentionedIds, reasonOf, uniqueById } from "./involved"
 import { log } from "./log"
 import {
   toConversation,
-  toPrEvents,
+  timelineFields,
+  withEventsFallback,
   withStackFallback,
   type RawConversation,
   type RawPrEvents,
@@ -202,7 +203,6 @@ type RawOpenPr = RawConversation & {
   title: string
   url: string
   isDraft: boolean
-  createdAt: string
   updatedAt: string
   mergeable: string
   viewerCanUpdateBranch: boolean
@@ -214,7 +214,7 @@ type RawOpenPr = RawConversation & {
   changedFiles: number
   repository: { nameWithOwner: string }
   isCrossRepository: boolean
-  author: { login: string; __typename?: string } | null
+  author: { login: string } | null
   assignees: { nodes: { login: string }[] }
   comments: { nodes: Login[] }
   reviewThreads: {
@@ -366,10 +366,7 @@ function toPr(
           : [],
     ),
     updated: p.updatedAt,
-    createdAt: p.createdAt,
-    author: p.author?.login ?? "ghost",
-    ...(isBot(p.author) && { bot: true }),
-    events: toPrEvents(p),
+    ...timelineFields(p),
     ...(p.stackEntry && {
       stack: { ...p.stackEntry.stack, position: p.stackEntry.position },
     }),
@@ -446,6 +443,8 @@ const perFollowed = <T>(
 
 // comptes dont GitHub a refusé `stackEntry` : la session continue sans les stacks natifs
 const withoutStack = new Set<string>()
+// comptes dont GitHub a refusé les événements de la vue Fil (GitHub Enterprise ancien) : lus sans eux
+const withoutEvents = new Set<string>()
 
 // ids seulement : ~1 point par page
 const MENTIONS_QUERY = `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: 100, after: $after) {
@@ -455,12 +454,19 @@ const MENTIONS_QUERY = `query($q: String!, $after: String) { search(query: $q, t
 async function fetchNodes(a: Account, ids: string[]): Promise<RawPr[]> {
   const out: RawPr[] = []
   for (const part of chunk(ids, NODES_PER_QUERY)) {
-    const { nodes } = await withStackFallback(
-      a.host,
-      withoutStack.has(a.id),
-      (query) =>
-        gql<{ nodes: (RawPr | null)[] }>(conn(a), query, { ids: part }),
-      () => withoutStack.add(a.id),
+    const { nodes } = await withEventsFallback(
+      withoutEvents.has(a.id),
+      (noEvents) =>
+        withStackFallback(
+          a.host,
+          withoutStack.has(a.id),
+          (query) =>
+            gql<{ nodes: (RawPr | null)[] }>(conn(a), query, { ids: part }),
+          () => withoutStack.add(a.id),
+          "nodes",
+          noEvents,
+        ),
+      () => withoutEvents.add(a.id),
     )
     out.push(
       ...nodes.filter((n): n is RawPr => !!n && Object.keys(n).length > 0),
