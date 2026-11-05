@@ -17,6 +17,21 @@ export type Thread = {
 /** Commentaire général de la PR ou texte d'une review ; `state` : celui de la review. */
 export type Note = Thread["comments"][number] & { state?: string }
 
+/**
+ * Événement d'une PR ouverte lu pour la vue Fil : review envoyée (avec ou sans texte : son texte est dans
+ * `conversation`, même `url`), passage en « prête », fermeture, réouverture.
+ */
+export type PrEvent = {
+  kind: "review" | "ready" | "close" | "reopen"
+  who: string
+  at: string
+  /** review : `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, `DISMISSED` */
+  review?: string
+  /** review : commentaires de code joints */
+  threads?: number
+  url?: string
+}
+
 export type Pr = {
   /** id GraphQL (nœud) de la PR */
   id: string
@@ -38,7 +53,7 @@ export type Pr = {
   comments: number
   unresolved: number
   threads: Thread[]
-  /** 10 derniers commentaires généraux et textes des 30 dernières reviews, du plus ancien au plus récent */
+  /** 30 derniers commentaires généraux et textes des 30 dernières reviews, du plus ancien au plus récent */
   conversation: Note[]
   additions: number
   deletions: number
@@ -47,6 +62,12 @@ export type Pr = {
   /** reviews demandées ; `team` : une équipe (nom affiché, pas un login) */
   requested: { who: string; team?: boolean }[]
   updated: string
+  createdAt: string
+  author: string
+  /** auteur robot (Renovate, Dependabot) : hors de la vue Fil */
+  bot?: boolean
+  /** 30 dernières reviews envoyées et 10 derniers « prête », fermeture, réouverture, du plus ancien au plus récent */
+  events: PrEvent[]
   /** stack natif GitHub (`stackEntry`) ; absent : stack déduit des branches */
   stack?: { number: number; position: number; size: number }
   /** branche de tête dans un fork (`isCrossRepository`) : ne peut pas servir de base à une PR du repo */

@@ -31,12 +31,16 @@ import {
   TIMELINE_TOOLTIP_MAX,
 } from "@/lib/constants"
 import { locale, strings, useStrings } from "@/lib/i18n"
+import { bodyText } from "@/lib/mcp-data"
 import { HOUR_MS } from "@/lib/quiet"
 import { updateSettings, useSettings } from "@/lib/settings"
 import { useMentionLookup } from "@/lib/slack"
 import { slackParts } from "@/lib/slack-text"
+import { useData } from "@/lib/store"
 import {
   layoutRow,
+  mergeTimeline,
+  storeTimelineMemo,
   toRows,
   windowOf,
   withSlack,
@@ -794,6 +798,7 @@ export function PrTimeline({ last, days }: { last: Date; days: number }) {
   const t = useStrings(S)
   const { timelineHidden: hidden } = useSettings()
   const mentionsOf = useMentionLookup()
+  const { prs: open } = useData()
   const first = new Date(
     last.getFullYear(),
     last.getMonth(),
@@ -848,13 +853,19 @@ export function PrTimeline({ last, days }: { last: Date; days: number }) {
     () => windowOf(new Date(`${to}T00:00:00`), days, data.at),
     [to, days, data.at],
   )
+  // PR ouvertes de l'arbre : textes et Slack ; la lecture légère complète, sans texte
+  const [toStore] = useState(() => storeTimelineMemo(bodyText))
+  const store = useMemo(() => toStore(open), [open, toStore])
   const rows = useMemo(
     () =>
       toRows(
-        data.prs.map((p) => withSlack(p, mentionsOf(p.url))),
+        mergeTimeline(
+          store.map((p) => withSlack(p, mentionsOf(p.url))),
+          data.prs,
+        ),
         w,
       ),
-    [data.prs, mentionsOf, w],
+    [store, data.prs, mentionsOf, w],
   )
   const pool = useMemo(
     () => rows.filter((r) => !hidden.includes(r.key)),

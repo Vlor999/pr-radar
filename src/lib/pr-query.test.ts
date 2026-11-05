@@ -2,9 +2,13 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 import {
+  isEventsFieldError,
   isStackFieldError,
   queryFor,
+  timelineFields,
   toConversation,
+  toPrEvents,
+  withEventsFallback,
   withStackFallback,
 } from "./pr-query.ts"
 
@@ -156,5 +160,193 @@ test("conversation : commentaires et textes de review mêlés par date, review v
       ["bob", "r1", "APPROVED"],
       ["ghost", "c2", undefined],
     ],
+  )
+})
+
+const review = (state: string, submittedAt: string | null, n = 0) => ({
+  author: { login: "ada" },
+  state,
+  submittedAt,
+  url: `r-${submittedAt}`,
+  comments: { totalCount: n },
+})
+
+test("événements de la vue Fil : reviews envoyées et prête / fermeture / réouverture, par date", () => {
+  const events = toPrEvents({
+    reviews: {
+      nodes: [
+        review("APPROVED", "2026-01-04T00:00:00Z"),
+        review("COMMENTED", "2026-01-02T00:00:00Z", 2),
+      ],
+    },
+    events: {
+      nodes: [
+        {
+          __typename: "ReadyForReviewEvent",
+          actor: { login: "me" },
+          createdAt: "2026-01-03T00:00:00Z",
+        },
+        null,
+        {
+          __typename: "ClosedEvent",
+          actor: null,
+          createdAt: "2026-01-05T00:00:00Z",
+        },
+      ],
+    },
+  })
+  assert.deepEqual(events, [
+    {
+      kind: "review",
+      who: "ada",
+      at: "2026-01-02T00:00:00Z",
+      review: "COMMENTED",
+      threads: 2,
+      url: "r-2026-01-02T00:00:00Z",
+    },
+    { kind: "ready", who: "me", at: "2026-01-03T00:00:00Z" },
+    {
+      kind: "review",
+      who: "ada",
+      at: "2026-01-04T00:00:00Z",
+      review: "APPROVED",
+      threads: 0,
+      url: "r-2026-01-04T00:00:00Z",
+    },
+    { kind: "close", who: "ghost", at: "2026-01-05T00:00:00Z" },
+  ])
+})
+
+test("une review en attente ou non envoyée n'est pas un événement de la vue Fil", () => {
+  const events = toPrEvents({
+    reviews: {
+      nodes: [
+        review("PENDING", "2026-01-02T00:00:00Z"),
+        review("COMMENTED", null),
+      ],
+    },
+    events: { nodes: [] },
+  })
+  assert.deepEqual(events, [])
+})
+
+test("les événements de la vue Fil sont lus avec chaque PR, sauf une fois refusés", () => {
+  assert.match(queryFor("ghe.example.com"), /READY_FOR_REVIEW_EVENT/)
+  assert.doesNotMatch(
+    queryFor("ghe.example.com", false, "nodes", true),
+    /timelineItems|EVENTS\b/,
+  )
+  assert.doesNotMatch(queryFor("github.com", false, "probe"), /timelineItems/)
+})
+
+const EVENTS_ERROR = new Error(
+  "Argument 'itemTypes' on Field 'timelineItems' has an invalid value",
+)
+
+test("seule une erreur sur les événements de la vue Fil déclenche leur repli", () => {
+  for (const message of [
+    "Argument 'itemTypes' on Field 'timelineItems' has an invalid value ([READY_FOR_REVIEW_EVENT]). Expected type '[PullRequestTimelineItemsItemType!]'.",
+    "Field 'timelineItems' doesn't exist on type 'PullRequest'",
+    "Field 'timelineItems' doesn't accept argument 'itemTypes'",
+    "No such type ReadyForReviewEvent, so it can't be a fragment condition",
+    "Fragment on ReopenedEvent can't be spread inside PullRequestTimelineItems",
+  ])
+    assert.equal(isEventsFieldError(new Error(message)), true, message)
+  assert.equal(isEventsFieldError(FIELD_ERROR), false)
+  assert.equal(isEventsFieldError(new Error("Something went wrong")), false)
+})
+
+test("un refus des événements relance une fois sans eux et le retient", async () => {
+  const calls: boolean[] = []
+  let refused = false
+  const out = await withEventsFallback(
+    false,
+    async (without) => {
+      calls.push(without)
+      if (!without) throw EVENTS_ERROR
+      return "ok"
+    },
+    () => (refused = true),
+  )
+  assert.equal(out, "ok")
+  assert.equal(refused, true)
+  assert.deepEqual(calls, [false, true])
+})
+
+test("une autre erreur n'est pas rattrapée par le repli des événements", async () => {
+  await assert.rejects(
+    withEventsFallback(
+      false,
+      async () => {
+        throw new Error("HTTP 502")
+      },
+      () => assert.fail("pas de repli"),
+    ),
+    /HTTP 502/,
+  )
+})
+
+test("événements déjà refusés : lecture directe sans eux", async () => {
+  const calls: boolean[] = []
+  await withEventsFallback(
+    true,
+    async (w) => calls.push(w),
+    () => {},
+  )
+  assert.deepEqual(calls, [true])
+})
+
+test("champs de la vue Fil d'une PR : ouverture, auteur, robot et événements", () => {
+  const fields = timelineFields({
+    createdAt: "2026-01-01T00:00:00Z",
+    author: { login: "renovate", __typename: "Bot" },
+    reviews: { nodes: [review("APPROVED", "2026-01-02T00:00:00Z")] },
+    events: { nodes: [] },
+  })
+  assert.deepEqual(fields, {
+    createdAt: "2026-01-01T00:00:00Z",
+    author: "renovate",
+    bot: true,
+    events: [
+      {
+        kind: "review",
+        who: "ada",
+        at: "2026-01-02T00:00:00Z",
+        review: "APPROVED",
+        threads: 0,
+        url: "r-2026-01-02T00:00:00Z",
+      },
+    ],
+  })
+})
+
+test("PR sans auteur ni événements lus (champ refusé) : ghost, pas robot, reviews gardées", () => {
+  const fields = timelineFields({
+    createdAt: "2026-01-01T00:00:00Z",
+    author: null,
+    reviews: { nodes: [review("COMMENTED", "2026-01-02T00:00:00Z")] },
+  })
+  assert.equal(fields.author, "ghost")
+  assert.equal("bot" in fields, false)
+  assert.deepEqual(
+    fields.events.map((e) => e.kind),
+    ["review"],
+  )
+})
+
+test("une erreur qui nomme timelineItems sans être un refus du schéma ne déclenche pas le repli", () => {
+  assert.equal(
+    isEventsFieldError(
+      new Error("Timeout on validation of query: timelineItems took too long"),
+    ),
+    false,
+  )
+  assert.equal(
+    isEventsFieldError(
+      new Error(
+        "Something went wrong while executing your query (ReadyForReviewEvent)",
+      ),
+    ),
+    false,
   )
 })

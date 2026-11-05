@@ -6,8 +6,8 @@ import { allAccounts } from "./auth"
 import { cachedChecks } from "./github"
 import {
   attentionPayload,
+  bodyText,
   checksPayload,
-  htmlToText,
   mergedPayload,
   parentsOf,
   parseAttentionArgs,
@@ -138,9 +138,6 @@ function context(): McpContext {
   }
 }
 
-const toText = (html: string) =>
-  htmlToText(new DOMParser().parseFromString(html, "text/html").body)
-
 function answer(tool: string, args: unknown): McpReply {
   const ctx = context()
   const d = getData()
@@ -223,7 +220,7 @@ function answer(tool: string, args: unknown): McpReply {
       d.reviews.reviews,
       parents,
       mentionsOf,
-      toText,
+      bodyText,
     )
     return r.ok ? { text: JSON.stringify(r.data) } : { error: r.error }
   }

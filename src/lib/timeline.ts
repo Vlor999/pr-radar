@@ -1,6 +1,9 @@
 /**
- * Vue Fil du calendrier : PR des repos suivis en lignes de temps. Logique pure (lecture GitHub → événements,
- * lignes de la fenêtre, placement des marqueurs), sans React ni réseau.
+ * Vue Fil du calendrier : PR des repos suivis en lignes de temps. Logique pure (PR de l'arbre et lecture
+ * légère GitHub → événements, lignes de la fenêtre, placement des marqueurs), sans React ni réseau.
+ *
+ * Deux sources : les PR ouvertes de l'arbre (`fetchPrs`, avec textes et Slack) et une recherche légère, sans
+ * texte, pour les autres (fermées ou mergées, ouvertes d'autres auteurs, fenêtres passées).
  */
 // extensions : chargé aussi par node --test
 import {
@@ -10,25 +13,23 @@ import {
   TIMELINE_MARKER_GAP_PX,
   TIMELINE_MERGE_CLOSE_MS,
 } from "./constants.ts"
-import type { SlackMention, TimelineEvent, TimelinePr } from "./types.ts"
+import type { Pr, SlackMention, TimelineEvent, TimelinePr } from "./types.ts"
 
 type Actor = { login: string; __typename?: string } | null
 
-/** Nœud de `timelineItems` (types demandés par `TIMELINE_QUERY` de github.ts). */
+/** Nœud de `timelineItems` (types demandés par `TIMELINE_QUERY` de github.ts), sans texte. */
 export type RawTimelineItem =
   | {
       __typename: "PullRequestReview"
       author: Actor
       state: string
       submittedAt: string | null
-      bodyText: string
       comments: { totalCount: number }
     }
   | {
       __typename: "IssueComment"
       author: Actor
       createdAt: string
-      bodyText: string
     }
   | {
       __typename:
@@ -80,7 +81,7 @@ const byTime = (a: TimelineEvent, b: TimelineEvent) =>
   a.at.localeCompare(b.at) ||
   (a.kind === "start" ? -1 : b.kind === "start" ? 1 : 0)
 
-/** PR lue sur GitHub → événements du fil. `repo` : clé du repo (avec le compte), `login` : moi sur ce compte. */
+/** PR de la lecture légère → événements du fil, sans texte. `repo` : clé du repo (avec le compte), `login` : moi sur ce compte. */
 export function toTimelinePr(
   p: RawTimelinePr,
   repo: string,
@@ -100,7 +101,6 @@ export function toTimelinePr(
           kind: "review",
           at: n.submittedAt,
           who: n.author?.login,
-          text: clip(n.bodyText),
           review: n.state,
           threads: n.comments.totalCount,
         })
@@ -110,7 +110,6 @@ export function toTimelinePr(
           kind: "comment",
           at: n.createdAt,
           who: n.author?.login,
-          text: clip(n.bodyText),
         })
         break
       case "MergedEvent":
@@ -159,6 +158,135 @@ export function toTimelinePr(
     events: events.sort(byTime),
   }
 }
+
+/**
+ * PR ouverte de l'arbre → fil : ouverture, reviews (texte repris de `conversation` par l'`url`), commentaires
+ * généraux, « prête », fermeture et réouverture. `toText` : `bodyHTML` GitHub → texte brut.
+ */
+function fromStore(p: Pr, toText: (html: string) => string): TimelinePr {
+  const text = (html: string) => clip(toText(html))
+  const notes = new Map(p.conversation.map((n) => [n.url, n.body]))
+  const events: TimelineEvent[] = [
+    { kind: "start", at: p.createdAt, who: p.author },
+    ...p.events.map((e): TimelineEvent => {
+      if (e.kind !== "review") return { kind: e.kind, at: e.at, who: e.who }
+      const body = e.url ? notes.get(e.url) : undefined
+      return {
+        kind: "review",
+        at: e.at,
+        who: e.who,
+        review: e.review,
+        threads: e.threads,
+        ...(body && { text: text(body) }),
+      }
+    }),
+    ...p.conversation
+      .filter((n) => !n.state)
+      .map((n): TimelineEvent => ({
+        kind: "comment",
+        at: n.at,
+        who: n.author,
+        text: text(n.body),
+      })),
+  ]
+  return {
+    repo: p.repo,
+    number: p.number,
+    title: p.title,
+    url: p.url,
+    state: "OPEN",
+    draft: p.draft,
+    author: p.author,
+    mine: !p.involved,
+    createdAt: p.createdAt,
+    events: events.sort(byTime),
+  }
+}
+
+/**
+ * PR ouvertes de l'arbre → fil, sans les robots (comme la lecture légère). Seules les PR nouvelles ou changées
+ * (`url` + `updated`) sont reconverties : les textes HTML ne sont pas relus à chaque actualisation. Les PR sorties
+ * de l'arbre quittent le cache.
+ */
+export function storeTimelineMemo(toText: (html: string) => string) {
+  let cache = new Map<string, { updated: string; pr: TimelinePr }>()
+  return (prs: Pr[]): TimelinePr[] => {
+    const next = new Map<string, { updated: string; pr: TimelinePr }>()
+    for (const p of prs) {
+      if (p.bot) continue
+      const hit = cache.get(p.url)
+      next.set(
+        p.url,
+        hit && hit.updated === p.updated
+          ? hit
+          : { updated: p.updated, pr: fromStore(p, toText) },
+      )
+    }
+    cache = next
+    return [...next.values()].map((e) => e.pr)
+  }
+}
+
+/** Même événement lu par les deux sources (l'arbre et la lecture légère, sans url) : type, date, auteur. */
+const eventKey = (e: TimelineEvent) => `${e.kind}@${e.at}@${e.who ?? "ghost"}`
+
+/**
+ * Fil de la vue : PR de l'arbre (plus riches : textes, Slack), puis celles de la lecture légère absentes de l'arbre.
+ * PR dans les deux : textes et Slack de l'arbre, plus les événements de la lecture légère qu'il n'a pas (l'arbre
+ * est borné : 30 commentaires, 30 reviews, 10 « prête » / fermeture / réouverture ; la lecture légère va jusqu'à
+ * `TIMELINE_ITEMS_MAX`). Ouverte dans l'arbre mais finie dans la lecture légère (mergée ou fermée depuis la
+ * dernière actualisation) : état de la lecture légère.
+ */
+export function mergeTimeline(
+  store: TimelinePr[],
+  light: TimelinePr[],
+): TimelinePr[] {
+  const fresh = new Map(light.map((p) => [prKey(p), p]))
+  const known = new Set(store.map(prKey))
+  return [
+    ...store.map((p) => {
+      const l = fresh.get(prKey(p))
+      if (!l) return p
+      const seen = new Set(p.events.map(eventKey))
+      const extra = l.events.filter((e) => !seen.has(eventKey(e)))
+      const ended = l.state !== "OPEN" && p.state === "OPEN"
+      return {
+        ...p,
+        ...(ended && { state: l.state, draft: l.draft }),
+        events: extra.length ? [...p.events, ...extra].sort(byTime) : p.events,
+      }
+    }),
+    ...light.filter((p) => !known.has(prKey(p))),
+  ]
+}
+
+/** Jour local `YYYY-MM-DD`. */
+export const localDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+
+/**
+ * Mes PR ouvertes viennent de l'arbre : fenêtre qui finit aujourd'hui (ou après), arbre chargé sans erreur.
+ * Sinon (fenêtre passée : l'arbre n'a que l'état actuel ; arbre absent ou incomplet) la lecture légère prend tout.
+ */
+export const exceptMineFor = (
+  to: string,
+  today: string,
+  storeComplete: boolean,
+) => storeComplete && to >= today
+
+/**
+ * Recherches légères d'un lot de repos (`filter` : `repo:…`) pour des bornes déjà élargies. `exceptMine` (fenêtre
+ * d'aujourd'hui, arbre chargé) : mes PR ouvertes sont toutes dans l'arbre, seules celles des autres sont
+ * cherchées (celles qui me concernent, aussi dans l'arbre, écartées ensuite par `mergeTimeline`).
+ */
+export const timelineSearches = (
+  b: { from: string; to: string },
+  filter: string,
+  exceptMine: boolean,
+) => [
+  `is:pr is:open${exceptMine ? " -author:@me" : ""} created:<=${b.to} ${filter}`,
+  `is:pr is:closed closed:>=${b.from} created:<=${b.to} ${filter}`,
+]
 
 /** Ajoute au fil les messages Slack qui contiennent le lien de la PR. */
 export const withSlack = (

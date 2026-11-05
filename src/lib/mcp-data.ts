@@ -123,6 +123,10 @@ export const htmlToText = (root: HtmlNode) =>
     .replace(/\n{3,}/g, "\n\n")
     .trim()
 
+/** Texte d'un `bodyHTML` GitHub lu avec le `DOMParser` de la webview (rien n'est exécuté ni chargé). */
+export const bodyText = (html: string) =>
+  htmlToText(new DOMParser().parseFromString(html, "text/html").body)
+
 /* ---------- Réponses des outils ---------- */
 
 /** Parent de chaque PR dans l'arbre (PR sur laquelle elle est stackée), par URL. */

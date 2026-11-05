@@ -181,12 +181,22 @@ export const SLACK_SKELETON_ROWS = 6
 export const TIMELINE_WINDOWS = [7, 14, 21, 30] as const
 export const TIMELINE_DEFAULT_DAYS = 21
 /**
- * PR par page de recherche. Coût GraphQL : (1 + N requêtes de `timelineItems`, une par PR) / 100, soit
- * 1 point par page ; 20 PR × 50 événements (`bodyText` entier) garde une réponse de quelques centaines de Ko.
+ * PR par page de la recherche légère (PR absentes de l'arbre). Coût GraphQL : (1 + N requêtes de
+ * `timelineItems`, une par PR) / 100, soit 1 point par page ; sans texte, la réponse reste petite.
  */
 export const TIMELINE_PAGE_SIZE = 20
 /** événements lus par PR (les plus récents : `last`) ; GitHub : 100 au plus par connexion */
 export const TIMELINE_ITEMS_MAX = 50
+/**
+ * événements « prête », fermeture, réouverture lus avec chaque PR ouverte de l'arbre (`fetchPrs`). Coût mesuré
+ * de `nodes(ids:)` inchangé avec eux (1, 5 et 20 ids : 1, 5 et 22 points), réponse +3 %.
+ */
+export const PR_EVENTS_MAX = 10
+/**
+ * commentaires généraux lus avec chaque PR ouverte (cartes, MCP, vue Fil). Coût mesuré de `nodes(ids:)` identique
+ * avec 10 et 30 (1, 5 et 20 ids : 1, 5 et 22 points) : seule la taille de la réponse suit les textes.
+ */
+export const CONVERSATION_MAX = 30
 /** texte d'un commentaire ou d'une review gardé après lecture (l'info-bulle en montre 6 lignes) */
 export const TIMELINE_BODY_MAX_CHARS = 600
 /** recherche GitHub : 1 000 résultats au plus par requête, au-delà la liste est tronquée */

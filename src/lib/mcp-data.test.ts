@@ -62,6 +62,9 @@ const pr = (number: number, extra: Partial<Pr> = {}): Pr => ({
   reviews: [],
   requested: [],
   updated: "2026-01-01T00:00:00Z",
+  createdAt: "2026-01-01T00:00:00Z",
+  author: "me",
+  events: [],
   ...extra,
 })
 
