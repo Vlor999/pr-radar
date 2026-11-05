@@ -4,8 +4,17 @@ import { cn } from "cn"
 import { mergedBetween } from "@/lib/actions"
 import { locale, strings, useStrings } from "@/lib/i18n"
 import type { MergedPr } from "@/lib/types"
+import { TIMELINE_DEFAULT_DAYS, TIMELINE_WINDOWS } from "@/lib/constants"
+import { PrTimeline, TimelineLegend } from "@/components/pr-timeline"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useThumb } from "@/hooks/use-thumb"
 
 const PALETTE = [
@@ -20,6 +29,7 @@ const MAX_VISIBLE = 3
 
 const S = strings(
   {
+    timeline: "Fil",
     month: "Mois",
     week: "Semaine",
     day: "Jour",
@@ -30,6 +40,11 @@ const S = strings(
     prev: (unit: string, week: boolean) =>
       `${unit} précédent${week ? "e" : ""}`,
     next: (unit: string, week: boolean) => `${unit} suivant${week ? "e" : ""}`,
+    prevWindow: (n: number) => `${n} jours précédents`,
+    nextWindow: (n: number) => `${n} jours suivants`,
+    windowLabel: "Période",
+    windowDays: (n: number) => `${n} j`,
+    span: (from: string, to: string) => `Du ${from} au ${to}`,
     viewLabel: "Vue du calendrier",
     today: "Aujourd'hui",
     merged: (n: number) => `${n} PR mergée${n > 1 ? "s" : ""}`,
@@ -37,6 +52,7 @@ const S = strings(
     collapse: "Réduire",
   },
   {
+    timeline: "Timeline",
     month: "Month",
     week: "Week",
     day: "Day",
@@ -46,6 +62,11 @@ const S = strings(
     weekOf: (from: string, to: string) => `Week of ${from} to ${to}`,
     prev: (unit: string) => `Previous ${unit.toLowerCase()}`,
     next: (unit: string) => `Next ${unit.toLowerCase()}`,
+    prevWindow: (n: number) => `Previous ${n} days`,
+    nextWindow: (n: number) => `Next ${n} days`,
+    windowLabel: "Period",
+    windowDays: (n: number) => `${n} days`,
+    span: (from: string, to: string) => `${from} to ${to}`,
     viewLabel: "Calendar view",
     today: "Today",
     merged: (n: number) => `${n} merged PR${n === 1 ? "" : "s"}`,
@@ -68,11 +89,12 @@ const addDays = (d: Date, n: number) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
 const monday = (d: Date) => addDays(d, -((d.getDay() + 6) % 7))
 
-type View = "month" | "week" | "day"
-const VIEWS: View[] = ["month", "week", "day"]
+type View = "timeline" | "month" | "week" | "day"
+const VIEWS: View[] = ["timeline", "month", "week", "day"]
 
-/** Premier et dernier jour affichés pour une vue autour d'un jour d'ancrage. */
-function range(view: View, anchor: Date): [Date, Date] {
+/** Premier et dernier jour affichés pour une vue autour d'un jour d'ancrage (Fil : `days` jours jusqu'à lui). */
+function range(view: View, anchor: Date, days: number): [Date, Date] {
+  if (view === "timeline") return [addDays(anchor, 1 - days), anchor]
   if (view === "day") return [anchor, anchor]
   if (view === "week") return [monday(anchor), addDays(monday(anchor), 6)]
   return [
@@ -88,6 +110,15 @@ function heading(t: typeof S.fr, view: View, from: Date, to: Date) {
         weekday: "long",
         day: "numeric",
         month: "long",
+        year: "numeric",
+      }),
+    )
+  if (view === "timeline")
+    return t.span(
+      from.toLocaleDateString(locale(), { day: "numeric", month: "short" }),
+      to.toLocaleDateString(locale(), {
+        day: "numeric",
+        month: "short",
         year: "numeric",
       }),
     )
@@ -111,7 +142,8 @@ export function MergeCalendar() {
   const t = useStrings(S)
   const now = new Date()
   const todayKey = dayKey(now)
-  const [view, setView] = useState<View>("month")
+  const [view, setView] = useState<View>("timeline")
+  const [days, setDays] = useState<number>(TIMELINE_DEFAULT_DAYS)
   const [viewBox, thumb] = useThumb<HTMLDivElement>(
     '[aria-pressed="true"]',
     view,
@@ -122,14 +154,16 @@ export function MergeCalendar() {
   const [data, setData] = useState<Loaded>({ key: "", prs: [] })
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  const [first, last] = range(view, anchor)
+  const [first, last] = range(view, anchor, days)
+  const timeline = view === "timeline"
   const from = dayKey(first)
   const to = dayKey(last)
   const rangeKey = `${from}..${to}`
-  const loading = data.key !== rangeKey
+  const loading = !timeline && data.key !== rangeKey
   const isCurrent = from <= todayKey && todayKey <= to
 
   useEffect(() => {
+    if (timeline) return
     let stale = false
     const key = `${from}..${to}`
     mergedBetween(from, to)
@@ -140,7 +174,7 @@ export function MergeCalendar() {
     return () => {
       stale = true
     }
-  }, [from, to])
+  }, [from, to, timeline])
 
   const byDay = useMemo(() => {
     const map = new Map<string, MergedPr[]>()
@@ -180,13 +214,31 @@ export function MergeCalendar() {
     setAnchor((a) =>
       view === "month"
         ? new Date(a.getFullYear(), a.getMonth() + delta, 1)
-        : addDays(a, delta * (view === "week" ? 7 : 1)),
+        : view === "timeline"
+          ? // pas au-delà d'aujourd'hui
+            new Date(
+              Math.min(
+                addDays(a, delta * days).getTime(),
+                new Date(
+                  now.getFullYear(),
+                  now.getMonth(),
+                  now.getDate(),
+                ).getTime(),
+              ),
+            )
+          : addDays(a, delta * (view === "week" ? 7 : 1)),
     )
   const openDay = (d: Date) => {
     setAnchor(d)
     setView("day")
   }
   const unit = t[view]
+  const prevLabel = timeline
+    ? t.prevWindow(days)
+    : t.prev(unit, view === "week")
+  const nextLabel = timeline
+    ? t.nextWindow(days)
+    : t.next(unit, view === "week")
 
   const pill = (pr: MergedPr) => (
     <a
@@ -240,7 +292,7 @@ export function MergeCalendar() {
         <Button
           variant="outline"
           size="icon-sm"
-          aria-label={t.prev(unit, view === "week")}
+          aria-label={prevLabel}
           onClick={() => move(-1)}
         >
           <ChevronLeft />
@@ -260,7 +312,7 @@ export function MergeCalendar() {
         <Button
           variant="outline"
           size="icon-sm"
-          aria-label={t.next(unit, view === "week")}
+          aria-label={nextLabel}
           disabled={isCurrent}
           onClick={() => move(1)}
         >
@@ -269,164 +321,218 @@ export function MergeCalendar() {
         <h2 className="ml-1 text-lg font-semibold">
           {heading(t, view, first, last)}
         </h2>
+        {timeline && (
+          <span className="flex items-center gap-1">
+            <span id="timeline-window" className="sr-only">
+              {t.windowLabel}
+            </span>
+            <Select
+              items={TIMELINE_WINDOWS.map((n) => ({
+                value: n,
+                label: t.windowDays(n),
+              }))}
+              value={days}
+              onValueChange={(v) => v && setDays(v)}
+            >
+              <SelectTrigger
+                size="sm"
+                aria-labelledby="timeline-window"
+                className="rounded-md bg-transparent px-2.5 font-medium hover:bg-muted dark:bg-transparent dark:hover:bg-muted/50"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                alignItemWithTrigger={false}
+                align="start"
+                className="rounded-xl p-1"
+              >
+                {TIMELINE_WINDOWS.map((n) => (
+                  <SelectItem
+                    key={n}
+                    value={n}
+                    className="rounded-lg py-1.5 pl-2.5 focus:bg-muted data-highlighted:bg-muted"
+                  >
+                    {t.windowDays(n)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <TimelineLegend />
+          </span>
+        )}
         {loading && (
           <Loader2 className="size-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">
-          {t.merged(data.prs.length)}
-        </span>
-        {repos.map(([repo, n]) => (
-          <Badge key={repo} variant="outline" title={repo}>
-            <span className={cn("size-2 rounded-full", color(repo))} />
-            {shortName(repo)} {n}
-          </Badge>
-        ))}
-      </div>
-
-      {data.error && <p className="text-sm text-destructive">{data.error}</p>}
-
-      <div
-        className={cn(
-          "transition-opacity motion-reduce:transition-none",
-          loading && "opacity-50",
-        )}
-      >
-        {view === "day" ? (
-          <ul className="flex flex-col divide-y rounded-lg border bg-card">
-            {(byDay.get(from) ?? []).map((pr) => (
-              <li key={`${pr.repo}#${pr.number}`}>
-                <a
-                  href={pr.url}
-                  target="_blank"
-                  rel="noopener"
-                  className="flex items-baseline gap-3 px-4 py-2.5 text-sm hover:bg-muted"
-                >
-                  <span className="shrink-0 text-muted-foreground tabular-nums">
-                    {new Date(pr.mergedAt).toLocaleTimeString(locale(), {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
-                    <span
-                      className={cn("size-2 rounded-full", color(pr.repo))}
-                    />
-                    {shortName(pr.repo)}#{pr.number}
-                  </span>
-                  <span className="min-w-0 flex-1">{pr.title}</span>
-                </a>
-              </li>
+      {timeline ? (
+        <PrTimeline last={last} days={days} />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {t.merged(data.prs.length)}
+            </span>
+            {repos.map(([repo, n]) => (
+              <Badge key={repo} variant="outline" title={repo}>
+                <span className={cn("size-2 rounded-full", color(repo))} />
+                {shortName(repo)} {n}
+              </Badge>
             ))}
-          </ul>
-        ) : (
-          <>
-            <div className="hidden grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border sm:grid">
-              {weekdays().map((w) => (
-                <div
-                  key={w}
-                  className="bg-muted px-2 py-1 text-center text-xs font-medium text-muted-foreground"
-                >
-                  {w}
-                </div>
-              ))}
-              {cells.map((d) => {
-                const k = dayKey(d)
-                const prs = byDay.get(k) ?? []
-                // la semaine a de la place : tout est affiché
-                const open = view === "week" || expanded.has(k)
-                const shown = open ? prs : prs.slice(0, MAX_VISIBLE)
-                return (
-                  <div
-                    key={k}
-                    className={cn(
-                      "flex min-w-0 flex-col gap-0.5 bg-card p-1",
-                      view === "week" ? "min-h-64" : "min-h-24",
-                      view === "month" &&
-                        d.getMonth() !== first.getMonth() &&
-                        "opacity-40",
-                      k === todayKey && "ring-2 ring-primary ring-inset",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      title={t.viewDay}
-                      onClick={() => openDay(d)}
-                      className="self-start rounded px-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      {view === "week"
-                        ? d.toLocaleDateString(locale(), {
-                            day: "numeric",
-                            month: "short",
-                          })
-                        : d.getDate()}
-                    </button>
-                    {shown.map(pill)}
-                    {!open && prs.length > MAX_VISIBLE && (
-                      <button
-                        type="button"
-                        className="px-1 text-left text-xs text-primary hover:underline"
-                        onClick={() => setExpanded((s) => new Set(s).add(k))}
-                      >
-                        +{prs.length - MAX_VISIBLE}
-                      </button>
-                    )}
-                    {view === "month" && expanded.has(k) && (
-                      <button
-                        type="button"
-                        className="px-1 text-left text-xs text-primary hover:underline"
-                        onClick={() =>
-                          setExpanded((s) => {
-                            const n = new Set(s)
-                            n.delete(k)
-                            return n
-                          })
-                        }
-                      >
-                        {t.collapse}
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+          </div>
 
-            <ul className="flex flex-col gap-3 sm:hidden">
-              {[...byDay]
-                .sort(([a], [b]) => b.localeCompare(a))
-                .map(([k, prs]) => (
-                  <li key={k} className="rounded-lg border bg-card p-2">
-                    <div className="mb-1 text-xs font-medium text-muted-foreground">
-                      {new Date(`${k}T00:00:00`).toLocaleDateString(locale(), {
-                        weekday: "long",
-                        day: "numeric",
-                        month: "long",
-                      })}
-                    </div>
-                    {prs.map(pill)}
+          {data.error && (
+            <p className="text-sm text-destructive">{data.error}</p>
+          )}
+
+          <div
+            className={cn(
+              "transition-opacity motion-reduce:transition-none",
+              loading && "opacity-50",
+            )}
+          >
+            {view === "day" ? (
+              <ul className="flex flex-col divide-y rounded-lg border bg-card">
+                {(byDay.get(from) ?? []).map((pr) => (
+                  <li key={`${pr.repo}#${pr.number}`}>
+                    <a
+                      href={pr.url}
+                      target="_blank"
+                      rel="noopener"
+                      className="flex items-baseline gap-3 px-4 py-2.5 text-sm hover:bg-muted"
+                    >
+                      <span className="shrink-0 text-muted-foreground tabular-nums">
+                        {new Date(pr.mergedAt).toLocaleTimeString(locale(), {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+                        <span
+                          className={cn("size-2 rounded-full", color(pr.repo))}
+                        />
+                        {shortName(pr.repo)}#{pr.number}
+                      </span>
+                      <span className="min-w-0 flex-1">{pr.title}</span>
+                    </a>
                   </li>
                 ))}
-            </ul>
-          </>
-        )}
-      </div>
+              </ul>
+            ) : (
+              <>
+                <div className="hidden grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border sm:grid">
+                  {weekdays().map((w) => (
+                    <div
+                      key={w}
+                      className="bg-muted px-2 py-1 text-center text-xs font-medium text-muted-foreground"
+                    >
+                      {w}
+                    </div>
+                  ))}
+                  {cells.map((d) => {
+                    const k = dayKey(d)
+                    const prs = byDay.get(k) ?? []
+                    // la semaine a de la place : tout est affiché
+                    const open = view === "week" || expanded.has(k)
+                    const shown = open ? prs : prs.slice(0, MAX_VISIBLE)
+                    return (
+                      <div
+                        key={k}
+                        className={cn(
+                          "flex min-w-0 flex-col gap-0.5 bg-card p-1",
+                          view === "week" ? "min-h-64" : "min-h-24",
+                          view === "month" &&
+                            d.getMonth() !== first.getMonth() &&
+                            "opacity-40",
+                          k === todayKey && "ring-2 ring-primary ring-inset",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          title={t.viewDay}
+                          onClick={() => openDay(d)}
+                          className="self-start rounded px-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          {view === "week"
+                            ? d.toLocaleDateString(locale(), {
+                                day: "numeric",
+                                month: "short",
+                              })
+                            : d.getDate()}
+                        </button>
+                        {shown.map(pill)}
+                        {!open && prs.length > MAX_VISIBLE && (
+                          <button
+                            type="button"
+                            className="px-1 text-left text-xs text-primary hover:underline"
+                            onClick={() =>
+                              setExpanded((s) => new Set(s).add(k))
+                            }
+                          >
+                            +{prs.length - MAX_VISIBLE}
+                          </button>
+                        )}
+                        {view === "month" && expanded.has(k) && (
+                          <button
+                            type="button"
+                            className="px-1 text-left text-xs text-primary hover:underline"
+                            onClick={() =>
+                              setExpanded((s) => {
+                                const n = new Set(s)
+                                n.delete(k)
+                                return n
+                              })
+                            }
+                          >
+                            {t.collapse}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
 
-      {!loading &&
-        !data.error &&
-        (view === "day" ? !byDay.get(from)?.length : data.prs.length === 0) && (
-          <p className="text-center text-sm text-muted-foreground">
-            {
-              t[
-                view === "month"
-                  ? "emptyMonth"
-                  : view === "week"
-                    ? "emptyWeek"
-                    : "emptyDay"
-              ]
-            }
-          </p>
-        )}
+                <ul className="flex flex-col gap-3 sm:hidden">
+                  {[...byDay]
+                    .sort(([a], [b]) => b.localeCompare(a))
+                    .map(([k, prs]) => (
+                      <li key={k} className="rounded-lg border bg-card p-2">
+                        <div className="mb-1 text-xs font-medium text-muted-foreground">
+                          {new Date(`${k}T00:00:00`).toLocaleDateString(
+                            locale(),
+                            {
+                              weekday: "long",
+                              day: "numeric",
+                              month: "long",
+                            },
+                          )}
+                        </div>
+                        {prs.map(pill)}
+                      </li>
+                    ))}
+                </ul>
+              </>
+            )}
+          </div>
+
+          {!loading &&
+            !data.error &&
+            (view === "day"
+              ? !byDay.get(from)?.length
+              : data.prs.length === 0) && (
+              <p className="text-center text-sm text-muted-foreground">
+                {
+                  t[
+                    view === "month"
+                      ? "emptyMonth"
+                      : view === "week"
+                        ? "emptyWeek"
+                        : "emptyDay"
+                  ]
+                }
+              </p>
+            )}
+        </>
+      )}
     </div>
   )
 }

@@ -2,13 +2,14 @@
  * Actions de l'interface (ex-server actions de la version web) : mêmes noms, mêmes retours,
  * exécutées ici dans l'app, puis rechargement des données.
  */
-import { splitKey } from "./accounts"
+import { describeErrors, splitKey } from "./accounts"
 import { allAccounts, logout } from "./auth"
 import {
   clearCache,
   commentOnPr,
   reposWithMyOpenPrs,
   fetchMerged,
+  fetchTimeline,
   listRepos,
   markReady,
   replyToThread,
@@ -18,6 +19,7 @@ import {
   resolveThread,
   updateBranch,
 } from "./github"
+import { pick, strings } from "./i18n"
 import { log } from "./log"
 import { prNumberOf } from "./log-data"
 import { forgetQuota } from "./quota"
@@ -31,7 +33,18 @@ import {
   setRepos,
 } from "./store"
 import { pull } from "./sync"
-import type { MergedPr } from "./types"
+import type { MergedPr, TimelinePr } from "./types"
+
+const S = strings(
+  {
+    truncated:
+      "Plus de 1 000 PR sur un lot de repos : la liste est incomplète, réduis la période",
+  },
+  {
+    truncated:
+      "More than 1,000 PRs in a batch of repos: the list is incomplete, shorten the period",
+  },
+)
 
 /** message d'erreur affiché tel quel dans l'interface, tronqué au-delà */
 const MAX_ERROR_CHARS = 300
@@ -243,6 +256,30 @@ export async function mergedBetween(
     return { prs: [], error: "Dates invalides" }
   try {
     return { prs: await fetchMerged(getRepos() ?? [], from, to) }
+  } catch (e) {
+    return { prs: [], error: message(e) }
+  }
+}
+
+/** Vue Fil : PR des repos suivis sur une période (YYYY-MM-DD inclus), les miennes et celles des autres. */
+export async function timelineBetween(
+  from: string,
+  to: string,
+): Promise<{ prs: TimelinePr[]; error?: string }> {
+  const date = /^\d{4}-\d{2}-\d{2}$/
+  if (!date.test(from) || !date.test(to))
+    return { prs: [], error: "Dates invalides" }
+  try {
+    const { data, errors, truncated } = await fetchTimeline(
+      getRepos() ?? [],
+      from,
+      to,
+    )
+    const notes = [
+      ...(errors.length ? [describeErrors(errors)] : []),
+      ...(truncated ? [pick(S).truncated] : []),
+    ]
+    return { prs: data, ...(notes.length && { error: notes.join(" ; ") }) }
   } catch (e) {
     return { prs: [], error: message(e) }
   }

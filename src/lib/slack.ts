@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react"
+import { useMemo, useSyncExternalStore } from "react"
 
 // extensions : chargé aussi par node --test
 import {
@@ -1016,4 +1016,19 @@ export function useMentions(url: string): SlackMention[] {
   )
   const s = useSettings()
   return useSlack().team ? filterMentions(list, s) : NONE
+}
+
+/**
+ * Mentions déjà lues de plusieurs PR, dans les conversations choisies (vue Fil). Ne lance aucune recherche :
+ * relu à chaque lecture terminée (la progression change). Slack non connecté : aucune.
+ */
+export function useMentionLookup(): (url: string) => SlackMention[] {
+  const p = useSlackProgress()
+  const s = useSettings()
+  const { team } = useSlack()
+  return useMemo(() => {
+    void p // dépendance : une lecture terminée a pu changer `mentions`
+    return (url: string) =>
+      team ? filterMentions(mentions.get(url)?.list ?? NONE, s) : NONE
+  }, [p, s, team])
 }

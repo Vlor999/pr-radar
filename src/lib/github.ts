@@ -31,7 +31,12 @@ import {
   type GqlResponse,
   type RepoNode,
 } from "./graphql"
-import { NODES_PER_QUERY } from "./constants"
+import {
+  NODES_PER_QUERY,
+  SEARCH_RESULTS_MAX,
+  TIMELINE_ITEMS_MAX,
+  TIMELINE_PAGE_SIZE,
+} from "./constants"
 import {
   fingerprint,
   isFullRead,
@@ -50,8 +55,22 @@ import {
 } from "./pr-query"
 import { addCost, trackQuota } from "./quota"
 import { toReview, type RawReview } from "./review"
+import {
+  isBot,
+  searchBounds,
+  toTimelinePr,
+  type RawTimelinePr,
+} from "./timeline"
 import type { Reviewer } from "./reviewers"
-import type { CiView, Decision, MergedPr, Pr, ReviewPr, Thread } from "./types"
+import type {
+  CiView,
+  Decision,
+  MergedPr,
+  Pr,
+  ReviewPr,
+  Thread,
+  TimelinePr,
+} from "./types"
 
 const CACHE_TTL_MS = 60_000
 const REPO_LIST_TTL_MS = 10 * 60_000
@@ -592,6 +611,94 @@ export function fetchMerged(
           mergedAt: p.mergedAt,
         }))
         .sort((a, b) => b.mergedAt.localeCompare(a.mergedAt))
+    },
+  )
+}
+
+// vue Fil : PR et leurs derniers événements (pas les commits). Coût : voir TIMELINE_PAGE_SIZE.
+const TIMELINE_QUERY = `query($q: String!, $after: String) { search(query: $q, type: ISSUE, first: ${TIMELINE_PAGE_SIZE}, after: $after) {
+  issueCount pageInfo { hasNextPage endCursor }
+  nodes { ... on PullRequest {
+    number title url state isDraft createdAt mergedAt closedAt
+    author { login __typename } repository { nameWithOwner }
+    timelineItems(last: ${TIMELINE_ITEMS_MAX}, itemTypes: [PULL_REQUEST_REVIEW, ISSUE_COMMENT, MERGED_EVENT, CLOSED_EVENT, REOPENED_EVENT, READY_FOR_REVIEW_EVENT]) { nodes {
+      __typename
+      ... on PullRequestReview { author { login } state submittedAt bodyText comments { totalCount } }
+      ... on IssueComment { author { login } createdAt bodyText }
+      ... on MergedEvent { actor { login } createdAt }
+      ... on ClosedEvent { actor { login } createdAt }
+      ... on ReopenedEvent { actor { login } createdAt }
+      ... on ReadyForReviewEvent { actor { login } createdAt }
+    } }
+  } } } }`
+
+/**
+ * Une recherche de la vue Fil, page par page. `truncated` : plus de `SEARCH_RESULTS_MAX` résultats, GitHub
+ * n'en sert pas davantage. Textes coupés dès la lecture (`toTimelinePr`) : le cache reste léger.
+ */
+async function searchTimeline(
+  a: Account,
+  login: string,
+  q: string,
+): Promise<{ prs: TimelinePr[]; truncated: boolean }> {
+  type TimelinePage = Page<RawTimelinePr> & {
+    search: { issueCount: number }
+  }
+  const prs: TimelinePr[] = []
+  let truncated = false
+  let after: string | null = null
+  do {
+    const { search }: TimelinePage = await gql<TimelinePage>(
+      conn(a),
+      TIMELINE_QUERY,
+      { q, after },
+    )
+    truncated ||= search.issueCount > SEARCH_RESULTS_MAX
+    for (const n of search.nodes)
+      if (n && Object.keys(n).length > 0 && !isBot(n.author))
+        prs.push(
+          toTimelinePr(n, repoKey(a.id, n.repository.nameWithOwner), login),
+        )
+    after = search.pageInfo.hasNextPage ? search.pageInfo.endCursor : null
+  } while (after)
+  return { prs, truncated }
+}
+
+/**
+ * Vue Fil : PR des repos suivis présentes entre deux dates (YYYY-MM-DD, incluses), de tout auteur sauf les
+ * robots, avec leurs événements. Deux recherches par lot de repos : ouvertes avant la fin, et fermées (ou
+ * mergées) après le début, bornes élargies d'un jour (dates UTC de GitHub). Lots lus l'un après l'autre :
+ * pas de rafale de requêtes (limite secondaire de GitHub). `errors` : comptes en échec, les autres sont
+ * gardés ; `truncated` : une recherche a dépassé 1 000 résultats.
+ */
+export function fetchTimeline(
+  repos: string[],
+  from: string,
+  to: string,
+): Promise<{ data: TimelinePr[]; errors: AccountError[]; truncated: boolean }> {
+  return cached(
+    `timeline:${repos.join(",")}|${from}..${to}`,
+    CACHE_TTL_MS,
+    async () => {
+      const b = searchBounds(from, to)
+      let truncated = false
+      const result = await perFollowed(repos, async (a, names) => {
+        const login = await me(a)
+        const out: TimelinePr[] = []
+        for (const c of chunk(names, REPOS_PER_QUERY)) {
+          const filter = c.map((r) => "repo:" + r).join(" ")
+          for (const q of [
+            `is:pr is:open created:<=${b.to} ${filter}`,
+            `is:pr is:closed closed:>=${b.from} created:<=${b.to} ${filter}`,
+          ]) {
+            const r = await searchTimeline(a, login, q)
+            truncated ||= r.truncated
+            out.push(...r.prs)
+          }
+        }
+        return out
+      })
+      return { ...result, truncated }
     },
   )
 }

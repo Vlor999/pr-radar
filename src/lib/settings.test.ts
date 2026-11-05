@@ -104,3 +104,10 @@ test("fuseau de la plage : enregistré sous son nom canonique", () => {
     "UTC",
   )
 })
+
+test("les PR masquées de la vue Fil ne gardent que des chaînes", () => {
+  const s = parseSettings(
+    JSON.stringify({ timelineHidden: ["o/r#1", 2, null] }),
+  )
+  assert.deepEqual(s.timelineHidden, ["o/r#1"])
+})

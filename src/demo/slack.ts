@@ -382,6 +382,37 @@ const MENTIONS: Record<string, SlackMention[]> = {
       3,
     ),
   ],
+  // vue Fil (src/demo/github.ts, `fetchTimeline`)
+  "https://github.com/acme/api/pull/141": [
+    at(
+      "C1",
+      "me",
+      "Re-review possible sur la proration ? <https://github.com/acme/api/pull/141>",
+      12 * 24,
+    ),
+    at(
+      "D1",
+      "me",
+      "Je relance sur <https://github.com/acme/api/pull/141|acme/api#141>, il bloque la facturation de décembre",
+      5 * 24 + 2,
+    ),
+  ],
+  "https://github.com/acme/web/pull/112": [
+    at(
+      "C1",
+      "me",
+      "Fix rapide sur la nav : <https://github.com/acme/web/pull/112>",
+      26,
+    ),
+  ],
+  "https://github.com/globex/billing/pull/31": [
+    at(
+      "G1",
+      "linus",
+      "Qui peut relire le cache CI ? <https://github.com/globex/billing/pull/31>",
+      9 * 24,
+    ),
+  ],
   "https://github.com/globex/billing/pull/7": [
     at("G1", "bob", "Qui peut relire l'export CSV ? globex/billing#7", 50),
   ],
@@ -439,4 +470,16 @@ export function useMentions(url: string): SlackMention[] {
   return slackAll
     ? list
     : list.filter((m) => slackChannels.includes(m.channelId))
+}
+
+export function useMentionLookup(): (url: string) => SlackMention[] {
+  const { slackAll, slackChannels } = useSettings()
+  const { team } = useSlack()
+  return (url: string) => {
+    const list = MENTIONS[url] ?? NONE
+    if (!team) return NONE
+    return slackAll
+      ? list
+      : list.filter((m) => slackChannels.includes(m.channelId))
+  }
 }
