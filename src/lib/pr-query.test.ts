@@ -244,7 +244,14 @@ const EVENTS_ERROR = new Error(
 )
 
 test("seule une erreur sur les événements de la vue Fil déclenche leur repli", () => {
-  assert.equal(isEventsFieldError(EVENTS_ERROR), true)
+  for (const message of [
+    "Argument 'itemTypes' on Field 'timelineItems' has an invalid value ([READY_FOR_REVIEW_EVENT]). Expected type '[PullRequestTimelineItemsItemType!]'.",
+    "Field 'timelineItems' doesn't exist on type 'PullRequest'",
+    "Field 'timelineItems' doesn't accept argument 'itemTypes'",
+    "No such type ReadyForReviewEvent, so it can't be a fragment condition",
+    "Fragment on ReopenedEvent can't be spread inside PullRequestTimelineItems",
+  ])
+    assert.equal(isEventsFieldError(new Error(message)), true, message)
   assert.equal(isEventsFieldError(FIELD_ERROR), false)
   assert.equal(isEventsFieldError(new Error("Something went wrong")), false)
 })
@@ -324,5 +331,22 @@ test("PR sans auteur ni événements lus (champ refusé) : ghost, pas robot, rev
   assert.deepEqual(
     fields.events.map((e) => e.kind),
     ["review"],
+  )
+})
+
+test("une erreur qui nomme timelineItems sans être un refus du schéma ne déclenche pas le repli", () => {
+  assert.equal(
+    isEventsFieldError(
+      new Error("Timeout on validation of query: timelineItems took too long"),
+    ),
+    false,
+  )
+  assert.equal(
+    isEventsFieldError(
+      new Error(
+        "Something went wrong while executing your query (ReadyForReviewEvent)",
+      ),
+    ),
+    false,
   )
 })

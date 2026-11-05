@@ -197,12 +197,23 @@ export const withStackFallback = <T>(
     return run(queryFor(host, true, kind, withoutEvents))
   })
 
-/** Erreur de validation GraphQL sur les événements de la vue Fil (champ ou type d'événement inconnu du serveur). */
+// erreurs de validation du schéma (graphql-ruby, GitHub.com et GHES) sur le champ, son argument ou ses fragments
+const EVENT_TYPES = "(?:ReadyForReviewEvent|ClosedEvent|ReopenedEvent)"
+const EVENTS_FIELD_ERRORS = [
+  /Field 'timelineItems' doesn't exist on type/,
+  /Field 'timelineItems' doesn't accept argument 'itemTypes'/,
+  /Argument 'itemTypes' on Field 'timelineItems' has an invalid value/,
+  new RegExp(
+    `No such type ${EVENT_TYPES}, so it can't be a fragment condition`,
+  ),
+  new RegExp(`Fragment on ${EVENT_TYPES} can't be spread inside`),
+]
+/**
+ * Erreur de validation GraphQL sur les événements de la vue Fil (champ, argument ou type d'événement inconnu du
+ * serveur). Une autre erreur qui les nomme (délai, erreur serveur) n'est pas un refus : pas de repli pour la session.
+ */
 export const isEventsFieldError = (e: unknown) =>
-  e instanceof Error &&
-  /timelineItems|itemTypes|ReadyForReviewEvent|ReopenedEvent|ClosedEvent|READY_FOR_REVIEW_EVENT|REOPENED_EVENT|CLOSED_EVENT/.test(
-    e.message,
-  )
+  e instanceof Error && EVENTS_FIELD_ERRORS.some((r) => r.test(e.message))
 
 /**
  * Lance `run` avec les événements de la vue Fil, sauf si `skip` ; si GitHub les refuse, appelle `onRefused` et
