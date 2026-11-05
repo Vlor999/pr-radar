@@ -40,7 +40,7 @@ import { useData } from "@/lib/store"
 import {
   layoutRow,
   mergeTimeline,
-  storeTimeline,
+  storeTimelineMemo,
   toRows,
   windowOf,
   withSlack,
@@ -854,7 +854,8 @@ export function PrTimeline({ last, days }: { last: Date; days: number }) {
     [to, days, data.at],
   )
   // PR ouvertes de l'arbre : textes et Slack ; la lecture légère complète, sans texte
-  const store = useMemo(() => storeTimeline(open, bodyText), [open])
+  const [toStore] = useState(() => storeTimelineMemo(bodyText))
+  const store = useMemo(() => toStore(open), [open, toStore])
   const rows = useMemo(
     () =>
       toRows(

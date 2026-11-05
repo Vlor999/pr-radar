@@ -203,9 +203,29 @@ function fromStore(p: Pr, toText: (html: string) => string): TimelinePr {
   }
 }
 
-/** PR ouvertes de l'arbre → fil, sans les robots (comme la lecture légère). */
-export const storeTimeline = (prs: Pr[], toText: (html: string) => string) =>
-  prs.filter((p) => !p.bot).map((p) => fromStore(p, toText))
+/**
+ * PR ouvertes de l'arbre → fil, sans les robots (comme la lecture légère). Seules les PR nouvelles ou changées
+ * (`url` + `updated`) sont reconverties : les textes HTML ne sont pas relus à chaque actualisation. Les PR sorties
+ * de l'arbre quittent le cache.
+ */
+export function storeTimelineMemo(toText: (html: string) => string) {
+  let cache = new Map<string, { updated: string; pr: TimelinePr }>()
+  return (prs: Pr[]): TimelinePr[] => {
+    const next = new Map<string, { updated: string; pr: TimelinePr }>()
+    for (const p of prs) {
+      if (p.bot) continue
+      const hit = cache.get(p.url)
+      next.set(
+        p.url,
+        hit && hit.updated === p.updated
+          ? hit
+          : { updated: p.updated, pr: fromStore(p, toText) },
+      )
+    }
+    cache = next
+    return [...next.values()].map((e) => e.pr)
+  }
+}
 
 /**
  * Fil de la vue : PR de l'arbre (plus riches : textes, Slack), puis celles de la lecture légère absentes de l'arbre.

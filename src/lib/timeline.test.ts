@@ -8,7 +8,7 @@ import {
   layoutRow,
   mergeTimeline,
   searchBounds,
-  storeTimeline,
+  storeTimelineMemo,
   timelineSearches,
   toRows,
   toTimelinePr,
@@ -473,7 +473,7 @@ const open = (extra: Partial<Pr> = {}): Pr => ({
   ...extra,
 })
 const stripTags = (html: string) => html.replace(/<[^>]+>/g, "")
-const fromTree = (p: Pr) => storeTimeline([p], stripTags)[0]
+const fromTree = (p: Pr) => storeTimelineMemo(stripTags)([p])[0]
 
 test("une PR de l'arbre commence à son ouverture, par son auteur", () => {
   const p = fromTree(
@@ -594,7 +594,7 @@ test("prête, fermeture et réouverture de l'arbre s'insèrent dans le fil par d
 })
 
 test("une PR de l'arbre d'un robot n'est pas dans le fil", () => {
-  assert.deepEqual(storeTimeline([open({ bot: true })], stripTags), [])
+  assert.deepEqual(storeTimelineMemo(stripTags)([open({ bot: true })]), [])
 })
 
 test("une PR de l'arbre remplace celle de la lecture légère, les autres sont gardées", () => {
@@ -716,4 +716,25 @@ test("PR de l'arbre fermée puis rouverte puis fermée : seule la nouvelle ferme
     ["start", "close", "reopen", "close"],
   )
   assert.equal(p.state, "CLOSED")
+})
+
+test("une PR de l'arbre inchangée n'est pas reconvertie, une PR modifiée l'est", () => {
+  let parsed = 0
+  const toStore = storeTimelineMemo((h) => (parsed++, stripTags(h)))
+  const a = open({
+    conversation: [{ author: "bob", body: "<p>Ok</p>", url: "c1", at: D(3) }],
+  })
+  const first = toStore([a])
+  const again = toStore([{ ...a }])
+  assert.equal(again[0], first[0])
+  assert.equal(parsed, 1)
+  const changed = toStore([{ ...a, updated: "2026-01-06T00:00:00Z" }])
+  assert.notEqual(changed[0], first[0])
+  assert.equal(parsed, 2)
+})
+
+test("une PR sortie de l'arbre quitte le fil converti, un robot n'y entre pas", () => {
+  const toStore = storeTimelineMemo(stripTags)
+  toStore([open()])
+  assert.deepEqual(toStore([open({ number: 2, url: "u2", bot: true })]), [])
 })
