@@ -1,6 +1,10 @@
 /** Requête GraphQL des PR ouvertes : logique pure, sans Tauri. */
 import { GITHUB } from "./accounts.ts"
-import { PR_EVENTS_MAX, PROBE_PAGE_SIZE } from "./constants.ts"
+import {
+  CONVERSATION_MAX,
+  PR_EVENTS_MAX,
+  PROBE_PAGE_SIZE,
+} from "./constants.ts"
 import type { Note, PrEvent } from "./types.ts"
 
 /** Champs d'une PR affichée ; `STACK` remplacé par `queryFor`. */
@@ -9,7 +13,7 @@ const PR_FIELDS = `
       repository { nameWithOwner }
       isCrossRepository author { login __typename } assignees(first: 10) { nodes { login } }
       comments(first: 100) { nodes { author { login } } }
-      conversation: comments(last: 10) { nodes { author { login } bodyHTML url createdAt } }
+      conversation: comments(last: ${CONVERSATION_MAX}) { nodes { author { login } bodyHTML url createdAt } }
       reviews(last: 30) { nodes { author { login } state bodyHTML url submittedAt comments { totalCount } } }
       events: timelineItems(last: ${PR_EVENTS_MAX}, itemTypes: [READY_FOR_REVIEW_EVENT, CLOSED_EVENT, REOPENED_EVENT]) { nodes {
         __typename

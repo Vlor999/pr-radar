@@ -53,7 +53,7 @@ export type Pr = {
   comments: number
   unresolved: number
   threads: Thread[]
-  /** 10 derniers commentaires généraux et textes des 30 dernières reviews, du plus ancien au plus récent */
+  /** 30 derniers commentaires généraux et textes des 30 dernières reviews, du plus ancien au plus récent */
   conversation: Note[]
   additions: number
   deletions: number

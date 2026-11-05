@@ -192,6 +192,11 @@ export const TIMELINE_ITEMS_MAX = 50
  * de `nodes(ids:)` inchangé avec eux (1, 5 et 20 ids : 1, 5 et 22 points), réponse +3 %.
  */
 export const PR_EVENTS_MAX = 10
+/**
+ * commentaires généraux lus avec chaque PR ouverte (cartes, MCP, vue Fil). Coût mesuré de `nodes(ids:)` identique
+ * avec 10 et 30 (1, 5 et 20 ids : 1, 5 et 22 points) : seule la taille de la réponse suit les textes.
+ */
+export const CONVERSATION_MAX = 30
 /** texte d'un commentaire ou d'une review gardé après lecture (l'info-bulle en montre 6 lignes) */
 export const TIMELINE_BODY_MAX_CHARS = 600
 /** recherche GitHub : 1 000 résultats au plus par requête, au-delà la liste est tronquée */
