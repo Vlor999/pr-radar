@@ -8,38 +8,36 @@
 
 ## Why
 
-PR Radar is for following PR stacks across repos and answering review threads without opening the browser, on any desktop OS, with a local browser tab and a read-only MCP server for your agents. Comparison with github.com/pulls, Gitify and PR Marmot: [docs/comparison.md](docs/comparison.md).
+Follow PR stacks across repos and answer review threads without opening the browser. How it compares with github.com/pulls, Gitify and PR Marmot: [docs/comparison.md](docs/comparison.md).
 
 ## Features
 
 - PR tree per repo, with "depends on / blocks" stacks
-- Review, CI and conflict status; CI jobs per workflow (click the CI badge), with re-run of failed jobs
-- Unresolved review threads shown with the code, reply or resolve in place
-- From the card: request reviewers, mark a draft ready, update a branch behind its base
-- Other people's PRs where you are assigned, mentioned or involved, placed in the tree with the reason
+- Review, CI and conflict status, with a re-run of failed CI jobs
+- Unresolved review threads shown with the code: reply or resolve in place
+- Request reviewers, mark a draft ready or update a branch from the card
+- Other people's PRs where you are assigned, mentioned or involved
 - Filters, search, ready-to-merge and stale PRs, new since your last visit
-- Merge calendar: month, week, day
-- Local web version ([docs/web.md](docs/web.md)) and read-only local MCP server for AI agents (your PRs and their Slack mentions) ([docs/mcp.md](docs/mcp.md)), both opt-in
-- System notifications with Do not disturb (1 h or until tomorrow, also from the tray) and launch at login; runs in the menu bar or tray
-- Quota-aware refresh, command palette `⌘K` / `Ctrl+K`, light / dark / auto theme, English and French UI
+- Calendar: timeline of the PRs in your followed repos over 7 to 30 days, plus month, week and day views
+- Optional Slack connection: messages that link to a PR show next to its card
+- Quota-aware refreshes that reread only changed PRs
+- Command palette `⌘K` / `Ctrl+K` and keyboard shortcuts
+- Opt-in local web version ([docs/web.md](docs/web.md)) and read-only MCP server for AI agents ([docs/mcp.md](docs/mcp.md))
+- Menu bar or tray app, with notifications, Do not disturb and launch at login
+- Light, dark or auto theme; English and French UI
 
-More: repo picker per organization, settings by category with a typo-tolerant search, automatic refreshes that reread only changed PRs (status dot next to Refresh), local activity log (redacted, with retention) and reviewed crash reports (Diagnostics settings), keyboard shortcuts `/` `j` `k` `o` `e` `d`, Quit from the tray menu (closing the window or ⌘Q on macOS keeps the app running).
+More in [docs/features.md](docs/features.md).
 
-## Download
+## Install
 
-- Download page: https://vlor999.github.io/pr-radar/
-- Releases: https://github.com/Vlor999/pr-radar/releases (macOS, Windows and Linux, x64 and arm64)
-- Homebrew: `brew install --cask vlor999/tap/pr-radar`
-
-## First launch
-
-- macOS: the app is signed and notarized by Apple. Drag it to Applications, launch it, confirm "Open".
-- Windows (SmartScreen): More info > Run anyway.
+- Download from the [website](https://vlor999.github.io/pr-radar/) or the [releases](https://github.com/Vlor999/pr-radar/releases) (macOS, Windows and Linux, x64 and arm64), or `brew install --cask vlor999/tap/pr-radar`.
+- macOS: signed and notarized by Apple. Drag PR Radar to Applications, open it and confirm "Open".
+- Windows: if SmartScreen blocks the installer, click More info > Run anyway.
 
 ## GitHub sign-in
 
-- **Sign in with GitHub** (device flow): no server, the token is stored in the system keychain.
-- **Personal access token**: fine-grained (read Pull requests + Contents/Metadata; write Pull requests to reply, resolve threads and mark drafts ready; write Contents to update a PR branch; write Actions to re-run failed jobs) or classic with the `repo` scope (enough to re-run jobs; the `workflow` scope is only for editing workflow files). Also used for GitHub Enterprise.
+- Sign in with GitHub (device flow). There is no server; the token is stored in the system keychain.
+- Or use a personal access token, also the way to add GitHub Enterprise. Fine-grained (read Pull requests + Contents/Metadata; write Pull requests to reply, resolve threads and mark drafts ready; write Contents to update a PR branch; write Actions to re-run failed jobs) or classic with the `repo` scope (enough to re-run jobs; the `workflow` scope is only for editing workflow files).
 
 Organization repos may require the organization to approve the OAuth app, or SSO authorization of the token.
 
@@ -49,6 +47,7 @@ No backend, no telemetry, no analytics. The app only talks to GitHub, to your Gi
 
 ## Docs
 
+- [Features in detail](docs/features.md)
 - [Local MCP server](docs/mcp.md)
 - [Local web version](docs/web.md)
 - [Privacy](docs/privacy.md)
